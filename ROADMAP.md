@@ -1,8 +1,8 @@
 # MacroStudio Roadmap
 
-Version 0.1.0 is Milestone 1 only: a safe proof-of-concept editor for existing Blizzard-native macros. Later milestones stay unimplemented until the preceding work has been tested in game.
+Version 0.2.0 completes Milestones 1, 1.1, and 2. Later milestones remain intentionally out of scope until the completed work has been tested in game.
 
-## Milestone 1 — Native macro editor
+## Milestone 1 - Native macro editor
 
 - [x] Standalone addon and Git repository
 - [x] Large movable, resizable window
@@ -14,27 +14,37 @@ Version 0.1.0 is Milestone 1 only: a safe proof-of-concept editor for existing B
 - [x] SavedVariables foundation
 - [x] Windows Junction tooling and manual test plan
 
-## Milestone 2 — Organization
+## Milestone 1.1 - Reactive editor state
 
-- [ ] Virtual folders/categories and category management
-- [ ] Favorites independent of categories
-- [ ] Multiple tags plus one optional primary category
-- [ ] SavedVariables metadata storage and migration
-- [ ] Careful metadata reconciliation across macro changes
-- [ ] Duplicate-name detection and warnings
-- [ ] Per-macro notes and last-edited timestamps
-- [ ] Preserve unresolved metadata for manual reconciliation rather than guessing
+- [x] Derive dirty, length, limit, Save, and Revert state directly from edit-box text
+- [x] Update all editor controls on every user text-change event
+- [x] Suppress text-change handling during programmatic loads, then recompute once
+- [x] Keep clean external updates automatic through `UPDATE_MACROS`
+- [x] Preserve dirty buffers and block Save on external conflicts
+- [x] Retain Refresh only as an explicit fallback
 
-Candidate categories include Favorites, Mythic+, Raid, PvP, Utility, Healing, Class, Profession, and Misc. These remain MacroStudio metadata and never alter Blizzard's storage model.
+## Milestone 2 - Organization
 
-## Milestone 3 — Search and filtering
+- [x] Virtual category creation, rename, deletion, assignment, and removal
+- [x] Favorites independent of categories
+- [x] Multiple tags plus one optional category per macro
+- [x] Favorites, All, Account, Character, and category navigation filters
+- [x] SavedVariables schema 2 with opaque metadata record IDs
+- [x] Conservative metadata reconciliation across index movement
+- [x] Preservation of unresolved metadata instead of guessing
+- [x] Scope-aware duplicate-name detection and warnings
+- [x] Organization actions never create, rename, edit, or delete Blizzard macros
+
+Per-macro notes and last-edited timestamps remain possible future organization enhancements; they were not part of the approved Milestone 2 implementation plan.
+
+## Milestone 3 - Search and filtering
 
 - [ ] Search macro name and body
 - [ ] Search category and tags
 - [ ] Basic filters such as `scope:account`, `scope:character`, `tag:M+`, and `favorite:true`
 - [ ] Favor simple, useful filtering before designing a query language
 
-## Milestone 4 — Full macro management
+## Milestone 4 - Full macro management
 
 - [ ] New and Duplicate Macro
 - [ ] Rename and icon picker
@@ -46,7 +56,7 @@ Candidate categories include Favorites, Mythic+, Raid, PvP, Utility, Healing, Cl
 
 All operations must honor combat protection, native name/body/capacity limits, and duplicate names.
 
-## Milestone 5 — Backups and history
+## Milestone 5 - Backups and history
 
 - [ ] Snapshot name, body, icon, scope, and timestamp before MacroStudio changes/deletes
 - [ ] Browse versions by human-readable time
@@ -54,7 +64,7 @@ All operations must honor combat protection, native name/body/capacity limits, a
 - [ ] Sensible retention limits for SavedVariables growth
 - [ ] Trash for macros deleted through MacroStudio, if feasible
 
-## Milestone 6 — Parser and conservative linter
+## Milestone 6 - Parser and conservative linter
 
 - [ ] Deterministic macro tokenizer/parser
 - [ ] Character-budget warnings
@@ -63,30 +73,30 @@ All operations must honor combat protection, native name/body/capacity limits, a
 - [ ] Suspicious spell/item references where an API can support the check
 - [ ] Maintainable syntax highlighting for commands, conditions, targets, and arguments
 
-The linter must be presented as advisory, not an infallible validator. It must not silently rewrite working macros.
+The linter must be advisory and must not silently rewrite working macros.
 
-## Milestone 7 — Action-bar awareness
+## Milestone 7 - Action-bar awareness
 
 - [ ] Show raw action slots that reference the selected macro
 - [ ] Map slots to human-friendly bar/button descriptions only where reliable
 - [ ] Account for paging, forms/stances, overrides, possess states, and third-party action-bar presentation
 - [ ] Investigate keybinding awareness later
 
-## Milestone 8 — Templates and snippets
+## Milestone 8 - Templates and snippets
 
 - [ ] Previewable macro templates such as Mouseover Heal, Focus Interrupt, and Arena Target
 - [ ] Insertable snippets such as `[@cursor]`, `[@player]`, and `[mod:shift]`
 - [ ] Insert snippets at the editor cursor
 - [ ] Keep templates as drafts until the user explicitly creates a native macro
 
-## Milestone 9 — Optimization helpers
+## Milestone 9 - Optimization helpers
 
 - [ ] Suggest conservative character-count reductions
 - [ ] Display estimated savings and resulting length
 - [ ] Explain each proposed change
 - [ ] Never silently apply or claim semantic equivalence without sufficient certainty
 
-## Milestone 10 — Import and export
+## Milestone 10 - Import and export
 
 - [ ] Individual macro sharing
 - [ ] Category/template packs

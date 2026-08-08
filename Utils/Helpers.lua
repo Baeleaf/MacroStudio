@@ -51,6 +51,8 @@ function Helpers:CopyMacro(macro)
         icon = macro.icon,
         body = macro.body,
         scope = macro.scope,
+        duplicateName = macro.duplicateName,
+        duplicateCount = macro.duplicateCount,
     }
 end
 

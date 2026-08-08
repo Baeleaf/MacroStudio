@@ -1,108 +1,136 @@
 # MacroStudio Architecture
 
-## Scope of version 0.1.0
+## Scope of version 0.2.0
 
-Milestone 1 is intentionally narrow: enumerate existing native macros, select one, edit its body, validate it, Save, and Revert. Native WoW frames/APIs are used directly; there is no addon framework or third-party runtime dependency.
+Version 0.2.0 edits bodies of existing Blizzard-native macros and adds virtual organization through categories, favorites, and tags. It does not implement search or native macro creation, rename, icon change, duplication, deletion, or scope changes. Native WoW frames and APIs are used directly; there is no addon framework or third-party runtime dependency.
 
 ## Module responsibilities
 
 ```text
 Core.lua
-  ├─ Database.lua
-  ├─ MacroRepository.lua
-  ├─ Utils/Helpers.lua
-  └─ UI/MainFrame.lua
-       ├─ UI/MacroList.lua
-       └─ UI/Editor.lua
+|-- Database.lua
+|-- MacroRepository.lua
+|-- MetadataRepository.lua
+|-- Utils/Helpers.lua
+`-- UI/MainFrame.lua
+    |-- UI/Dialogs.lua
+    |-- UI/Sidebar.lua
+    |-- UI/MacroList.lua
+    `-- UI/Editor.lua
 ```
 
-- `Core.lua` owns the single addon namespace, constants, event dispatch, combat state, and opt-in debug output.
-- `Database.lua` initializes missing SavedVariables fields without replacing an existing database.
-- `MacroRepository.lua` owns all calls to `GetNumMacros`, `GetMacroInfo`, and `EditMacro`.
-- `UI/MainFrame.lua` coordinates lifecycle, selection, refreshing, confirmation, Save, and Revert.
-- `UI/MacroList.lua` renders account and character sections from repository records.
-- `UI/Editor.lua` owns the draft buffer and derives dirty/limit/combat UI state.
-- `Utils/Helpers.lua` contains only small cross-module utilities.
+- `Core.lua` owns the addon namespace, constants, event dispatch, combat state, and opt-in debug output.
+- `Database.lua` initializes and migrates SavedVariables fields without replacing existing data.
+- `MacroRepository.lua` owns all calls to `GetNumMacros`, `GetMacroInfo`, and `EditMacro` and annotates scope-local duplicate names.
+- `MetadataRepository.lua` owns virtual categories, favorites, tags, metadata records, and reconciliation.
+- `UI/MainFrame.lua` coordinates lifecycle, filtering, selection, refreshing, conflict handling, Save, and Revert.
+- `UI/Dialogs.lua` owns discard confirmations and category/tag input prompts.
+- `UI/Sidebar.lua` renders built-in and user-created navigation filters.
+- `UI/MacroList.lua` renders account and character sections from filtered repository records.
+- `UI/Editor.lua` owns the draft buffer, organization controls, and derived reactive editor state.
+- `Utils/Helpers.lua` contains small cross-module utilities.
 
-UI modules do not call raw macro APIs. They ask `MacroRepository` for current snapshots and operations.
+UI modules do not call raw native macro APIs. They use `MacroRepository` for current snapshots and writes and `MetadataRepository` for virtual organization.
 
-## Blizzard-owned data and MacroStudio-owned data
+## Blizzard-owned and MacroStudio-owned data
 
-Blizzard remains the source of truth for every native macro's name, body, icon, scope, and current enumeration index. MacroStudio writes only through the native API and never creates a parallel execution mechanism.
+Blizzard is the source of truth for every native macro's name, body, icon, scope, and current enumeration index. MacroStudio writes a body only through `EditMacro` and never creates a parallel execution mechanism.
 
-`MacroStudioDB` is additive storage with this initial shape:
+`MacroStudioDB` schema 2 is additive:
 
 ```lua
 MacroStudioDB = {
-    schemaVersion = 1,
-    settings = {},
-    metadata = {},
+    schemaVersion = 2,
+    settings = {
+        window = {},
+    },
+    metadata = {
+        nextId = 1,
+        records = {
+            ["metadata-1"] = {
+                id = "metadata-1",
+                favorite = true,
+                categoryId = "category-1",
+                tags = { "Burst", "Raid" },
+                snapshot = {
+                    scope = "ACCOUNT",
+                    lastKnownIndex = 7,
+                    name = "Cooldowns",
+                    icon = 134400,
+                    body = "/cast Example",
+                },
+            },
+        },
+    },
+    categories = {
+        nextId = 2,
+        order = { "category-1" },
+        byId = {
+            ["category-1"] = { id = "category-1", name = "Raid" },
+        },
+    },
     history = {},
 }
 ```
 
-Only window settings are currently populated. `metadata` and `history` are migration-ready placeholders, not implemented features. Missing fields are added individually; an existing table is never overwritten wholesale.
+Migration adds missing fields individually, preserves settings and reserved history data, and never downgrades a database created by a newer addon. Organization records are keyed by opaque IDs, never by a macro index or name. `lastKnownIndex` and name are reconciliation evidence inside a snapshot, not persistent table keys.
 
-If MacroStudio is disabled or removed, native macros remain ordinary Blizzard macros.
+Deleting a category removes only MacroStudio metadata assignments. It never invokes a native macro write or deletion API. If MacroStudio is disabled or removed, native macros remain ordinary Blizzard macros.
 
-## Native macro repository
+## Native macro repository and duplicate names
 
-`MacroRepository:Refresh()` enumerates account macros and character macros, whose native index range begins after `MAX_ACCOUNT_MACROS`. Each record is a current snapshot:
+`MacroRepository:Refresh()` enumerates account and character indexes and produces current snapshots:
 
 ```text
-index, scope, name, icon, body
+index, scope, name, icon, body, duplicateName, duplicateCount
 ```
 
-The index is used as a short-lived handle because index-based reads/writes avoid the ambiguity of duplicate names. Before Save, the repository re-reads that index and requires the complete snapshot to match. If anything changed externally, Save is blocked and the draft is retained.
+Duplicate detection is case-insensitive and isolated by scope. Warnings are informational; enumeration and Save always use native indexes, never name lookup.
 
-After `EditMacro`, the repository refreshes and uses the returned index, original index, or a unique full-field match to reselect the saved macro. It reports ambiguity rather than guessing.
+Before Save, the repository re-reads the selected index and requires the complete original snapshot to match. An external change blocks the write and preserves the draft. After `EditMacro`, the repository refreshes and uses the returned index, original index, or a unique full-field match. Ambiguity is reported instead of guessed.
 
-## Macro identity is not solved by an index
+## Metadata reconciliation
 
-Blizzard macro indexes are sorted enumeration positions, not durable primary keys. Renaming or other list changes may move a macro. Names are also insufficient because duplicate names are legal; bodies and icons can change as well.
+Macro indexes are sorted enumeration positions rather than durable identities, and names can be duplicated. Each meaningful organization record therefore stores a snapshot and is reconciled against currently available macros with decreasing confidence:
 
-Therefore future metadata must never use a mapping such as `metadata[17]` with the assumption that index 17 always means the same macro.
+1. unique scope/name/icon/body match;
+2. unique scope/name/icon match;
+3. unique scope/name/body match.
 
-A future reconciliation design may retain a signature/snapshot containing:
+Each current macro can receive at most one metadata record during a reconciliation pass. If a tier produces multiple candidates, or no confident candidate exists, the record remains stored but unattached. The last-known index is never used as sufficient evidence. A later refresh can attach the preserved record when the ambiguity clears.
 
-- scope
-- last-known index
-- name
-- body
-- icon
-- previous reconciliation evidence
+Empty records are pruned after their category, favorite, and tags are all removed. Meaningful unresolved records are retained.
 
-Refresh can then compare multiple fields and assign confidence. Exact unique matches are safe; ambiguous matches must preserve metadata separately and ask the user. MacroStudio must never silently attach a category, history, or backup to a different macro merely because it inherited an old index.
+## Central reactive editor state
 
-Milestone 1 does not persist per-macro metadata, so it does not prematurely commit to a flawed identity scheme.
+The editor keeps the body loaded from Blizzard as `savedBody`. `UpdateEditorState()` compares that immutable baseline with the current edit-box text and derives one state object:
 
-## Duplicate names
+```text
+body, dirty, length, overBy, canSave, canRevert
+```
 
-Enumeration and Save use native indexes, never a macro name lookup. The pre-save full-snapshot check prevents a changed index from silently targeting a same-named neighbor. Revert can follow an exact snapshot or a unique scope/name/icon candidate; it refuses ambiguous duplicates.
+The edit box calls this function directly from `OnTextChanged`, so a keystroke updates the count, dirty label, limit message, Save, and Revert immediately without refreshing the repository or rebuilding the list.
 
-Explicit duplicate detection and user reconciliation belong to Milestone 2.
+Programmatic loads use `SetEditorText()`, which raises `suppressTextChanged`, calls `SetText`, clears the suppression flag, and performs exactly one explicit state update. This prevents selection, Save, Revert, and external refreshes from creating false dirty transitions.
 
-## Dirty-buffer safety
+The derived Save condition requires a selected macro, a dirty body at or below 255 characters, no combat lockdown, and no external conflict. Revert remains available for any dirty selected body, including an over-limit or conflicted draft.
 
-The editor keeps an immutable copy of the body loaded from Blizzard and compares it with the current edit-box text.
+## Dirty-buffer and refresh safety
 
 - Selecting another macro while dirty opens a discard confirmation.
-- Refresh never overwrites a dirty buffer.
-- If an external update invalidates the selection, the buffer remains visible and Save becomes blocked.
-- Revert deliberately reloads the latest safely resolved Blizzard body without writing anything.
-- Hiding and reopening the window preserves the in-memory draft.
-
-Reloading the entire UI cannot preserve an unsaved in-memory draft; persistent drafts are a possible future feature.
+- `UPDATE_MACROS` automatically refreshes repository and organization state.
+- A clean selection reloads when its native body changes.
+- A dirty editor buffer is never overwritten by refresh.
+- If the selected native snapshot changes while dirty, the editor enters an external-conflict state and Save is blocked.
+- Revert deliberately resolves and loads Blizzard's current body without writing.
+- Manual Refresh and `/ms refresh` remain fallback diagnostics, not prerequisites for editor state.
+- Hiding and reopening preserves the in-memory draft; reloading the whole UI cannot.
 
 ## Combat restrictions
 
-`PLAYER_REGEN_DISABLED`, `PLAYER_REGEN_ENABLED`, and `InCombatLockdown()` drive state. The editor remains readable and its draft remains editable, but Save is disabled and the repository independently rechecks combat immediately before `EditMacro`.
+`PLAYER_REGEN_DISABLED`, `PLAYER_REGEN_ENABLED`, and `InCombatLockdown()` drive state. The editor remains readable and editable, but Save is disabled, and the repository independently checks combat immediately before `EditMacro`.
 
-Leaving combat only re-enables legal actions. It never auto-saves.
-
-## Refresh behavior
-
-`UPDATE_MACROS` triggers repository/list refreshes without polling. Because this event may fire even for non-mutating selection activity in Blizzard's Macro UI, refresh is idempotent and never discards a dirty draft. A manual Refresh button and `/ms refresh` are also available.
+Leaving combat only recomputes legal actions. It never auto-saves.
 
 ## Non-destructive rules
 
@@ -110,5 +138,8 @@ Leaving combat only re-enables legal actions. It never auto-saves.
 - Never truncate an over-limit body.
 - Never choose a duplicate by name when an enumerated index is available.
 - Never overwrite external edits when the selected snapshot no longer matches.
+- Never key durable metadata by macro index or name.
+- Never attach ambiguous metadata by guesswork.
+- Never let a category/tag/favorite action mutate or delete a native macro.
 - Never execute imported text as Lua.
-- Future linting/optimization may suggest changes but must not silently mutate macros.
+- Future linting or optimization may suggest changes but must not silently mutate macros.

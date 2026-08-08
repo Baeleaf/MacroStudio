@@ -1,31 +1,5 @@
 local _, MacroStudio = ...
 
-local DISCARD_DIALOG_KEY = "MACROSTUDIO_DISCARD_EDITOR_CHANGES"
-
-local function setDialogDefinition()
-    if not StaticPopupDialogs then
-        return
-    end
-
-    StaticPopupDialogs[DISCARD_DIALOG_KEY] = {
-        text = "MacroStudio has unsaved changes. Discard them and select %s?",
-        button1 = "Discard Changes",
-        button2 = CANCEL,
-        OnAccept = function(dialog, data)
-            local payload = data or dialog.data
-            if payload and payload.macro then
-                MacroStudio:SelectMacro(payload.macro)
-            end
-        end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        preferredIndex = 3,
-    }
-end
-
-setDialogDefinition()
-
 function MacroStudio:RestoreWindowGeometry(frame)
     local settings = self.db and self.db.settings and self.db.settings.window or nil
     local screenWidth = UIParent:GetWidth() or self.DEFAULT_WIDTH
@@ -115,16 +89,21 @@ function MacroStudio:CreateMainFrame()
     title:SetPoint("LEFT", 15, 0)
     title:SetTextColor(0.35, 0.75, 1)
 
-    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " · Milestone 1")
+    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " · Milestone 2")
     version:SetPoint("LEFT", title, "RIGHT", 10, -2)
 
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -3, -3)
 
+    local sidebarPanel = self.Sidebar:Create(frame)
+    sidebarPanel:SetPoint("TOPLEFT", 14, -48)
+    sidebarPanel:SetPoint("BOTTOMLEFT", 14, 14)
+    sidebarPanel:SetWidth(180)
+
     local listPanel = self.MacroList:Create(frame)
-    listPanel:SetPoint("TOPLEFT", 14, -48)
-    listPanel:SetPoint("BOTTOMLEFT", 14, 14)
-    listPanel:SetWidth(310)
+    listPanel:SetPoint("TOPLEFT", sidebarPanel, "TOPRIGHT", 12, 0)
+    listPanel:SetPoint("BOTTOMLEFT", sidebarPanel, "BOTTOMRIGHT", 12, 0)
+    listPanel:SetWidth(280)
 
     local editorPanel = self.Editor:Create(frame)
     editorPanel:SetPoint("TOPLEFT", listPanel, "TOPRIGHT", 12, 0)
@@ -154,6 +133,7 @@ function MacroStudio:CreateMainFrame()
     end)
     frame:SetScript("OnHide", function()
         self.Editor.editBox:ClearFocus()
+        self.Editor:HideMetadataMenus()
     end)
 
     frame:Hide()
@@ -172,16 +152,52 @@ function MacroStudio:Initialize()
         self.Database:Initialize()
     end
 
+    self.activeFilter = { kind = "all" }
     self:CreateMainFrame()
     self.initialized = true
     self:RefreshMacros("initial")
     self:UpdateCombatState()
 end
 
+function MacroStudio:GetFilteredMacros()
+    local filtered = {}
+    local filter = self.activeFilter or { kind = "all" }
+
+    for _, macro in ipairs(self.MacroRepository:GetAll()) do
+        local include = filter.kind == "all"
+            or (filter.kind == "account" and macro.scope == "ACCOUNT")
+            or (filter.kind == "character" and macro.scope == "CHARACTER")
+            or (filter.kind == "favorites" and self.MetadataRepository:IsFavorite(macro))
+            or (filter.kind == "category" and self.MetadataRepository:GetCategoryId(macro) == filter.categoryId)
+        if include then
+            filtered[#filtered + 1] = macro
+        end
+    end
+    return filtered
+end
+
+function MacroStudio:RefreshOrganizationUI()
+    self.Sidebar:Rebuild(self.activeFilter)
+    self.MacroList:Rebuild(self:GetFilteredMacros(), self.selectedMacro)
+    self.Editor:RefreshMetadata()
+end
+
+function MacroStudio:SetFilter(kind, categoryId)
+    if kind == "category" and not self.MetadataRepository:GetCategory(categoryId) then
+        kind = "all"
+        categoryId = nil
+    end
+    self.activeFilter = {
+        kind = kind or "all",
+        categoryId = categoryId,
+    }
+    self:RefreshOrganizationUI()
+end
+
 function MacroStudio:SelectMacro(macro)
     self.selectedMacro = self.Helpers:CopyMacro(macro)
     self.Editor:SetMacro(self.selectedMacro)
-    self.MacroList:SetSelected(self.selectedMacro)
+    self:RefreshOrganizationUI()
     self:Debug("macro selected", self.selectedMacro.index)
 end
 
@@ -194,9 +210,7 @@ function MacroStudio:RequestSelectMacro(macro)
     end
 
     if self.Editor:IsDirty() then
-        if StaticPopup_Show then
-            StaticPopup_Show(DISCARD_DIALOG_KEY, macro.name or "the selected macro", nil, { macro = macro })
-        else
+        if not self.Dialogs:ShowDiscardChanges(macro) then
             self.Editor:SetNotice("Save or Revert the current macro before selecting another.", true)
         end
         return
@@ -211,8 +225,10 @@ function MacroStudio:RefreshMacros(reason)
     end
 
     local macros = self.MacroRepository:Refresh()
+    self.MetadataRepository:Reconcile(macros)
     local editorWasDirty = self.Editor:IsDirty()
     local exactSelection
+
     if self.selectedMacro then
         for _, macro in ipairs(macros) do
             if self.MacroRepository:SnapshotsEqual(macro, self.selectedMacro) then
@@ -223,40 +239,43 @@ function MacroStudio:RefreshMacros(reason)
     end
 
     if exactSelection then
-        self.MacroList:Rebuild(macros, self.selectedMacro)
+        self.selectedMacro.duplicateName = exactSelection.duplicateName
+        self.selectedMacro.duplicateCount = exactSelection.duplicateCount
+        self.Editor.macro = self.selectedMacro
         self.Editor:SetExternalConflict(false)
     elseif self.selectedMacro and editorWasDirty then
-        self.MacroList:Rebuild(macros, nil)
+        self:Debug("external macro change detected", self.selectedMacro.index)
         self.Editor:SetExternalConflict(true)
     elseif self.selectedMacro then
-        local latest = self.MacroRepository:ResolveLatest(self.selectedMacro)
+        local latest = self.MacroRepository:ResolveLatest(self.selectedMacro, false)
         if latest then
             self.selectedMacro = self.Helpers:CopyMacro(latest)
             self.Editor:SetMacro(self.selectedMacro)
-            self.MacroList:Rebuild(self.MacroRepository:GetAll(), self.selectedMacro)
+            self:Debug("selected macro reconciled", self.selectedMacro.index)
         else
             self.selectedMacro = nil
             self.Editor:Clear()
-            self.MacroList:Rebuild(self.MacroRepository:GetAll(), nil)
             self.Editor:SetNotice("The previously selected macro no longer exists.", true)
         end
+    end
+
+    if not self.selectedMacro and #macros > 0 and (reason == "initial" or reason == "open") then
+        self:SelectMacro(macros[1])
     else
-        self.MacroList:Rebuild(macros, nil)
-        if #macros > 0 and (reason == "initial" or reason == "open") then
-            self:SelectMacro(macros[1])
-        end
+        self:RefreshOrganizationUI()
     end
 end
 
 function MacroStudio:OnMacrosChanged(reason)
     if self.initialized then
+        self:Debug("UPDATE_MACROS received")
         self:RefreshMacros(reason or "event")
     end
 end
 
 function MacroStudio:OnEditorTextChanged()
     if self.Editor then
-        self.Editor:RefreshState()
+        self.Editor:UpdateEditorState("callback")
     end
 end
 
@@ -266,24 +285,29 @@ function MacroStudio:SaveSelectedMacro()
         return
     end
 
+    local previousMacro = self.Helpers:CopyMacro(self.selectedMacro)
+    local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(previousMacro)
     local body = self.Editor:GetBody()
-    local saved, updatedMacro, message = self.MacroRepository:Update(self.selectedMacro, body)
+    local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, body)
     if not saved then
         self.Editor:SetNotice(message or "The macro could not be saved.", true)
         return
     end
 
     if not updatedMacro then
-        self.MacroList:Rebuild(self.MacroRepository:GetAll(), nil)
+        self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
+        self:RefreshOrganizationUI()
         self.Editor:SetExternalConflict(true)
         self.Editor:SetNotice(message or "Saved, but the macro must be selected again.", true)
         return
     end
 
+    self.MetadataRepository:OnMacroSaved(previousMacro, updatedMacro, trustedMetadataId)
+    self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
     self.selectedMacro = self.Helpers:CopyMacro(updatedMacro)
     self.Editor:SetMacro(self.selectedMacro)
     self.Editor:SetNotice("Macro saved.", false)
-    self.MacroList:Rebuild(self.MacroRepository:GetAll(), self.selectedMacro)
+    self:RefreshOrganizationUI()
 end
 
 function MacroStudio:RevertSelectedMacro()
@@ -293,8 +317,9 @@ function MacroStudio:RevertSelectedMacro()
     end
 
     local latest, message = self.MacroRepository:ResolveLatest(self.selectedMacro)
+    self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
     if not latest then
-        self.MacroList:Rebuild(self.MacroRepository:GetAll(), nil)
+        self:RefreshOrganizationUI()
         self.Editor:SetExternalConflict(true)
         self.Editor:SetNotice(message or "The macro could not be resolved safely.", true)
         return
@@ -303,13 +328,107 @@ function MacroStudio:RevertSelectedMacro()
     self.selectedMacro = self.Helpers:CopyMacro(latest)
     self.Editor:SetMacro(self.selectedMacro)
     self.Editor:SetNotice("Editor restored from Blizzard's current macro body.", false)
-    self.MacroList:Rebuild(self.MacroRepository:GetAll(), self.selectedMacro)
+    self:RefreshOrganizationUI()
+end
+
+function MacroStudio:ToggleSelectedFavorite()
+    if not self.selectedMacro then
+        return
+    end
+    self.MetadataRepository:ToggleFavorite(self.selectedMacro)
+    self:RefreshOrganizationUI()
+end
+
+function MacroStudio:AssignSelectedCategory(categoryId)
+    if not self.selectedMacro then
+        return
+    end
+    local ok, message = self.MetadataRepository:SetCategory(self.selectedMacro, categoryId)
+    if not ok then
+        self.Editor:SetNotice(message, true)
+        return
+    end
+    self:RefreshOrganizationUI()
+end
+
+function MacroStudio:PromptAddTag()
+    if not self.selectedMacro then
+        return
+    end
+    self.Dialogs:ShowAddTag(self.selectedMacro, function(tag)
+        local ok, message = self.MetadataRepository:AddTag(self.selectedMacro, tag)
+        if not ok then
+            self.Editor:SetNotice(message, true)
+            return
+        end
+        self:RefreshOrganizationUI()
+    end)
+end
+
+function MacroStudio:RemoveSelectedTag(tag)
+    if not self.selectedMacro then
+        return
+    end
+    local ok, message = self.MetadataRepository:RemoveTag(self.selectedMacro, tag)
+    if not ok then
+        self.Editor:SetNotice(message, true)
+        return
+    end
+    self:RefreshOrganizationUI()
+end
+
+function MacroStudio:PromptCreateCategory()
+    self.Dialogs:ShowNewCategory(function(name)
+        local category, message = self.MetadataRepository:CreateCategory(name)
+        if not category then
+            self:Print(message)
+            return
+        end
+        self:SetFilter("category", category.id)
+    end)
+end
+
+function MacroStudio:GetActiveCategory()
+    if self.activeFilter and self.activeFilter.kind == "category" then
+        return self.MetadataRepository:GetCategory(self.activeFilter.categoryId)
+    end
+    return nil
+end
+
+function MacroStudio:PromptRenameCategory()
+    local category = self:GetActiveCategory()
+    if not category then
+        return
+    end
+    self.Dialogs:ShowRenameCategory(category, function(name)
+        local ok, result = self.MetadataRepository:RenameCategory(category.id, name)
+        if not ok then
+            self:Print(result)
+            return
+        end
+        self:RefreshOrganizationUI()
+    end)
+end
+
+function MacroStudio:PromptDeleteCategory()
+    local category = self:GetActiveCategory()
+    if not category then
+        return
+    end
+    self.Dialogs:ShowDeleteCategory(category, function()
+        local ok, message = self.MetadataRepository:DeleteCategory(category.id)
+        if not ok then
+            self:Print(message)
+            return
+        end
+        self:SetFilter("all")
+    end)
 end
 
 function MacroStudio:UpdateCombatState()
     self.inCombat = InCombatLockdown() and true or false
     if self.Editor then
-        self.Editor:RefreshState()
+        self.Editor:UpdateEditorState("combat")
     end
 end
 
@@ -342,7 +461,7 @@ local function handleSlashCommand(message)
         MacroStudio.frame:Show()
     elseif command == "help" then
         MacroStudio:Print("/macrostudio or /ms — toggle the window")
-        MacroStudio:Print("/ms refresh — refresh Blizzard macros")
+        MacroStudio:Print("/ms refresh — force a fallback macro refresh")
         MacroStudio:Print("/ms debug [on|off] — control debug logging")
     elseif command == "" then
         MacroStudio:Toggle()

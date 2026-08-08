@@ -1,12 +1,53 @@
 local _, MacroStudio = ...
 
-local Editor = {}
+local Editor = {
+    categoryMenuRows = {},
+    tagMenuRows = {},
+}
 MacroStudio.Editor = Editor
 
 local NORMAL_COLOR = { 0.82, 0.86, 0.92 }
 local WARNING_COLOR = { 1, 0.68, 0.2 }
 local ERROR_COLOR = { 1, 0.3, 0.3 }
 local SUCCESS_COLOR = { 0.35, 0.9, 0.45 }
+
+local function createPopupMenu(parent, width)
+    local menu = MacroStudio.Helpers:CreatePanel(parent)
+    menu:SetFrameStrata("TOOLTIP")
+    menu:SetWidth(width)
+    menu:Hide()
+    return menu
+end
+
+local function createMenuRow(menu)
+    local row = CreateFrame("Button", nil, menu, "BackdropTemplate")
+    row:SetHeight(23)
+    row:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    row:SetBackdropColor(0.065, 0.08, 0.105, 1)
+
+    local text = MacroStudio.Helpers:CreateLabel(row, "GameFontNormalSmall", "")
+    text:SetPoint("LEFT", 7, 0)
+    text:SetPoint("RIGHT", -7, 0)
+    text:SetJustifyH("LEFT")
+    text:SetWordWrap(false)
+    row.Text = text
+
+    row:SetScript("OnEnter", function(button)
+        button:SetBackdropColor(0.12, 0.24, 0.34, 1)
+    end)
+    row:SetScript("OnLeave", function(button)
+        button:SetBackdropColor(0.065, 0.08, 0.105, 1)
+    end)
+    return row
+end
+
+function Editor:ResizeEditBox()
+    if not self.editBox or not self.scrollFrame then
+        return
+    end
+    local availableHeight = math.max(1, self.scrollFrame:GetHeight())
+    self.editBox:SetHeight(math.max(availableHeight, self.editBox:GetStringHeight() + 24))
+end
 
 function Editor:Create(parent)
     local panel = MacroStudio.Helpers:CreatePanel(parent)
@@ -26,9 +67,18 @@ function Editor:Create(parent)
     icon:SetTexture(MacroStudio.DEFAULT_ICON)
     self.icon = icon
 
+    local favoriteButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    favoriteButton:SetSize(108, 24)
+    favoriteButton:SetPoint("TOPRIGHT", -14, -43)
+    favoriteButton:SetText("☆ Favorite")
+    favoriteButton:SetScript("OnClick", function()
+        MacroStudio:ToggleSelectedFavorite()
+    end)
+    self.favoriteButton = favoriteButton
+
     local nameText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "No macro selected")
     nameText:SetPoint("TOPLEFT", 72, -44)
-    nameText:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -14, -44)
+    nameText:SetPoint("TOPRIGHT", favoriteButton, "TOPLEFT", -10, -1)
     nameText:SetJustifyH("LEFT")
     nameText:SetWordWrap(false)
     self.nameText = nameText
@@ -38,8 +88,57 @@ function Editor:Create(parent)
     scopeText:SetTextColor(0.6, 0.68, 0.78)
     self.scopeText = scopeText
 
+    local categoryLabel = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "Category:")
+    categoryLabel:SetPoint("TOPLEFT", 14, -96)
+
+    local categoryButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    categoryButton:SetSize(170, 22)
+    categoryButton:SetPoint("LEFT", categoryLabel, "RIGHT", 8, 0)
+    categoryButton:SetText("Uncategorized")
+    categoryButton:SetScript("OnClick", function()
+        self:ToggleCategoryMenu()
+    end)
+    self.categoryButton = categoryButton
+
+    local tagsLabel = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "Tags:")
+    tagsLabel:SetPoint("TOPLEFT", 14, -127)
+
+    local addTagButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    addTagButton:SetSize(66, 22)
+    addTagButton:SetPoint("TOPRIGHT", -14, -119)
+    addTagButton:SetText("+ Add")
+    addTagButton:SetScript("OnClick", function()
+        MacroStudio:PromptAddTag()
+    end)
+    self.addTagButton = addTagButton
+
+    local removeTagButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    removeTagButton:SetSize(76, 22)
+    removeTagButton:SetPoint("RIGHT", addTagButton, "LEFT", -6, 0)
+    removeTagButton:SetText("Remove")
+    removeTagButton:SetScript("OnClick", function()
+        self:ToggleTagMenu()
+    end)
+    self.removeTagButton = removeTagButton
+
+    local tagsText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "None")
+    tagsText:SetPoint("LEFT", tagsLabel, "RIGHT", 8, 0)
+    tagsText:SetPoint("RIGHT", removeTagButton, "LEFT", -8, 0)
+    tagsText:SetJustifyH("LEFT")
+    tagsText:SetWordWrap(false)
+    tagsText:SetTextColor(0.68, 0.76, 0.86)
+    self.tagsText = tagsText
+
+    local duplicateText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "")
+    duplicateText:SetPoint("TOPLEFT", 14, -153)
+    duplicateText:SetPoint("TOPRIGHT", -14, -153)
+    duplicateText:SetJustifyH("LEFT")
+    duplicateText:SetWordWrap(false)
+    duplicateText:SetTextColor(unpack(WARNING_COLOR))
+    self.duplicateText = duplicateText
+
     local editBorder = MacroStudio.Helpers:CreatePanel(panel)
-    editBorder:SetPoint("TOPLEFT", 14, -104)
+    editBorder:SetPoint("TOPLEFT", 14, -176)
     editBorder:SetPoint("BOTTOMRIGHT", -14, 70)
     editBorder:SetBackdropColor(0.018, 0.024, 0.035, 1)
     self.editBorder = editBorder
@@ -72,18 +171,17 @@ function Editor:Create(parent)
     editBox:SetScript("OnEditFocusLost", function()
         editBorder:SetBackdropBorderColor(0.18, 0.22, 0.28, 1)
     end)
-    editBox:SetScript("OnTextChanged", function(box)
-        local availableHeight = math.max(1, scrollFrame:GetHeight())
-        box:SetHeight(math.max(availableHeight, box:GetStringHeight() + 24))
-        if not self.loading then
+    editBox:SetScript("OnTextChanged", function(_, userInput)
+        self:ResizeEditBox()
+        if not self.suppressTextChanged then
             self.notice = nil
-            MacroStudio:OnEditorTextChanged()
+            self:UpdateEditorState(userInput and "user" or "unsuppressed")
         end
     end)
 
     scrollFrame:SetScript("OnSizeChanged", function(frame)
         editBox:SetWidth(math.max(1, frame:GetWidth() - 4))
-        editBox:SetHeight(math.max(frame:GetHeight(), editBox:GetStringHeight() + 24))
+        self:ResizeEditBox()
     end)
 
     local countText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormal", "0 / 255")
@@ -115,14 +213,31 @@ function Editor:Create(parent)
     end)
     self.revertButton = revertButton
 
+    local categoryMenu = createPopupMenu(panel, 184)
+    categoryMenu:SetPoint("TOPLEFT", categoryButton, "BOTTOMLEFT", 0, -2)
+    self.categoryMenu = categoryMenu
+
+    local tagMenu = createPopupMenu(panel, 184)
+    tagMenu:SetPoint("TOPRIGHT", removeTagButton, "BOTTOMRIGHT", 0, -2)
+    self.tagMenu = tagMenu
+
     self.savedBody = ""
     self.externalConflict = false
     self:Clear()
     return panel
 end
 
+function Editor:SetEditorText(text)
+    self.suppressTextChanged = true
+    self.editBox:SetText(type(text) == "string" and text or "")
+    self.editBox:SetCursorPosition(0)
+    self.scrollFrame:SetVerticalScroll(0)
+    self.suppressTextChanged = false
+    self:ResizeEditBox()
+    self:UpdateEditorState("programmatic")
+end
+
 function Editor:SetMacro(macro)
-    self.loading = true
     self.macro = macro
     self.savedBody = macro and macro.body or ""
     self.externalConflict = false
@@ -131,11 +246,9 @@ function Editor:SetMacro(macro)
     self.nameText:SetText(macro and macro.name or "No macro selected")
     self.scopeText:SetText(macro and (macro.scope == "ACCOUNT" and "Account Macro" or "Character Macro") or "Select a macro from the list.")
     self.icon:SetTexture(macro and macro.icon or MacroStudio.DEFAULT_ICON)
-    self.editBox:SetText(self.savedBody)
-    self.editBox:SetCursorPosition(0)
-    self.scrollFrame:SetVerticalScroll(0)
-    self.loading = false
-    self:RefreshState()
+    self:HideMetadataMenus()
+    self:SetEditorText(self.savedBody)
+    self:RefreshMetadata()
 end
 
 function Editor:Clear()
@@ -147,12 +260,12 @@ function Editor:GetBody()
 end
 
 function Editor:IsDirty()
-    return self.macro ~= nil and self:GetBody() ~= self.savedBody
+    return self.state and self.state.dirty or false
 end
 
 function Editor:SetExternalConflict(conflicted)
     self.externalConflict = conflicted and true or false
-    self:RefreshState()
+    self:UpdateEditorState("conflict")
 end
 
 function Editor:SetNotice(message, isError)
@@ -160,18 +273,38 @@ function Editor:SetNotice(message, isError)
         message = message,
         color = isError and ERROR_COLOR or SUCCESS_COLOR,
     }
-    self:RefreshState()
+    self:UpdateEditorState("notice")
 end
 
-function Editor:RefreshState()
+function Editor:UpdateEditorState(reason)
     if not self.editBox then
         return
     end
 
     local hasMacro = self.macro ~= nil
-    local dirty = self:IsDirty()
-    local length = MacroStudio.Helpers:TextLength(self:GetBody())
+    local body = self:GetBody()
+    local dirty = hasMacro and body ~= self.savedBody or false
+    local length = MacroStudio.Helpers:TextLength(body)
     local overBy = length - MacroStudio.MAX_BODY_LENGTH
+    local canSave = hasMacro
+        and dirty
+        and not MacroStudio.inCombat
+        and not self.externalConflict
+        and length <= MacroStudio.MAX_BODY_LENGTH
+    local canRevert = hasMacro and dirty
+
+    if self.state and self.state.dirty ~= dirty then
+        MacroStudio:Debug(dirty and "editor became dirty" or "editor returned clean", reason or "state")
+    end
+
+    self.state = {
+        body = body,
+        dirty = dirty,
+        length = length,
+        overBy = overBy,
+        canSave = canSave,
+        canRevert = canRevert,
+    }
 
     self.editBox:SetEnabled(hasMacro)
     self.dirtyText:SetText(dirty and "Unsaved changes" or "")
@@ -193,7 +326,7 @@ function Editor:RefreshState()
         statusMessage = "Combat Lockdown — native macros cannot be modified until combat ends."
         statusColor = ERROR_COLOR
     elseif self.externalConflict then
-        statusMessage = "This macro changed outside MacroStudio. Save is blocked; Revert or select it again."
+        statusMessage = "Saved version changed outside MacroStudio; unsaved text was preserved. Revert to reload it."
         statusColor = ERROR_COLOR
     elseif overBy > 0 then
         statusMessage = string.format("Too long by %d character%s — cannot save.", overBy, overBy == 1 and "" or "s")
@@ -213,13 +346,121 @@ function Editor:RefreshState()
 
     self.stateText:SetText(statusMessage)
     self.stateText:SetTextColor(unpack(statusColor))
-
-    local canSave = hasMacro
-        and dirty
-        and not MacroStudio.inCombat
-        and not self.externalConflict
-        and length <= MacroStudio.MAX_BODY_LENGTH
-    local canRevert = hasMacro and dirty
     MacroStudio.Helpers:SetButtonEnabled(self.saveButton, canSave)
     MacroStudio.Helpers:SetButtonEnabled(self.revertButton, canRevert)
+end
+
+function Editor:RefreshState()
+    self:UpdateEditorState("refresh")
+end
+
+function Editor:RefreshMetadata()
+    local hasMacro = self.macro ~= nil
+    local presentation = MacroStudio.MetadataRepository:GetPresentation(self.macro)
+    self.favoriteButton:SetText(presentation.favorite and "★ Favorite" or "☆ Favorite")
+    self.categoryButton:SetText(presentation.categoryName)
+    self.tagsText:SetText(#presentation.tags > 0 and table.concat(presentation.tags, ", ") or "None")
+
+    if self.macro and self.macro.duplicateName then
+        self.duplicateText:SetText(string.format(
+            "⚠ Duplicate macro name — %d %s macros are named %q.",
+            self.macro.duplicateCount or 2,
+            self.macro.scope == "ACCOUNT" and "account" or "character",
+            self.macro.name
+        ))
+    else
+        self.duplicateText:SetText("")
+    end
+
+    MacroStudio.Helpers:SetButtonEnabled(self.favoriteButton, hasMacro)
+    MacroStudio.Helpers:SetButtonEnabled(self.categoryButton, hasMacro)
+    MacroStudio.Helpers:SetButtonEnabled(self.addTagButton, hasMacro)
+    MacroStudio.Helpers:SetButtonEnabled(self.removeTagButton, hasMacro and #presentation.tags > 0)
+end
+
+function Editor:HideMetadataMenus()
+    if self.categoryMenu then
+        self.categoryMenu:Hide()
+    end
+    if self.tagMenu then
+        self.tagMenu:Hide()
+    end
+end
+
+function Editor:ToggleCategoryMenu()
+    if not self.macro then
+        return
+    end
+    self.tagMenu:Hide()
+    if self.categoryMenu:IsShown() then
+        self.categoryMenu:Hide()
+        return
+    end
+
+    local items = { { id = nil, name = "Uncategorized" } }
+    for _, category in ipairs(MacroStudio.MetadataRepository:GetCategories()) do
+        items[#items + 1] = category
+    end
+
+    for index, item in ipairs(items) do
+        local row = self.categoryMenuRows[index]
+        if not row then
+            row = createMenuRow(self.categoryMenu)
+            row:SetScript("OnClick", function(button)
+                self.categoryMenu:Hide()
+                MacroStudio:AssignSelectedCategory(button.categoryId)
+            end)
+            self.categoryMenuRows[index] = row
+        end
+        row.categoryId = item.id
+        row.Text:SetText(item.name)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 4, -4 - ((index - 1) * 23))
+        row:SetPoint("TOPRIGHT", -4, -4 - ((index - 1) * 23))
+        row:Show()
+    end
+    for index = #items + 1, #self.categoryMenuRows do
+        self.categoryMenuRows[index]:Hide()
+    end
+    self.categoryMenu:SetHeight(8 + (#items * 23))
+    self.categoryMenu:Show()
+end
+
+function Editor:ToggleTagMenu()
+    if not self.macro then
+        return
+    end
+    self.categoryMenu:Hide()
+    if self.tagMenu:IsShown() then
+        self.tagMenu:Hide()
+        return
+    end
+
+    local tags = MacroStudio.MetadataRepository:GetPresentation(self.macro).tags
+    if #tags == 0 then
+        return
+    end
+
+    for index, tag in ipairs(tags) do
+        local row = self.tagMenuRows[index]
+        if not row then
+            row = createMenuRow(self.tagMenu)
+            row:SetScript("OnClick", function(button)
+                self.tagMenu:Hide()
+                MacroStudio:RemoveSelectedTag(button.tag)
+            end)
+            self.tagMenuRows[index] = row
+        end
+        row.tag = tag
+        row.Text:SetText("Remove " .. tag)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 4, -4 - ((index - 1) * 23))
+        row:SetPoint("TOPRIGHT", -4, -4 - ((index - 1) * 23))
+        row:Show()
+    end
+    for index = #tags + 1, #self.tagMenuRows do
+        self.tagMenuRows[index]:Hide()
+    end
+    self.tagMenu:SetHeight(8 + (#tags * 23))
+    self.tagMenu:Show()
 end

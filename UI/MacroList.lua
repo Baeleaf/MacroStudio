@@ -169,12 +169,17 @@ function MacroList:AddSection(title, macros, yOffset)
         row:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
         row.macro = macro
         row.icon:SetTexture(macro.icon or MacroStudio.DEFAULT_ICON)
-        row.nameText:SetText(macro.name ~= "" and macro.name or "Unnamed Macro")
+        local name = macro.name ~= "" and macro.name or "Unnamed Macro"
+        local favoritePrefix = MacroStudio.MetadataRepository:IsFavorite(macro) and "* " or ""
+        row.nameText:SetText(favoritePrefix .. name)
 
         local length = MacroStudio.Helpers:TextLength(macro.body)
         local preview = MacroStudio.Helpers:FirstLine(macro.body, 28)
         if preview == "" then
             preview = "Empty body"
+        end
+        if macro.duplicateName then
+            preview = "Duplicate name - " .. preview
         end
         row.detailText:SetText(string.format("%d / %d  ·  %s", length, MacroStudio.MAX_BODY_LENGTH, preview))
         self.visibleRows[#self.visibleRows + 1] = row

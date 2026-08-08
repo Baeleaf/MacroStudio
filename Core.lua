@@ -1,12 +1,12 @@
 local addonName, MacroStudio = ...
 
 MacroStudio.ADDON_NAME = addonName
-MacroStudio.VERSION = "0.1.0"
+MacroStudio.VERSION = "0.2.0"
 MacroStudio.MAX_BODY_LENGTH = 255
 MacroStudio.BODY_WARNING_LENGTH = 230
-MacroStudio.DEFAULT_WIDTH = 950
+MacroStudio.DEFAULT_WIDTH = 1100
 MacroStudio.DEFAULT_HEIGHT = 650
-MacroStudio.MIN_WIDTH = 750
+MacroStudio.MIN_WIDTH = 900
 MacroStudio.MIN_HEIGHT = 500
 MacroStudio.DEFAULT_ICON = 134400 -- INV_Misc_QuestionMark
 MacroStudio.debug = false

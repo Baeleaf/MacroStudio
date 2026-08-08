@@ -4,6 +4,7 @@ local MacroRepository = {
     macros = {},
     accountCount = 0,
     characterCount = 0,
+    duplicateGroups = {},
 }
 MacroStudio.MacroRepository = MacroRepository
 
@@ -52,6 +53,32 @@ function MacroRepository:GetByIndex(index, expectedScope)
     }
 end
 
+function MacroRepository:DetectDuplicateNames()
+    local candidates = {}
+    self.duplicateGroups = {}
+
+    for _, macro in ipairs(self.macros) do
+        macro.duplicateName = nil
+        macro.duplicateCount = nil
+        if macro.name ~= "" then
+            local key = macro.scope .. "\031" .. macro.name:lower()
+            candidates[key] = candidates[key] or {}
+            candidates[key][#candidates[key] + 1] = macro
+        end
+    end
+
+    for key, group in pairs(candidates) do
+        if #group > 1 then
+            self.duplicateGroups[key] = group
+            for _, macro in ipairs(group) do
+                macro.duplicateName = true
+                macro.duplicateCount = #group
+            end
+            MacroStudio:Debug("duplicate macro name detected", group[1].scope, group[1].name, #group)
+        end
+    end
+end
+
 function MacroRepository:Refresh()
     local refreshed = {}
     local accountCount, characterCount = 0, 0
@@ -79,12 +106,17 @@ function MacroRepository:Refresh()
     end
 
     self.macros = refreshed
-    MacroStudio:Debug("macro refresh", #refreshed, "macros")
+    self:DetectDuplicateNames()
+    MacroStudio:Debug("repository refreshed", #refreshed, "macros")
     return refreshed
 end
 
 function MacroRepository:GetAll()
     return self.macros
+end
+
+function MacroRepository:GetDuplicateGroups()
+    return self.duplicateGroups
 end
 
 function MacroRepository:FindByIndex(index)
@@ -106,12 +138,14 @@ function MacroRepository:SnapshotsEqual(first, second)
         and first.body == second.body
 end
 
-function MacroRepository:ResolveLatest(snapshot)
+function MacroRepository:ResolveLatest(snapshot, refreshFirst)
     if type(snapshot) ~= "table" then
         return nil, "No macro is selected."
     end
 
-    self:Refresh()
+    if refreshFirst ~= false then
+        self:Refresh()
+    end
 
     local sameIndex = self:FindByIndex(snapshot.index)
     local exactMatch
