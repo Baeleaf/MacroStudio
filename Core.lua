@@ -1,0 +1,85 @@
+local addonName, MacroStudio = ...
+
+MacroStudio.ADDON_NAME = addonName
+MacroStudio.VERSION = "0.1.0"
+MacroStudio.MAX_BODY_LENGTH = 255
+MacroStudio.BODY_WARNING_LENGTH = 230
+MacroStudio.DEFAULT_WIDTH = 950
+MacroStudio.DEFAULT_HEIGHT = 650
+MacroStudio.MIN_WIDTH = 750
+MacroStudio.MIN_HEIGHT = 500
+MacroStudio.DEFAULT_ICON = 134400 -- INV_Misc_QuestionMark
+MacroStudio.debug = false
+MacroStudio.inCombat = false
+
+local function joinArguments(...)
+    local parts = {}
+    for index = 1, select("#", ...) do
+        parts[index] = tostring(select(index, ...))
+    end
+    return table.concat(parts, " ")
+end
+
+function MacroStudio:Print(...)
+    print("|cff59b8ffMacroStudio|r:", joinArguments(...))
+end
+
+function MacroStudio:Debug(...)
+    if self.debug then
+        print("|cff8bd0ffMacroStudio Debug|r:", joinArguments(...))
+    end
+end
+
+function MacroStudio:SetDebug(enabled)
+    self.debug = enabled and true or false
+    self:Print("Debug logging " .. (self.debug and "enabled." or "disabled."))
+end
+
+function MacroStudio:OnAddonLoaded()
+    if self.Database then
+        self.Database:Initialize()
+    end
+    self.inCombat = InCombatLockdown() and true or false
+    self:Debug("ADDON_LOADED")
+end
+
+function MacroStudio:OnPlayerLogin()
+    self:Debug("PLAYER_LOGIN")
+    if self.Initialize then
+        self:Initialize()
+    end
+end
+
+function MacroStudio:OnCombatEvent(inCombat)
+    self.inCombat = inCombat and true or false
+    self:Debug(self.inCombat and "combat lockdown entered" or "combat lockdown ended")
+    if self.UpdateCombatState then
+        self:UpdateCombatState()
+    end
+end
+
+local eventFrame = CreateFrame("Frame")
+MacroStudio.eventFrame = eventFrame
+
+eventFrame:RegisterEvent("ADDON_LOADED")
+eventFrame:RegisterEvent("PLAYER_LOGIN")
+eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+eventFrame:RegisterEvent("UPDATE_MACROS")
+
+eventFrame:SetScript("OnEvent", function(_, event, ...)
+    if event == "ADDON_LOADED" then
+        local loadedAddon = ...
+        if loadedAddon == addonName then
+            MacroStudio:OnAddonLoaded()
+        end
+    elseif event == "PLAYER_LOGIN" then
+        MacroStudio:OnPlayerLogin()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        MacroStudio:OnCombatEvent(true)
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        MacroStudio:OnCombatEvent(false)
+    elseif event == "UPDATE_MACROS" and MacroStudio.OnMacrosChanged then
+        MacroStudio:OnMacrosChanged("UPDATE_MACROS")
+    end
+end)

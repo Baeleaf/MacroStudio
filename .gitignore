@@ -1,0 +1,18 @@
+# Editors and operating-system files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Local test/build artifacts
+.luacheckcache
+coverage/
+tests/.artifacts/
+
+# SavedVariables exports do not belong in the addon repository
+MacroStudioDB.lua
+MacroStudioDB.lua.bak

@@ -1,0 +1,14 @@
+## Interface: 120007
+## Title: MacroStudio
+## Notes: A larger, safer editor for native World of Warcraft macros.
+## Author: MacroStudio Contributors
+## Version: 0.1.0
+## SavedVariables: MacroStudioDB
+
+Core.lua
+Utils\Helpers.lua
+Database.lua
+MacroRepository.lua
+UI\Editor.lua
+UI\MacroList.lua
+UI\MainFrame.lua
