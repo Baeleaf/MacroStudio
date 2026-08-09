@@ -86,6 +86,46 @@ function Helpers:ResetNativeScrollingEditBox(scrollBox)
     end
 end
 
+function Helpers:CreateOverlayBorder(parent, aboveFrame, thickness)
+    if not parent then
+        return nil, {}
+    end
+
+    thickness = math.max(1, tonumber(thickness) or 1)
+    local overlay = CreateFrame("Frame", nil, parent)
+    overlay:SetAllPoints(parent)
+    overlay:SetFrameLevel(math.max(parent:GetFrameLevel(), aboveFrame and aboveFrame:GetFrameLevel() or 0) + 1)
+    overlay:EnableMouse(false)
+
+    local top = overlay:CreateTexture(nil, "OVERLAY")
+    top:SetPoint("TOPLEFT")
+    top:SetPoint("TOPRIGHT")
+    top:SetHeight(thickness)
+
+    local bottom = overlay:CreateTexture(nil, "OVERLAY")
+    bottom:SetPoint("BOTTOMLEFT")
+    bottom:SetPoint("BOTTOMRIGHT")
+    bottom:SetHeight(thickness)
+
+    local left = overlay:CreateTexture(nil, "OVERLAY")
+    left:SetPoint("TOPLEFT")
+    left:SetPoint("BOTTOMLEFT")
+    left:SetWidth(thickness)
+
+    local right = overlay:CreateTexture(nil, "OVERLAY")
+    right:SetPoint("TOPRIGHT")
+    right:SetPoint("BOTTOMRIGHT")
+    right:SetWidth(thickness)
+
+    return overlay, { top, right, bottom, left }
+end
+
+function Helpers:SetOverlayBorderColor(edges, red, green, blue, alpha)
+    for _, edge in ipairs(edges or {}) do
+        edge:SetColorTexture(red, green, blue, alpha or 1)
+    end
+end
+
 function Helpers:Clamp(value, minimum, maximum)
     value = tonumber(value) or minimum
     if value < minimum then

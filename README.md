@@ -1,6 +1,6 @@
 # MacroStudio
 
-MacroStudio is a standalone World of Warcraft Retail addon for editing, organizing, creating, and deleting Blizzard-native macros. Version 0.2.3 completes Milestone 2.1 and uses Blizzard's scrolling edit-box template for reliable caret and selection behavior.
+MacroStudio is a standalone World of Warcraft Retail addon for editing, organizing, creating, and deleting Blizzard-native macros. Version 0.2.4 completes Milestone 2.2 with a complete editor focus border and safe modal macro creation.
 
 MacroStudio does not replace WoW's macro execution system. Saved and created macros remain ordinary Blizzard macros that work when MacroStudio is disabled. Categories, Favorites, and tags are local MacroStudio organization metadata.
 
@@ -9,10 +9,10 @@ MacroStudio does not replace WoW's macro execution system. Saved and created mac
 - `/macrostudio` and `/ms` toggle a movable, resizable three-column workspace. The window stays closed after login and `/reload` until explicitly opened.
 - Account and Character filters show only their relevant section. All shows both; Favorites and category filters omit empty sections.
 - Macro rows show native icons, names, body lengths, first-line previews, duplicate warnings, and an atlas-based Favorite marker.
-- The multiline editor uses native mouse caret placement, drag selection, keyboard navigation, copy/paste, and scrolling.
+- The multiline editor uses native mouse caret placement, drag selection, keyboard navigation, copy/paste, and scrolling, with a four-edge focus border that remains aligned while resizing.
 - Dirty, character-limit, Save, Revert, Delete, conflict, and combat eligibility update from the current editor buffer.
 - Save is permitted only for a selected, dirty, current target at or below 255 characters and outside combat. Every write revalidates immediately before using the native API.
-- Create a native Account or Character macro with a name, body, icon picker, scope, capacity feedback, and visible validation.
+- Create a native Account or Character macro in a movable modal dialog with a name, body, icon picker, scope, capacity feedback, and visible validation. The main workspace remains interaction-blocked until the dialog closes.
 - Delete the exact selected native macro after explicit scope/name confirmation. Dirty, conflicted, stale, or combat-locked targets cannot be deleted.
 - Create, rename, delete, assign, and remove virtual categories with inline validation and Enter/Escape keyboard flow.
 - Toggle Favorites using Blizzard's reliable Favorite atlas.
@@ -21,7 +21,7 @@ MacroStudio does not replace WoW's macro execution system. Saved and created mac
 - Metadata uses opaque record IDs and conservative reconciliation. Deleting a macro through MacroStudio removes only that macro's metadata before indexes can be reconciled.
 - Window position and size are remembered. Debug logging is optional and off by default.
 
-Search is intentionally not part of Milestone 2.1. Duplicate Macro was optional and remains deferred. See [ROADMAP.md](ROADMAP.md).
+Search is intentionally not part of Milestone 2.2. Duplicate Macro and native action-bar dragging remain deferred. See [ROADMAP.md](ROADMAP.md).
 
 ## Slash commands
 
@@ -75,14 +75,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\remove-juncti
 - `Database.lua` - non-destructive SavedVariables initialization and migration.
 - `MacroRepository.lua` - native enumeration, exact snapshots, capacity, validation, Save, Create, and Delete.
 - `MetadataRepository.lua` - categories, Favorites, tags, opaque records, cleanup, and reconciliation.
-- `Utils/Helpers.lua` - string/UI helpers and shared native EditBox behavior.
+- `Utils/Helpers.lua` - string/UI helpers, shared native EditBox behavior, and exact overlay borders.
 - `UI/Dialogs.lua` - validated category/tag input and destructive confirmations.
 - `UI/IconPicker.lua` - virtualized native macro icon chooser.
-- `UI/MacroDialog.lua` - native macro creation form.
+- `UI/MacroDialog.lua` - movable modal native-macro creation form.
 - `UI/Sidebar.lua` - built-in and category navigation.
 - `UI/MacroList.lua` - filter-aware scope sections and rows.
-- `UI/Editor.lua` - draft buffer, derived action eligibility, and metadata controls.
-- `UI/MainFrame.lua` - lifecycle, filters, native mutation coordination, and slash commands.
+- `UI/Editor.lua` - draft buffer, complete focus border, derived action eligibility, and metadata controls.
+- `UI/MainFrame.lua` - lifecycle, modal overlay, filters, native mutation coordination, and slash commands.
 - `tests/preflight.py` - Lua compilation plus stubbed macro/metadata/filter regression tests.
 
 ## Known limitations
@@ -91,6 +91,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\remove-juncti
 - Blizzard's 255-character limit is enforced. Longer drafts remain visible but cannot be saved.
 - Macro indexes are transient handles. Ambiguous unresolved metadata is preserved without guessing.
 - Organization metadata does not alter Blizzard's Macro UI or sync through Blizzard macro storage.
-- Search, history/Trash, linting, templates, and action-bar awareness remain future work.
+- Search, history/Trash, linting, templates, direct native action-bar placement, and action-bar usage inspection remain future work.
 - Reloading the UI cannot preserve an unsaved in-memory draft.
 - Native caret/selection feel, protected API behavior, and final layout require the in-game checks in [TESTING.md](TESTING.md).

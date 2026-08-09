@@ -1,8 +1,8 @@
 # MacroStudio Architecture
 
-## Scope of version 0.2.3
+## Scope of version 0.2.4
 
-Version 0.2.3 edits, creates, and deletes Blizzard-native macros and provides virtual organization through categories, Favorites, and tags. It does not implement search, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, or launchers.
+Version 0.2.4 edits, creates, and deletes Blizzard-native macros, provides virtual organization, and makes native macro creation modal and movable. It does not implement search, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, launchers, or action-bar integration.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
@@ -25,12 +25,12 @@ Core.lua
 
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, or `DeleteMacro`.
 - `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
-- `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, mouse/focus configuration, tooltips, and disabled styling.
-- `UI/Editor.lua` derives Save/Delete state from the draft, combat, conflict, length, and exact target snapshot.
-- `UI/MacroDialog.lua` derives Create state from name/body/icon/scope/capacity/combat validation.
+- `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
+- `UI/Editor.lua` derives Save/Delete state and owns the editor's complete four-edge focus treatment.
+- `UI/MacroDialog.lua` derives Create state and owns the movable dialog and modal lifecycle.
 - `UI/IconPicker.lua` uses Blizzard's icon provider when available and compatible API fallbacks otherwise.
 - `UI/MacroList.lua` decides which scope headers are meaningful for the active filter.
-- `UI/MainFrame.lua` coordinates selection, event suppression during native mutations, organization refresh, and dialogs.
+- `UI/MainFrame.lua` coordinates selection, native mutations, organization refresh, dialogs, and the interaction-blocking modal overlay.
 
 UI modules never call raw native macro mutation APIs.
 
@@ -79,6 +79,8 @@ Save requires a selected dirty target, at most 255 characters, no combat, no ext
 
 The main editor and creation dialog use Blizzard's `ScrollingEditBoxTemplate` with a registered `MinimalScrollBar`. The template owns caret rendering, mouse drag selection, multiline keyboard navigation, and cursor scrolling; MacroStudio hooks its scripts without replacing that native behavior.
 
+The one-pixel Backdrop border sits below child frames, so the main editor also uses four exact edge textures on a non-interactive frame above its scrolling controls. Focus and blur recolor all four edges together; the overlay shares the editor border's anchors and therefore remains aligned during resize and scroll.
+
 Programmatic loads suppress text-change handling, then recompute once. External refresh never overwrites a dirty draft.
 
 ## Input and Favorite UI
@@ -88,6 +90,14 @@ Category and tag text input uses one custom dialog. Enter invokes the same valid
 Tag Add menus contain all unique existing tags not assigned to the selected macro, plus **Create New Tag...**. Tag spelling is canonicalized case-insensitively.
 
 Favorites use Blizzard's `PetJournal-FavoritesIcon` atlas rather than Unicode font glyphs. The editor also changes the atlas treatment, label, and backdrop so active state is obvious without relying on color alone.
+
+## Modal macro creation
+
+Showing Create Macro activates a full-size, mouse-enabled overlay above every main-window control and below the `FULLSCREEN_DIALOG` creation frame. The overlay consumes clicks and mouse-wheel input; it is functional input blocking, not only a dimming effect. Metadata menus and tooltips are closed as modal state begins.
+
+The dialog can move only from its dedicated title bar. Name, body, scope, and icon controls do not start movement, and the frame remains clamped to the screen.
+
+The dialog's `OnHide` path is the single cleanup point for Cancel, Escape, the close button, successful creation, and main-window closure. It clears form focus, closes a child icon picker, hides the modal overlay, and restores focus to an enabled selected editor when the main window remains open. Combat state updates validation in place: form contents and modal blocking remain, Create stays blocked, and leaving combat never submits automatically.
 
 ## Combat and non-destructive invariants
 

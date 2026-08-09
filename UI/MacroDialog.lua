@@ -80,6 +80,12 @@ function MacroDialog:UpdateState()
     end
 end
 
+function MacroDialog:Close()
+    if self.frame then
+        self.frame:Hide()
+    end
+end
+
 function MacroDialog:Submit()
     local valid, message = self:ValidateRequest(self:GetRequest())
     if not valid then
@@ -94,7 +100,7 @@ function MacroDialog:Submit()
         return
     end
 
-    self.frame:Hide()
+    self:Close()
 end
 
 function MacroDialog:Create()
@@ -108,12 +114,27 @@ function MacroDialog:Create()
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
+    frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:Hide()
     self.frame = frame
 
-    local title = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormalLarge", "Create New Native Macro")
-    title:SetPoint("TOPLEFT", 16, -15)
+    local titleBar = CreateFrame("Frame", nil, frame)
+    titleBar:SetPoint("TOPLEFT", 1, -1)
+    titleBar:SetPoint("TOPRIGHT", -1, -1)
+    titleBar:SetHeight(42)
+    titleBar:EnableMouse(true)
+    titleBar:RegisterForDrag("LeftButton")
+    titleBar:SetScript("OnDragStart", function()
+        frame:StartMoving()
+    end)
+    titleBar:SetScript("OnDragStop", function()
+        frame:StopMovingOrSizing()
+    end)
+    self.titleBar = titleBar
+
+    local title = MacroStudio.Helpers:CreateLabel(titleBar, "GameFontNormalLarge", "Create New Native Macro")
+    title:SetPoint("LEFT", 15, 0)
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -3, -3)
@@ -238,8 +259,9 @@ function MacroDialog:Create()
     cancelButton:SetPoint("RIGHT", createButton, "LEFT", -8, 0)
     cancelButton:SetText("Cancel")
     cancelButton:SetScript("OnClick", function()
-        frame:Hide()
+        self:Close()
     end)
+    self.cancelButton = cancelButton
 
     nameBox:SetScript("OnTextChanged", function()
         self:UpdateState()
@@ -252,15 +274,30 @@ function MacroDialog:Create()
         bodyBox:SetFocus()
     end)
     nameBox:SetScript("OnEscapePressed", function()
-        frame:Hide()
+        self:Close()
     end)
     bodyBox:HookScript("OnEscapePressed", function()
-        frame:Hide()
+        self:Close()
     end)
 
+    frame:SetScript("OnShow", function()
+        MacroStudio:SetMainWindowModalBlocked(true)
+        frame:Raise()
+    end)
     frame:SetScript("OnHide", function()
         nameBox:ClearFocus()
         bodyBox:ClearFocus()
+        if MacroStudio.IconPicker and MacroStudio.IconPicker.frame then
+            MacroStudio.IconPicker.frame:Hide()
+        end
+        MacroStudio:SetMainWindowModalBlocked(false)
+        if MacroStudio.frame
+            and MacroStudio.frame:IsShown()
+            and MacroStudio.Editor
+            and MacroStudio.Editor.editBox
+            and MacroStudio.Editor.editBox:IsEnabled() then
+            MacroStudio.Editor.editBox:SetFocus()
+        end
     end)
 
     self:SetIcon(MacroStudio.DEFAULT_ICON)
@@ -270,6 +307,12 @@ end
 
 function MacroDialog:Open(preset)
     local frame = self:Create()
+    if frame:IsShown() then
+        frame:Raise()
+        self.nameBox:SetFocus()
+        return
+    end
+
     preset = type(preset) == "table" and preset or {}
 
     self.nameBox:SetText(type(preset.name) == "string" and preset.name or "")

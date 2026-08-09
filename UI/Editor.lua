@@ -11,6 +11,8 @@ local NORMAL_COLOR = { 0.82, 0.86, 0.92 }
 local WARNING_COLOR = { 1, 0.68, 0.2 }
 local ERROR_COLOR = { 1, 0.3, 0.3 }
 local SUCCESS_COLOR = { 0.35, 0.9, 0.45 }
+local EDITOR_BORDER_NORMAL = { 0.18, 0.22, 0.28, 1 }
+local EDITOR_BORDER_FOCUSED = { 0.25, 0.62, 1, 1 }
 
 local function createPopupMenu(parent, width)
     local menu = MacroStudio.Helpers:CreatePanel(parent)
@@ -40,6 +42,17 @@ local function createMenuRow(menu)
         button:SetBackdropColor(0.065, 0.08, 0.105, 1)
     end)
     return row
+end
+
+function Editor:SetEditorFocusBorder(focused)
+    if not self.editBorder then
+        return
+    end
+
+    self.editorFocusBorderActive = focused and true or false
+    local color = self.editorFocusBorderActive and EDITOR_BORDER_FOCUSED or EDITOR_BORDER_NORMAL
+    self.editBorder:SetBackdropBorderColor(unpack(color))
+    MacroStudio.Helpers:SetOverlayBorderColor(self.editorFocusBorderEdges, unpack(color))
 end
 
 
@@ -184,14 +197,19 @@ function Editor:Create(parent)
     editBox:SetJustifyH("LEFT")
     editBox:SetJustifyV("TOP")
 
+    local focusBorder, focusBorderEdges = MacroStudio.Helpers:CreateOverlayBorder(editBorder, scrollBar, 2)
+    self.editorFocusBorder = focusBorder
+    self.editorFocusBorderEdges = focusBorderEdges
+    self:SetEditorFocusBorder(false)
+
     editBox:HookScript("OnEscapePressed", function(box)
         box:ClearFocus()
     end)
     editBox:HookScript("OnEditFocusGained", function()
-        editBorder:SetBackdropBorderColor(0.25, 0.62, 1, 1)
+        self:SetEditorFocusBorder(true)
     end)
     editBox:HookScript("OnEditFocusLost", function()
-        editBorder:SetBackdropBorderColor(0.18, 0.22, 0.28, 1)
+        self:SetEditorFocusBorder(false)
     end)
     editBox:HookScript("OnTextChanged", function(_, userInput)
         if not self.suppressTextChanged then

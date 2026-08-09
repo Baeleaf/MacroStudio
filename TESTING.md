@@ -1,4 +1,4 @@
-# MacroStudio Milestone 2.1 Testing
+# MacroStudio Milestone 2.2 Testing
 
 Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 
@@ -10,7 +10,7 @@ With Python 3 and `lupa` installed, run from the addon root:
 py .\tests\preflight.py
 ```
 
-The harness compiles every Lua source and exercises stubbed Retail APIs for scope enumeration, duplicates, capacity/name/body/combat validation, Create, exact-index Delete, stale-target refusal, metadata cleanup, canonical tags, filter section rules, and Favorite/caret wiring. Actual mouse caret feel still requires the real-client tests below.
+The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, metadata reconciliation, filters, native scrolling EditBoxes, all four focus-border edges, modal overlay entry/cleanup, title-bar movement, and combat form preservation. Actual frame layering and mouse behavior still require the live-client tests below.
 
 ## Load and window lifecycle
 
@@ -30,6 +30,33 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for scop
 - [ ] Repeat click placement and selection in category create/rename, tag creation, macro name, and new-macro body fields.
 - [ ] In category/tag dialogs, Enter submits through validation, invalid input remains visible with an inline error, and Escape cancels.
 - [ ] In the new-macro dialog, Enter/Tab in Name moves to Body; Enter in Body inserts a newline; Escape cancels.
+
+## Editor focus border
+
+- [ ] Click the main editor; top, right, bottom, and left edges all change to the same blue focus treatment.
+- [ ] Click another text field or press Escape; all four edges return to the same normal treatment.
+- [ ] Resize MacroStudio while the editor is focused; every edge remains exactly aligned.
+- [ ] Scroll, select another macro, enter/leave combat, Save, and Revert while focused; the border remains complete and the native caret/selection behavior does not change.
+
+## Create Macro modal safety and movement
+
+- [ ] Open **+ New Macro** and attempt to click the macro list, editor, category navigation, Favorite, tags, Save, Revert, Delete, and New Macro behind it; none respond.
+- [ ] Confirm the dimmed overlay covers the complete main window after resizing, including the title bar and resize grip.
+- [ ] Click Cancel; the dialog and overlay disappear and the selected main editor becomes interactive.
+- [ ] Reopen and press Escape from Name and Body; modal state clears each time.
+- [ ] Reopen, choose an icon, then close Create Macro; the icon picker also closes and no invisible overlay remains.
+- [ ] Successfully create a macro; the dialog closes, the repository refreshes automatically, the new macro is selected, and the editor is usable without Refresh.
+- [ ] Drag the dialog from its title bar; it moves and remains clamped on-screen.
+- [ ] Drag/click in Name, Body, scope, and icon controls; they interact normally and never move the window.
+- [ ] Close and reopen the dialog; it displays correctly at its prior clamped position.
+
+## Combat with Create Macro open
+
+- [ ] Open Create Macro, enter valid Name and Body text, then enter combat.
+- [ ] Confirm the form stays open with all text, scope, and icon intact.
+- [ ] Confirm Create remains protected/disabled and the underlying main window remains interaction-blocked.
+- [ ] Leave combat; confirm the form remains intact and nothing creates automatically.
+- [ ] Click Create manually; confirm normal creation, selection, modal cleanup, and restored editor interaction.
 
 ## Reactive editor and Save eligibility
 

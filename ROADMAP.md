@@ -1,6 +1,6 @@
 # MacroStudio Roadmap
 
-Version 0.2.2 completes Milestones 1, 1.1, 2, and 2.1. Search remains the next product milestone; it was intentionally not started as part of the 2.1 work.
+Version 0.2.4 completes Milestones 1, 1.1, 2, 2.1, and 2.2. Search remains the next product milestone; it was intentionally not started as part of the 2.2 work.
 
 ## Milestone 1 - Native macro editor
 
@@ -37,6 +37,15 @@ Version 0.2.2 completes Milestones 1, 1.1, 2, and 2.1. Search remains the next p
 - [x] Delete the exact native macro with confirmation, dirty/combat/conflict guards, and metadata isolation
 - [ ] Duplicate Macro (optional; deferred without delaying 2.1)
 
+## Milestone 2.2 - UI polish and modal safety
+
+- [x] Keep the native caret while rendering all four editor focus-border edges above scrolling controls
+- [x] Block the complete main workspace with a real mouse-consuming overlay while Create Macro is open
+- [x] Move Create Macro only by its title bar and keep it clamped on-screen
+- [x] Clear modal state through every close path and restore sensible editor focus
+- [x] Preserve the open form and modal blocking through combat without automatic creation
+- [x] Promote native macro dragging to action bars as a high-priority future milestone
+
 ## Milestone 3 - Search and filtering
 
 - [ ] Search macro name and body
@@ -52,6 +61,20 @@ Version 0.2.2 completes Milestones 1, 1.1, 2, and 2.1. Search remains the next p
 - [ ] Consider recoverable Trash only with a broader history design
 - [ ] Warn when destructive operations affect macros placed on action slots
 
+## High priority - Native action-bar placement and usage
+
+### A. Place macros on action bars (implement first)
+
+- [ ] Investigate current supported Retail macro pickup/cursor/drop APIs and secure-action restrictions
+- [ ] Drag a Blizzard-native macro from a MacroStudio row, editor icon, or both directly onto action bars
+- [ ] Respect combat lockdown and protected actions; never add custom execution or bypass secure restrictions
+- [ ] Test Blizzard action bars and reasonable interoperability with popular action-bar addons
+
+### B. Inspect action-bar usage (after placement)
+
+- [ ] Show which action bar and button contain the selected macro, including paging/form/override caveats
+- [ ] Resolve associated keybinds only if the result is reliable
+
 ## Backups, import, and export
 
 - [ ] Selective metadata-only export/import
@@ -66,10 +89,9 @@ Version 0.2.2 completes Milestones 1, 1.1, 2, and 2.1. Search remains the next p
 - [ ] Add a minimap or addon-compartment launcher
 - [ ] Consider an optional `/m` launcher without replacing Blizzard's `/macro`
 
-## Parser, action bars, templates, and optimization
+## Parser, templates, and optimization
 
 - [ ] Advisory tokenizer/linter and maintainable syntax highlighting
-- [ ] Action-slot awareness with paging/form/override caveats
 - [ ] Previewable templates and cursor-position snippets
 - [ ] Explained, opt-in character-count reduction suggestions
 

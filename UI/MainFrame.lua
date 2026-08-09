@@ -45,6 +45,30 @@ function MacroStudio:SaveWindowGeometry(frame)
     window.y = math.floor((y or 0) + 0.5)
 end
 
+function MacroStudio:SetMainWindowModalBlocked(blocked)
+    self.mainWindowModalBlocked = blocked and true or false
+    if not self.modalOverlay then
+        return
+    end
+
+    if self.mainWindowModalBlocked then
+        if self.Editor then
+            self.Editor:HideMetadataMenus()
+        end
+        if self.Dialogs and self.Dialogs.inputFrame then
+            self.Dialogs.inputFrame:Hide()
+        end
+        self.Helpers:HideTooltip()
+        self.modalOverlay:Show()
+    else
+        self.modalOverlay:Hide()
+    end
+end
+
+function MacroStudio:IsMainWindowModalBlocked()
+    return self.mainWindowModalBlocked == true
+end
+
 function MacroStudio:CreateMainFrame()
     local frame = CreateFrame("Frame", "MacroStudioMainFrame", UIParent, "BackdropTemplate")
     frame:Hide()
@@ -90,7 +114,7 @@ function MacroStudio:CreateMainFrame()
     title:SetPoint("LEFT", 15, 0)
     title:SetTextColor(0.35, 0.75, 1)
 
-    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " | Milestone 2.1")
+    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " | Milestone 2.2")
     version:SetPoint("LEFT", title, "RIGHT", 10, -2)
 
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -125,6 +149,21 @@ function MacroStudio:CreateMainFrame()
         frame:StopMovingOrSizing()
         self:SaveWindowGeometry(frame)
     end)
+
+    local modalOverlay = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    modalOverlay:SetAllPoints(frame)
+    modalOverlay:SetFrameStrata("DIALOG")
+    modalOverlay:SetFrameLevel(frame:GetFrameLevel() + 100)
+    modalOverlay:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    modalOverlay:SetBackdropColor(0, 0, 0, 0.42)
+    modalOverlay:EnableMouse(true)
+    modalOverlay:EnableMouseWheel(true)
+    modalOverlay:SetScript("OnMouseDown", function() end)
+    modalOverlay:SetScript("OnMouseUp", function() end)
+    modalOverlay:SetScript("OnMouseWheel", function() end)
+    modalOverlay:Hide()
+    self.modalOverlay = modalOverlay
+    self.mainWindowModalBlocked = false
 
     frame:SetScript("OnSizeChanged", function()
         self:SaveWindowGeometry(frame)

@@ -229,6 +229,7 @@ macro_list_source = (ROOT / "UI" / "MacroList.lua").read_text(encoding="utf-8")
 sidebar_source = (ROOT / "UI" / "Sidebar.lua").read_text(encoding="utf-8")
 editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
 macro_dialog_source = (ROOT / "UI" / "MacroDialog.lua").read_text(encoding="utf-8")
+main_frame_source = (ROOT / "UI" / "MainFrame.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
 dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
 
@@ -242,7 +243,14 @@ assert "SetMouseMotionEnabled(true)" in helpers_source
 assert "CreateNativeScrollingEditBox(editBorder, 5)" in editor_source
 assert "CreateNativeScrollingEditBox(bodyBorder, 5)" in macro_dialog_source
 assert '"OnCursorChanged"' not in helpers_source
+assert "CreateOverlayBorder(editBorder, scrollBar, 2)" in editor_source
+assert "#ms.Editor.editorFocusBorderEdges == 4" in (ROOT / "tests" / "ui_smoke.py").read_text(encoding="utf-8")
+assert "modalOverlay:EnableMouse(true)" in main_frame_source
+assert "modalOverlay:EnableMouseWheel(true)" in main_frame_source
+assert "SetMainWindowModalBlocked(true)" in macro_dialog_source
+assert "SetMainWindowModalBlocked(false)" in macro_dialog_source
+assert 'titleBar:RegisterForDrag("LeftButton")' in macro_dialog_source
 assert '"OnEnterPressed"' in dialogs_source and '"OnEscapePressed"' in dialogs_source
 
 run_ui_smoke(ROOT)
-print("PASS MacroStudio Milestone 2.1 preflight")
+print("PASS MacroStudio Milestone 2.2 preflight")
