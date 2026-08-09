@@ -12,6 +12,8 @@ Thumbs.db
 .luacheckcache
 coverage/
 tests/.artifacts/
+__pycache__/
+*.py[cod]
 
 # SavedVariables exports do not belong in the addon repository
 MacroStudioDB.lua

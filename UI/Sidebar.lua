@@ -8,14 +8,23 @@ MacroStudio.Sidebar = Sidebar
 
 local BUTTON_HEIGHT = 25
 
-local function createFilterButton(parent, label, onClick)
+local function createFilterButton(parent, label, onClick, atlas)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
     button:SetHeight(BUTTON_HEIGHT)
     button:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     button:SetBackdropColor(0.065, 0.08, 0.105, 1)
 
+    local icon
+    if atlas then
+        icon = button:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(16, 16)
+        icon:SetPoint("LEFT", 7, 0)
+        icon:SetAtlas(atlas)
+        button.Icon = icon
+    end
+
     local text = MacroStudio.Helpers:CreateLabel(button, "GameFontNormal", label)
-    text:SetPoint("LEFT", 8, 0)
+    text:SetPoint("LEFT", icon or button, icon and "RIGHT" or "LEFT", icon and 5 or 8, 0)
     text:SetPoint("RIGHT", -6, 0)
     text:SetJustifyH("LEFT")
     text:SetWordWrap(false)
@@ -43,7 +52,7 @@ function Sidebar:Create(parent)
     heading:SetPoint("TOPLEFT", 14, -14)
 
     local navigation = {
-        { kind = "favorites", text = "★ Favorites" },
+        { kind = "favorites", text = "Favorites", atlas = "PetJournal-FavoritesIcon" },
         { kind = "all", text = "All Macros" },
         { kind = "account", text = "Account Macros" },
         { kind = "character", text = "Character Macros" },
@@ -54,7 +63,7 @@ function Sidebar:Create(parent)
         local filterKind = definition.kind
         local button = createFilterButton(panel, definition.text, function()
             MacroStudio:SetFilter(filterKind)
-        end)
+        end, definition.atlas)
         button.filterKind = filterKind
         button:SetPoint("LEFT", 10, 0)
         button:SetPoint("RIGHT", -10, 0)

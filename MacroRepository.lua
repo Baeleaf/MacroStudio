@@ -9,9 +9,20 @@ local MacroRepository = {
 MacroStudio.MacroRepository = MacroRepository
 
 local FALLBACK_ACCOUNT_CAPACITY = 120
+local FALLBACK_CHARACTER_CAPACITY = 30
 
 local function accountCapacity()
-    return tonumber(MAX_ACCOUNT_MACROS) or FALLBACK_ACCOUNT_CAPACITY
+    local macroConstants = Constants and Constants.MacroConsts
+    return tonumber(macroConstants and macroConstants.MAX_ACCOUNT_MACROS)
+        or tonumber(MAX_ACCOUNT_MACROS)
+        or FALLBACK_ACCOUNT_CAPACITY
+end
+
+local function characterCapacity()
+    local macroConstants = Constants and Constants.MacroConsts
+    return tonumber(macroConstants and macroConstants.MAX_CHARACTER_MACROS)
+        or tonumber(MAX_CHARACTER_MACROS)
+        or FALLBACK_CHARACTER_CAPACITY
 end
 
 local function normalizeCount(value)
@@ -20,6 +31,10 @@ local function normalizeCount(value)
         return 0
     end
     return math.floor(value)
+end
+
+local function isInCombat()
+    return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
 end
 
 function MacroRepository:GetScopeForIndex(index)
@@ -119,6 +134,13 @@ function MacroRepository:GetDuplicateGroups()
     return self.duplicateGroups
 end
 
+function MacroRepository:GetCapacity(scope)
+    if scope == "CHARACTER" then
+        return self.characterCount, characterCapacity()
+    end
+    return self.accountCount, accountCapacity()
+end
+
 function MacroRepository:FindByIndex(index)
     for _, macro in ipairs(self.macros) do
         if macro.index == index then
@@ -136,6 +158,13 @@ function MacroRepository:SnapshotsEqual(first, second)
         and first.name == second.name
         and first.icon == second.icon
         and first.body == second.body
+end
+
+function MacroRepository:IsSnapshotCurrent(snapshot)
+    if type(snapshot) ~= "table" or type(snapshot.index) ~= "number" then
+        return false
+    end
+    return self:SnapshotsEqual(self:GetByIndex(snapshot.index, snapshot.scope), snapshot)
 end
 
 function MacroRepository:ResolveLatest(snapshot, refreshFirst)
@@ -190,6 +219,91 @@ function MacroRepository:ResolveLatest(snapshot, refreshFirst)
     return nil, "The selected macro no longer exists or changed identity."
 end
 
+function MacroRepository:ValidateCreateRequest(request)
+    request = type(request) == "table" and request or {}
+    local name = MacroStudio.Helpers:Trim(request.name)
+    local body = type(request.body) == "string" and request.body or ""
+    local scope = request.scope
+
+    if isInCombat() then
+        return false, "Combat Lockdown - native macros cannot be created until combat ends."
+    end
+    if type(CreateMacro) ~= "function" then
+        return false, "The WoW CreateMacro API is unavailable."
+    end
+    if name == "" then
+        return false, "Enter a macro name."
+    end
+    if MacroStudio.Helpers:TextLength(name) > MacroStudio.MAX_NAME_LENGTH then
+        return false, string.format("Macro names are limited to %d characters.", MacroStudio.MAX_NAME_LENGTH)
+    end
+    if MacroStudio.Helpers:TextLength(body) > MacroStudio.MAX_BODY_LENGTH then
+        return false, string.format("Macro bodies are limited to %d characters.", MacroStudio.MAX_BODY_LENGTH)
+    end
+    if scope ~= "ACCOUNT" and scope ~= "CHARACTER" then
+        return false, "Choose Account or Character scope."
+    end
+    if type(request.icon) ~= "number" and (type(request.icon) ~= "string" or request.icon == "") then
+        return false, "Choose a valid macro icon."
+    end
+
+    local count, capacity = self:GetCapacity(scope)
+    if count >= capacity then
+        return false, string.format("%s macros are full (%d/%d).", scope == "ACCOUNT" and "Account" or "Character", count, capacity)
+    end
+    return true
+end
+
+local function matchesCreatedResult(macro, request)
+    return macro
+        and macro.scope == request.scope
+        and macro.name == request.name
+        and macro.body == request.body
+end
+
+function MacroRepository:Create(request)
+    request = type(request) == "table" and request or {}
+    request = {
+        name = MacroStudio.Helpers:Trim(request.name),
+        body = type(request.body) == "string" and request.body or "",
+        scope = request.scope,
+        icon = request.icon or MacroStudio.DEFAULT_ICON,
+    }
+
+    self:Refresh()
+    local valid, message = self:ValidateCreateRequest(request)
+    if not valid then
+        return false, nil, message
+    end
+
+    local ok, returnedIndex = pcall(CreateMacro, request.name, request.icon, request.body, request.scope == "CHARACTER")
+    if not ok then
+        return false, nil, "WoW rejected the macro creation request: " .. tostring(returnedIndex)
+    end
+
+    self:Refresh()
+    local created = tonumber(returnedIndex) and self:FindByIndex(tonumber(returnedIndex)) or nil
+    if matchesCreatedResult(created, request) then
+        return true, created
+    end
+
+    local uniqueMatch
+    local matchCount = 0
+    for _, macro in ipairs(self.macros) do
+        if matchesCreatedResult(macro, request) then
+            uniqueMatch = macro
+            matchCount = matchCount + 1
+        end
+    end
+    if matchCount == 1 then
+        return true, uniqueMatch
+    end
+    if matchCount > 1 then
+        return true, nil, "Created, but duplicate macros made automatic selection ambiguous."
+    end
+    return false, nil, "WoW did not confirm the new macro."
+end
+
 local function matchesSavedResult(macro, original, body)
     return macro
         and macro.scope == original.scope
@@ -207,8 +321,8 @@ function MacroRepository:Update(snapshot, newBody)
     if type(newBody) ~= "string" then
         return false, nil, "The editor buffer is unavailable."
     end
-    if InCombatLockdown() then
-        return false, nil, "Combat Lockdown — native macros cannot be modified until combat ends."
+    if isInCombat() then
+        return false, nil, "Combat Lockdown - native macros cannot be modified until combat ends."
     end
 
     local bodyLength = MacroStudio.Helpers:TextLength(newBody)
@@ -230,8 +344,6 @@ function MacroRepository:Update(snapshot, newBody)
         return false, nil, "The WoW EditMacro API is unavailable."
     end
 
-    -- Passing nil for name and icon preserves them; using the enumerated index
-    -- avoids choosing an arbitrary duplicate by name.
     local returnedIndex = EditMacro(current.index, nil, nil, newBody)
     self:Refresh()
 
@@ -268,4 +380,35 @@ function MacroRepository:Update(snapshot, newBody)
     end
 
     return false, nil, "WoW did not confirm the macro update. The editor buffer was preserved."
+end
+
+function MacroRepository:Delete(snapshot)
+    if type(snapshot) ~= "table" or type(snapshot.index) ~= "number" then
+        return false, "No macro is selected."
+    end
+    if isInCombat() then
+        return false, "Combat Lockdown - native macros cannot be deleted until combat ends."
+    end
+    if type(DeleteMacro) ~= "function" then
+        return false, "The WoW DeleteMacro API is unavailable."
+    end
+
+    self:Refresh()
+    local current = self:GetByIndex(snapshot.index, snapshot.scope)
+    if not current or not self:SnapshotsEqual(current, snapshot) then
+        return false, "The selected macro changed outside MacroStudio. Refresh before deleting it."
+    end
+
+    local previousCount = current.scope == "ACCOUNT" and self.accountCount or self.characterCount
+    local ok, failure = pcall(DeleteMacro, current.index)
+    if not ok then
+        return false, "WoW rejected the delete request: " .. tostring(failure)
+    end
+
+    self:Refresh()
+    local currentCount = current.scope == "ACCOUNT" and self.accountCount or self.characterCount
+    if currentCount == previousCount - 1 then
+        return true
+    end
+    return false, "WoW did not confirm that the macro was deleted."
 end

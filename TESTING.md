@@ -1,117 +1,94 @@
-# MacroStudio Milestone 1.1 and 2 Testing
+# MacroStudio Milestone 2.1 Testing
 
-Run these manual in-game tests with Lua errors visible (for example, `/console scriptErrors 1`, then `/reload`) and keep Blizzard's default Macro UI available for comparison.
+Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 
-## Build and TOC verification
+## Automated preflight
 
-The implementation targets Retail build `12.0.7.68974` and Interface `120007`:
+With Python 3 and `lupa` installed, run from the addon root:
 
-```text
-## Interface: 120007
+```powershell
+py .\tests\preflight.py
 ```
 
-After a WoW update, compare current addon TOCs or the installed build before changing this value.
+The harness compiles every Lua source and exercises stubbed Retail APIs for scope enumeration, duplicates, capacity/name/body/combat validation, Create, exact-index Delete, stale-target refusal, metadata cleanup, canonical tags, filter section rules, and Favorite/caret wiring. Actual mouse caret feel still requires the real-client tests below.
 
-## First load and migration
+## Load and window lifecycle
 
-- [ ] Create the Junction using the README command and restart WoW if MacroStudio was not previously installed.
-- [ ] Log in or run `/reload`; confirm MacroStudio stays closed until `/macrostudio` or `/ms` is entered.
-- [ ] Confirm MacroStudio is enabled and loads without a Lua error.
-- [ ] Run `/macrostudio` and `/ms`; confirm both toggle the window.
-- [ ] Close with X and Escape; confirm the window can reopen.
-- [ ] Move and resize the window, `/reload`, reopen it, and confirm geometry is remembered.
-- [ ] Upgrade from version 0.1.0 with an existing `MacroStudioDB`; confirm window settings survive and `schemaVersion` becomes 2.
-- [ ] Confirm categories, favorites, and tags survive `/reload` and logout/login.
+- [ ] Log in and `/reload`; MacroStudio stays closed with no Lua error.
+- [ ] `/macrostudio` and `/ms` toggle it; X and Escape close it.
+- [ ] Move/resize, `/reload`, reopen, and confirm geometry persists.
+- [ ] Confirm the visible macro-list header has **+ New Macro** and no Refresh button.
+- [ ] Confirm `/ms refresh` still refreshes and opens the window.
+- [ ] Confirm schema 1 settings migrate to schema 2 and organization data survives reload/login.
 
-## Milestone 1.1 reactive-state regression
+## Native caret and keyboard behavior
 
-- [ ] Confirm typing and scrolling a multiline macro produces no `GetStringHeight` Lua error.
-- [ ] Select a macro and type one character. Without clicking Refresh, confirm all four update immediately: character count, **Unsaved changes**, Save enabled, Revert enabled.
-- [ ] Delete that character. Confirm the clean state and disabled Save/Revert return immediately.
-- [ ] Type, paste, cut, undo, and redo where supported; confirm each text change updates state immediately.
-- [ ] Select a different macro after resolving any dirty prompt. Confirm the programmatic load is clean and does not briefly remain dirty.
-- [ ] Click Revert after editing. Confirm the restored text is clean without clicking Refresh.
-- [ ] Save a valid change. Confirm the counter and buttons reset immediately.
-- [ ] At 229 characters, confirm normal state; at 230, confirm the warning state.
-- [ ] At exactly 255 characters, confirm Save is permitted.
-- [ ] At 256, confirm the text remains intact, the overage is shown, Save is disabled, and Revert remains enabled.
+- [ ] Click at the beginning, middle, and end of multiple editor lines; the native caret lands at the click.
+- [ ] Drag forward and backward across text and lines; selection, copy, cut, paste, undo, and redo behave normally.
+- [ ] Use arrows, Home/End, Ctrl+arrows, Page Up/Down, mouse wheel, and the scrollbar; the caret stays visible without jumping to the end.
+- [ ] Click blank space below short text; the editor focuses and places the caret at the end.
+- [ ] Repeat click placement and selection in category create/rename, tag creation, macro name, and new-macro body fields.
+- [ ] In category/tag dialogs, Enter submits through validation, invalid input remains visible with an inline error, and Escape cancels.
+- [ ] In the new-macro dialog, Enter/Tab in Name moves to Body; Enter in Body inserts a newline; Escape cancels.
 
-## Enumeration, selection, and duplicate warnings
+## Reactive editor and Save eligibility
 
-- [ ] Account and character macros appear in their labeled sections.
-- [ ] Icons, names, bodies, counts, and previews match Blizzard's Macro UI.
-- [ ] Test empty account/character sections and, if practical, an account with no macros.
-- [ ] Confirm multiline display, selection, copy, paste, scrolling, and focus styling.
-- [ ] Make a dirty edit and select another macro. Cancel the discard prompt and confirm the draft remains; accept and confirm the requested macro loads.
-- [ ] Create two account macros with the same name. Confirm both receive duplicate warnings.
-- [ ] Give an account and character macro the same name. Confirm they are not reported as duplicates across scopes.
-- [ ] Select same-named macros individually and confirm saving one never modifies the other.
+- [ ] Type one character: count, dirty label, Save, Revert, and New Macro state update immediately.
+- [ ] Remove it: clean state returns without Refresh.
+- [ ] Programmatic selection, Save, Revert, and refresh do not create false dirty state.
+- [ ] At 229 characters state is normal; 230 warns; 255 permits Save; 256 remains intact and blocks Save.
+- [ ] Dirty selection change shows confirmation; Cancel preserves the draft and Accept loads the requested macro.
+- [ ] A clean external body change reloads on `UPDATE_MACROS`.
+- [ ] A dirty external conflict preserves the draft and blocks Save/Delete until Revert or safe refresh.
+- [ ] A stale native target visibly disables Save; forcing the action cannot write a neighbor.
 
-## Categories
+## Favorites, tags, categories, and filter sections
 
-- [ ] Create several categories; confirm they appear in the left navigation.
-- [ ] Try an empty name and a case-only duplicate; confirm both are rejected.
-- [ ] Rename a category and confirm its navigation label and assigned editor label update.
-- [ ] Assign a macro to a category and confirm the category filter shows it.
-- [ ] Reassign the macro and remove its category by choosing **Uncategorized**.
-- [ ] Delete a category with assigned macros. Confirm those macros become uncategorized.
-- [ ] Confirm deleting a category does not delete or edit any macro in Blizzard's Macro UI.
+- [ ] Favorites show a reliable Blizzard atlas in navigation, rows, and editor—no missing-box glyphs.
+- [ ] Toggle Favorite; editor state is obvious from icon treatment, label, and backdrop. Tooltip explains it.
+- [ ] **+ Add** lists existing unassigned tags and **Create New Tag...**; assigned tags are absent.
+- [ ] Choosing an existing tag assigns it immediately. Case-only variants reuse canonical spelling.
+- [ ] Empty, over-limit, and duplicate tag input stays open with visible validation; Enter and Escape work.
+- [ ] Create/rename categories with empty, over-limit, and case-only duplicate input; errors are visible and correctable.
+- [ ] Deleting a category only uncategorizes its macros and never changes native data.
+- [ ] All shows Account and Character headers, including empty scopes.
+- [ ] Account shows only Account; Character shows only Character.
+- [ ] Favorites and category filters omit zero-result scope sections and show one generic no-match message when empty.
+- [ ] Changing filters never alters the selected editor body.
+- [ ] Search controls are absent.
 
-## Favorites and tags
+## Create native macro
 
-- [ ] Toggle Favorite and confirm the editor control and list marker update.
-- [ ] Select **Favorites** and confirm only favorite macros are listed.
-- [ ] Remove Favorite while that filter is active; confirm the macro leaves the filtered list but remains selected and unchanged natively.
-- [ ] Add multiple tags and confirm they display in the editor.
-- [ ] Try an empty tag and a case-only duplicate; confirm both are rejected.
-- [ ] Remove tags one at a time and confirm the display updates.
-- [ ] Confirm category, favorite, and tag actions never change a macro body, name, icon, or scope.
+- [ ] Open **+ New Macro**; verify Name, Account/Character scope, live capacity, icon, Body, count, inline status, Create, and Cancel.
+- [ ] Blank and over-limit names visibly block Create. Verify the native name maximum used by the client.
+- [ ] At 255 body characters Create is allowed; at 256 it is blocked without truncation.
+- [ ] Fill Account capacity and Character capacity separately; the full scope is blocked with its count shown.
+- [ ] Choose several icons. Confirm the selected icon persists in the form and resulting Blizzard macro.
+- [ ] Use the question-mark icon with a `#showtooltip` body and confirm normal dynamic tooltip behavior.
+- [ ] Create one Account and one Character macro. Each appears in Blizzard's Macro UI, refreshes automatically, and becomes the selected clean macro.
+- [ ] Create a duplicate name and confirm both records remain selectable with duplicate warnings.
+- [ ] With a dirty editor draft, New Macro is disabled and the draft is preserved.
+- [ ] Enter combat with the dialog open; Create disables visibly. Leave combat; valid creation re-enables without automatic action.
 
-## Navigation filters
+## Delete native macro
 
-- [ ] **All Macros** shows both scopes.
-- [ ] **Account Macros** and **Character Macros** show only their respective scopes.
-- [ ] **Favorites** shows only favorites.
-- [ ] Each category shows only assigned macros.
-- [ ] Confirm changing filters does not discard or alter the selected editor body.
-- [ ] Confirm search controls are absent; search belongs to Milestone 3.
+- [ ] Clean selected macro: Delete is enabled and confirmation names the exact scope and macro.
+- [ ] Cancel leaves native data and metadata unchanged.
+- [ ] Confirm permanently deletes the Blizzard macro, clears selection, refreshes the list, and removes its MacroStudio metadata.
+- [ ] With dirty text, Delete is disabled with a tooltip directing Save/Revert.
+- [ ] With an external conflict or stale target, Delete is disabled and cannot target the shifted neighbor.
+- [ ] In combat, Delete is visibly disabled; leaving combat only recomputes state.
+- [ ] Create same-name duplicates with different bodies/icons, delete the second, and confirm the first remains unchanged.
+- [ ] Delete an organized macro above another macro so indexes shift; confirm the neighbor does not inherit category, Favorite, or tags.
+- [ ] Confirm there is no Trash/history claim or recovery UI.
 
-## External changes and metadata reconciliation
+## Regression and real-client API checks
 
-- [ ] Select a clean macro, change its body in Blizzard's Macro UI, and close/save there. Confirm `UPDATE_MACROS` reloads MacroStudio automatically without manual Refresh.
-- [ ] Make a dirty MacroStudio draft, change that native macro externally, and confirm the draft remains visible while Save becomes blocked.
-- [ ] Click Revert after the conflict and confirm Blizzard's current body loads only when the target resolves safely.
-- [ ] Add, delete, or rename other macros so indexes shift. Confirm categories, favorites, and tags follow unique matching macros.
-- [ ] Create indistinguishable duplicates around an organized macro. Confirm MacroStudio does not attach its metadata to an arbitrary duplicate.
-- [ ] Remove the ambiguity and refresh. Confirm preserved metadata can reattach when a unique match exists.
-- [ ] Delete the selected macro externally. Confirm no Lua error and no metadata is silently assigned to a neighbor.
-- [ ] Use the Refresh button and `/ms refresh` only as fallback checks; neither should be needed for typing state.
-
-## Save, Revert, and combat
-
-- [ ] Change a body and Save; confirm the dirty state clears and Blizzard's Macro UI shows the same body.
-- [ ] Confirm the macro name, icon, and scope did not change.
-- [ ] Revert a draft and confirm Blizzard's macro was not written.
-- [ ] Create a dirty draft and enter combat. Confirm the draft stays editable/readable and Save becomes unavailable.
-- [ ] Leave combat. Confirm Save re-enables for a valid dirty draft and no automatic save occurred.
-- [ ] Save manually after combat and verify the native macro updates.
-
-## Debug and real-client checks
-
-- [ ] Enable `/ms debug on`, exercise refresh, selection, reconciliation, Save, and combat, and confirm concise logs appear without full macro bodies.
-- [ ] Disable `/ms debug off` and confirm normal use does not spam chat.
-- [ ] Verify protected `EditMacro` behavior and its returned index after list reordering.
-- [ ] Verify `UPDATE_MACROS` timing around Blizzard's Macro UI.
-- [ ] Compare non-ASCII character counts with Blizzard's acceptance behavior.
-- [ ] Inspect layout, font clipping, popup placement, scrolling, and minimum resize behavior at the user's UI scale and resolution.
-
-## Automated preflight completed during development
-
-- Lua 5.1 parsing of every addon source file.
-- Schema 1 to 2 migration while preserving settings, unknown metadata fields, and history.
-- Scope-aware duplicate detection.
-- Category/favorite/tag creation, validation, persistence, assignment, removal, and filters.
-- Unique index-movement reconciliation and ambiguous-record preservation.
-- Immediate dirty/count/Save/Revert transitions and programmatic-load suppression.
-- Save, clean external reload, dirty conflict preservation, Revert, and combat gating in a headless WoW API/UI stub.
-- Retail API regression: the EditBox stub intentionally omits `GetStringHeight`; only the FontString measurement object provides it.
+- [ ] Account/Character icons, names, bodies, indexes, counts, and previews match Blizzard's Macro UI.
+- [ ] Saving one same-name duplicate never modifies the other.
+- [ ] Revert reads native data without writing.
+- [ ] The editor remains usable in combat while native Create/Save/Delete stay blocked.
+- [ ] `UPDATE_MACROS` timing around Create, Save, Delete, and Blizzard's Macro UI causes no flicker, wrong selection, or metadata transfer.
+- [ ] Test non-ASCII name/body/tag character counts against Blizzard acceptance behavior.
+- [ ] Test empty Account/Character collections, both capacities full, multiple UI scales, minimum window size, popup placement, and icon-picker scrolling.
+- [ ] `/ms debug on` logs concise actions without macro bodies; `/ms debug off` returns to quiet operation.

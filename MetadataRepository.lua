@@ -422,3 +422,73 @@ function MetadataRepository:RemoveTag(macro, tag)
     end
     return false, "That tag is no longer assigned to this macro."
 end
+
+function MetadataRepository:GetAllTags()
+    local byKey = {}
+    for _, record in pairs(self:GetRecords()) do
+        for _, tag in ipairs(type(record) == "table" and record.tags or {}) do
+            local key = normalizedKey(tag)
+            if key ~= "" and not byKey[key] then
+                byKey[key] = tag
+            end
+        end
+    end
+
+    local tags = {}
+    for _, tag in pairs(byKey) do
+        tags[#tags + 1] = tag
+    end
+    table.sort(tags, function(first, second)
+        return first:lower() < second:lower()
+    end)
+    return tags
+end
+
+function MetadataRepository:FindExistingTag(tag)
+    local wantedKey = normalizedKey(tag)
+    if wantedKey == "" then
+        return nil
+    end
+    for _, existing in ipairs(self:GetAllTags()) do
+        if normalizedKey(existing) == wantedKey then
+            return existing
+        end
+    end
+    return nil
+end
+
+function MetadataRepository:IsTagAssigned(macro, tag)
+    local record = self:GetRecordForMacro(macro)
+    local wantedKey = normalizedKey(tag)
+    for _, existing in ipairs(record and record.tags or {}) do
+        if normalizedKey(existing) == wantedKey then
+            return true
+        end
+    end
+    return false
+end
+
+local addTagWithoutCanonicalization = MetadataRepository.AddTag
+function MetadataRepository:AddTag(macro, tag)
+    local canonical = self:FindExistingTag(tag)
+    return addTagWithoutCanonicalization(self, macro, canonical or tag)
+end
+
+function MetadataRepository:OnMacroDeleted(macro, trustedRecordId)
+    local recordId = trustedRecordId
+    if not recordId and type(macro) == "table" then
+        recordId = self.attachedByIndex[macro.index]
+    end
+    if not recordId then
+        return
+    end
+
+    local index = self.attachedByRecord[recordId]
+    if index then
+        self.attachedByIndex[index] = nil
+    end
+    self.attachedByRecord[recordId] = nil
+    self.reconciliation[recordId] = nil
+    self:GetRecords()[recordId] = nil
+    MacroStudio:Debug("metadata removed with native macro", recordId)
+end

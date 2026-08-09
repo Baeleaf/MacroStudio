@@ -29,13 +29,14 @@ function MacroList:Create(parent)
     local heading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "MACROS")
     heading:SetPoint("TOPLEFT", 14, -14)
 
-    local refreshButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    refreshButton:SetSize(76, 22)
-    refreshButton:SetPoint("TOPRIGHT", -12, -10)
-    refreshButton:SetText("Refresh")
-    refreshButton:SetScript("OnClick", function()
-        MacroStudio:RefreshMacros("manual")
+    local newMacroButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    newMacroButton:SetSize(104, 22)
+    newMacroButton:SetPoint("TOPRIGHT", -12, -10)
+    newMacroButton:SetText("+ New Macro")
+    newMacroButton:SetScript("OnClick", function()
+        MacroStudio:ShowNewMacroDialog()
     end)
+    self.newMacroButton = newMacroButton
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 10, -42)
@@ -53,6 +54,15 @@ function MacroList:Create(parent)
     end)
 
     return panel
+end
+
+function MacroList:SetNewMacroState(enabled, reason)
+    MacroStudio.Helpers:SetButtonEnabled(self.newMacroButton, enabled)
+    MacroStudio.Helpers:SetButtonTooltip(
+        self.newMacroButton,
+        "Create Native Macro",
+        enabled and "Create an Account or Character macro." or reason
+    )
 end
 
 function MacroList:AcquireHeader()
@@ -83,7 +93,15 @@ function MacroList:AcquireRow()
     local icon = button:CreateTexture(nil, "ARTWORK")
     icon:SetSize(34, 34)
     icon:SetPoint("LEFT", 7, 0)
+    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     button.icon = icon
+
+    local favorite = button:CreateTexture(nil, "OVERLAY")
+    favorite:SetSize(16, 16)
+    favorite:SetPoint("TOPRIGHT", icon, "TOPRIGHT", 5, 5)
+    favorite:SetAtlas("PetJournal-FavoritesIcon")
+    favorite:Hide()
+    button.favorite = favorite
 
     local nameText = MacroStudio.Helpers:CreateLabel(button, "GameFontNormal", "")
     nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 8, -1)
@@ -145,7 +163,20 @@ function MacroList:ReleaseVisibleItems()
     self.visibleEmptyLabels = {}
 end
 
-function MacroList:AddSection(title, macros, yOffset)
+function MacroList:AddEmptyMessage(message, yOffset)
+    local empty = self:AcquireEmptyLabel()
+    empty:ClearAllPoints()
+    empty:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 12, -yOffset)
+    empty:SetText(message)
+    self.visibleEmptyLabels[#self.visibleEmptyLabels + 1] = empty
+    return yOffset + EMPTY_HEIGHT
+end
+
+function MacroList:AddSection(title, macros, yOffset, showEmpty)
+    if #macros == 0 and not showEmpty then
+        return yOffset, false
+    end
+
     local header = self:AcquireHeader()
     header:ClearAllPoints()
     header:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 6, -yOffset)
@@ -154,12 +185,7 @@ function MacroList:AddSection(title, macros, yOffset)
     yOffset = yOffset + HEADER_HEIGHT
 
     if #macros == 0 then
-        local empty = self:AcquireEmptyLabel()
-        empty:ClearAllPoints()
-        empty:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 12, -yOffset)
-        empty:SetText("No macros in this scope")
-        self.visibleEmptyLabels[#self.visibleEmptyLabels + 1] = empty
-        return yOffset + EMPTY_HEIGHT
+        return self:AddEmptyMessage("No macros in this scope", yOffset), true
     end
 
     for _, macro in ipairs(macros) do
@@ -169,9 +195,8 @@ function MacroList:AddSection(title, macros, yOffset)
         row:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
         row.macro = macro
         row.icon:SetTexture(macro.icon or MacroStudio.DEFAULT_ICON)
-        local name = macro.name ~= "" and macro.name or "Unnamed Macro"
-        local favoritePrefix = MacroStudio.MetadataRepository:IsFavorite(macro) and "* " or ""
-        row.nameText:SetText(favoritePrefix .. name)
+        row.favorite:SetShown(MacroStudio.MetadataRepository:IsFavorite(macro))
+        row.nameText:SetText(macro.name ~= "" and macro.name or "Unnamed Macro")
 
         local length = MacroStudio.Helpers:TextLength(macro.body)
         local preview = MacroStudio.Helpers:FirstLine(macro.body, 28)
@@ -181,15 +206,15 @@ function MacroList:AddSection(title, macros, yOffset)
         if macro.duplicateName then
             preview = "Duplicate name - " .. preview
         end
-        row.detailText:SetText(string.format("%d / %d  ·  %s", length, MacroStudio.MAX_BODY_LENGTH, preview))
+        row.detailText:SetText(string.format("%d / %d  |  %s", length, MacroStudio.MAX_BODY_LENGTH, preview))
         self.visibleRows[#self.visibleRows + 1] = row
         yOffset = yOffset + ROW_HEIGHT + CONTENT_GAP
     end
 
-    return yOffset
+    return yOffset, true
 end
 
-function MacroList:Rebuild(macros, selectedMacro)
+function MacroList:Rebuild(macros, selectedMacro, activeFilter)
     self:ReleaseVisibleItems()
 
     local accountMacros = {}
@@ -202,10 +227,30 @@ function MacroList:Rebuild(macros, selectedMacro)
         end
     end
 
+    local filterKind = activeFilter and activeFilter.kind or "all"
+    local showAccount = filterKind ~= "character"
+    local showCharacter = filterKind ~= "account"
+    local showEmptySections = filterKind == "all" or filterKind == "account" or filterKind == "character"
     local yOffset = 2
-    yOffset = self:AddSection("ACCOUNT MACROS", accountMacros, yOffset)
-    yOffset = yOffset + 8
-    yOffset = self:AddSection("CHARACTER MACROS", characterMacros, yOffset)
+    local addedSection = false
+
+    if showAccount then
+        local added
+        yOffset, added = self:AddSection("ACCOUNT MACROS", accountMacros, yOffset, showEmptySections)
+        addedSection = addedSection or added
+    end
+    if showCharacter then
+        if addedSection then
+            yOffset = yOffset + 8
+        end
+        local added
+        yOffset, added = self:AddSection("CHARACTER MACROS", characterMacros, yOffset, showEmptySections)
+        addedSection = addedSection or added
+    end
+    if not addedSection then
+        yOffset = self:AddEmptyMessage("No macros match this filter.", yOffset + 8)
+    end
+
     self.contentHeight = yOffset + 4
     self.scrollChild:SetHeight(math.max(self.scrollFrame:GetHeight(), self.contentHeight))
     self:SetSelected(selectedMacro)

@@ -47,7 +47,7 @@ end
 
 function MacroStudio:CreateMainFrame()
     local frame = CreateFrame("Frame", "MacroStudioMainFrame", UIParent, "BackdropTemplate")
-    frame:Hide() -- Keep startup failures from leaving a partially built window visible.
+    frame:Hide()
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
     frame:SetMovable(true)
@@ -90,7 +90,7 @@ function MacroStudio:CreateMainFrame()
     title:SetPoint("LEFT", 15, 0)
     title:SetTextColor(0.35, 0.75, 1)
 
-    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " · Milestone 2")
+    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " | Milestone 2.1")
     version:SetPoint("LEFT", title, "RIGHT", 10, -2)
 
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -135,6 +135,15 @@ function MacroStudio:CreateMainFrame()
     frame:SetScript("OnHide", function()
         self.Editor.editBox:ClearFocus()
         self.Editor:HideMetadataMenus()
+        if self.Dialogs.inputFrame then
+            self.Dialogs.inputFrame:Hide()
+        end
+        if self.MacroDialog.frame then
+            self.MacroDialog.frame:Hide()
+        end
+        if self.IconPicker.frame then
+            self.IconPicker.frame:Hide()
+        end
     end)
 
     frame:Hide()
@@ -177,10 +186,36 @@ function MacroStudio:GetFilteredMacros()
     return filtered
 end
 
+function MacroStudio:UpdateActionControls()
+    if not self.MacroList or not self.MacroList.newMacroButton then
+        return
+    end
+
+    local accountCount, accountLimit = self.MacroRepository:GetCapacity("ACCOUNT")
+    local characterCount, characterLimit = self.MacroRepository:GetCapacity("CHARACTER")
+    local hasCapacity = accountCount < accountLimit or characterCount < characterLimit
+    local dirty = self.Editor and self.Editor:IsDirty()
+    local enabled = not self.inCombat and hasCapacity and not dirty
+    local reason
+    if self.inCombat then
+        reason = "Creating macros is unavailable during Combat Lockdown."
+    elseif dirty then
+        reason = "Save or Revert editor changes before creating and selecting a new macro."
+    elseif not hasCapacity then
+        reason = "Both Account and Character macro lists are full."
+    end
+    self.MacroList:SetNewMacroState(enabled, reason)
+
+    if self.MacroDialog and self.MacroDialog:IsShown() then
+        self.MacroDialog:UpdateState()
+    end
+end
+
 function MacroStudio:RefreshOrganizationUI()
     self.Sidebar:Rebuild(self.activeFilter)
-    self.MacroList:Rebuild(self:GetFilteredMacros(), self.selectedMacro)
+    self.MacroList:Rebuild(self:GetFilteredMacros(), self.selectedMacro, self.activeFilter)
     self.Editor:RefreshMetadata()
+    self:UpdateActionControls()
 end
 
 function MacroStudio:SetFilter(kind, categoryId)
@@ -196,6 +231,9 @@ function MacroStudio:SetFilter(kind, categoryId)
 end
 
 function MacroStudio:SelectMacro(macro)
+    if not macro then
+        return
+    end
     self.selectedMacro = self.Helpers:CopyMacro(macro)
     self.Editor:SetMacro(self.selectedMacro)
     self:RefreshOrganizationUI()
@@ -268,6 +306,10 @@ function MacroStudio:RefreshMacros(reason)
 end
 
 function MacroStudio:OnMacrosChanged(reason)
+    if self.nativeMutationInProgress then
+        self.pendingMacroRefresh = true
+        return
+    end
     if self.initialized then
         self:Debug("UPDATE_MACROS received")
         self:RefreshMacros(reason or "event")
@@ -277,19 +319,25 @@ end
 function MacroStudio:OnEditorTextChanged()
     if self.Editor then
         self.Editor:UpdateEditorState("callback")
+        self:UpdateActionControls()
     end
 end
 
 function MacroStudio:SaveSelectedMacro()
-    if not self.selectedMacro then
-        self.Editor:SetNotice("Select a macro before saving.", true)
+    local state = self.Editor and self.Editor.state
+    if not self.selectedMacro or not state or not state.canSave then
+        self.Editor:SetNotice(state and state.saveReason or "Select a macro before saving.", true)
         return
     end
 
     local previousMacro = self.Helpers:CopyMacro(self.selectedMacro)
     local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(previousMacro)
     local body = self.Editor:GetBody()
+    self.nativeMutationInProgress = true
     local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, body)
+    self.nativeMutationInProgress = false
+    self.pendingMacroRefresh = nil
+
     if not saved then
         self.Editor:SetNotice(message or "The macro could not be saved.", true)
         return
@@ -352,6 +400,19 @@ function MacroStudio:AssignSelectedCategory(categoryId)
     self:RefreshOrganizationUI()
 end
 
+function MacroStudio:AddExistingTag(tag)
+    if not self.selectedMacro then
+        return false, "Select a macro before assigning a tag."
+    end
+    local ok, message = self.MetadataRepository:AddTag(self.selectedMacro, tag)
+    if not ok then
+        self.Editor:SetNotice(message, true)
+        return false, message
+    end
+    self:RefreshOrganizationUI()
+    return true
+end
+
 function MacroStudio:PromptAddTag()
     if not self.selectedMacro then
         return
@@ -359,10 +420,10 @@ function MacroStudio:PromptAddTag()
     self.Dialogs:ShowAddTag(self.selectedMacro, function(tag)
         local ok, message = self.MetadataRepository:AddTag(self.selectedMacro, tag)
         if not ok then
-            self.Editor:SetNotice(message, true)
-            return
+            return false, message
         end
         self:RefreshOrganizationUI()
+        return true
     end)
 end
 
@@ -382,10 +443,10 @@ function MacroStudio:PromptCreateCategory()
     self.Dialogs:ShowNewCategory(function(name)
         local category, message = self.MetadataRepository:CreateCategory(name)
         if not category then
-            self:Print(message)
-            return
+            return false, message
         end
         self:SetFilter("category", category.id)
+        return true
     end)
 end
 
@@ -404,10 +465,10 @@ function MacroStudio:PromptRenameCategory()
     self.Dialogs:ShowRenameCategory(category, function(name)
         local ok, result = self.MetadataRepository:RenameCategory(category.id, name)
         if not ok then
-            self:Print(result)
-            return
+            return false, result
         end
         self:RefreshOrganizationUI()
+        return true
     end)
 end
 
@@ -426,11 +487,95 @@ function MacroStudio:PromptDeleteCategory()
     end)
 end
 
+function MacroStudio:ShowNewMacroDialog()
+    self:UpdateActionControls()
+    if self.Editor:IsDirty() then
+        self.Editor:SetNotice("Save or Revert editor changes before creating and selecting a new macro.", true)
+        return
+    end
+    if self.inCombat then
+        self.Editor:SetNotice("Creating macros is unavailable during Combat Lockdown.", true)
+        return
+    end
+    self.MacroDialog:Open({ scope = "ACCOUNT", icon = self.DEFAULT_ICON })
+end
+
+function MacroStudio:CreateNativeMacro(request)
+    if self.Editor:IsDirty() then
+        return false, "Save or Revert editor changes before creating a macro."
+    end
+
+    self.nativeMutationInProgress = true
+    local created, macro, message = self.MacroRepository:Create(request)
+    self.nativeMutationInProgress = false
+    self.pendingMacroRefresh = nil
+    if not created then
+        self:UpdateActionControls()
+        return false, message or "The macro could not be created."
+    end
+
+    self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
+    self.activeFilter = { kind = "all" }
+    if macro then
+        self:SelectMacro(macro)
+        self.Editor:SetNotice("Native macro created.", false)
+    else
+        self.selectedMacro = nil
+        self.Editor:Clear()
+        self:RefreshOrganizationUI()
+        self.Editor:SetNotice(message or "Created; select the new macro from the list.", true)
+    end
+    return true, macro
+end
+
+function MacroStudio:RequestDeleteSelectedMacro()
+    local state = self.Editor and self.Editor.state
+    if not self.selectedMacro or not state or not state.canDelete then
+        self.Editor:SetNotice(state and state.deleteReason or "Select a macro before deleting.", true)
+        return
+    end
+
+    local snapshot = self.Helpers:CopyMacro(self.selectedMacro)
+    self.Dialogs:ShowDeleteMacro(snapshot, function()
+        self:DeleteSelectedMacro(snapshot)
+    end)
+end
+
+function MacroStudio:DeleteSelectedMacro(snapshot)
+    local state = self.Editor and self.Editor.state
+    if not self.selectedMacro
+        or not self.MacroRepository:SnapshotsEqual(self.selectedMacro, snapshot)
+        or not state
+        or not state.canDelete then
+        self.Editor:SetNotice(state and state.deleteReason or "The selected macro is no longer safe to delete.", true)
+        return false
+    end
+
+    local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(snapshot)
+    self.nativeMutationInProgress = true
+    local deleted, message = self.MacroRepository:Delete(snapshot)
+    self.nativeMutationInProgress = false
+    self.pendingMacroRefresh = nil
+    if not deleted then
+        self.Editor:SetNotice(message or "The macro could not be deleted.", true)
+        return false
+    end
+
+    self.MetadataRepository:OnMacroDeleted(snapshot, trustedMetadataId)
+    self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
+    self.selectedMacro = nil
+    self.Editor:Clear()
+    self.Editor:SetNotice("Native macro deleted.", false)
+    self:RefreshOrganizationUI()
+    return true
+end
+
 function MacroStudio:UpdateCombatState()
-    self.inCombat = InCombatLockdown() and true or false
+    self.inCombat = type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
     if self.Editor then
         self.Editor:UpdateEditorState("combat")
     end
+    self:UpdateActionControls()
 end
 
 function MacroStudio:Toggle()
@@ -461,9 +606,9 @@ local function handleSlashCommand(message)
         MacroStudio:RefreshMacros("manual")
         MacroStudio.frame:Show()
     elseif command == "help" then
-        MacroStudio:Print("/macrostudio or /ms — toggle the window")
-        MacroStudio:Print("/ms refresh — force a fallback macro refresh")
-        MacroStudio:Print("/ms debug [on|off] — control debug logging")
+        MacroStudio:Print("/macrostudio or /ms - toggle the window")
+        MacroStudio:Print("/ms refresh - force a fallback macro refresh")
+        MacroStudio:Print("/ms debug [on|off] - control debug logging")
     elseif command == "" then
         MacroStudio:Toggle()
     else

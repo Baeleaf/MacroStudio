@@ -1,105 +1,76 @@
 # MacroStudio Roadmap
 
-Version 0.2.1 completes Milestones 1, 1.1, and 2, including the Retail multiline-editor compatibility hotfix. Later milestones remain intentionally out of scope until the completed work has been tested in game.
+Version 0.2.2 completes Milestones 1, 1.1, 2, and 2.1. Search remains the next product milestone; it was intentionally not started as part of the 2.1 work.
 
 ## Milestone 1 - Native macro editor
 
-- [x] Standalone addon and Git repository
-- [x] Large movable, resizable window
-- [x] Account/character macro enumeration
-- [x] Multiline body editor and live 255-character counter
-- [x] Dirty state, Save, Revert, and discard confirmation
-- [x] Combat lockdown behavior that preserves drafts
-- [x] Event-driven and manual refresh
-- [x] SavedVariables foundation
-- [x] Windows Junction tooling and manual test plan
+- [x] Standalone addon and movable, resizable workspace
+- [x] Account/Character enumeration and multiline body editor
+- [x] Live 255-character counter, dirty state, Save, Revert, and discard confirmation
+- [x] Combat-aware writes, event refresh, SavedVariables, and Windows Junction tooling
 
 ## Milestone 1.1 - Reactive editor state
 
-- [x] Derive dirty, length, limit, Save, and Revert state directly from edit-box text
-- [x] Update all editor controls on every user text-change event
-- [x] Suppress text-change handling during programmatic loads, then recompute once
-- [x] Keep clean external updates automatic through `UPDATE_MACROS`
-- [x] Preserve dirty buffers and block Save on external conflicts
-- [x] Retain Refresh only as an explicit fallback
+- [x] Derive dirty, length, limit, Save, and Revert from edit-box text
+- [x] Suppress false dirty transitions during programmatic loads
+- [x] Reload clean external updates and preserve dirty conflicts
+- [x] Keep `/ms refresh` only as an explicit fallback
 
 ## Milestone 2 - Organization
 
 - [x] Virtual category creation, rename, deletion, assignment, and removal
-- [x] Favorites independent of categories
-- [x] Multiple tags plus one optional category per macro
-- [x] Favorites, All, Account, Character, and category navigation filters
-- [x] SavedVariables schema 2 with opaque metadata record IDs
-- [x] Conservative metadata reconciliation across index movement
-- [x] Preservation of unresolved metadata instead of guessing
-- [x] Scope-aware duplicate-name detection and warnings
-- [x] Organization actions never create, rename, edit, or delete Blizzard macros
+- [x] Favorites and multiple tags
+- [x] Favorites, All, Account, Character, and category filters
+- [x] Opaque metadata IDs and conservative reconciliation
+- [x] Scope-aware duplicate-name warnings
 
-Per-macro notes and last-edited timestamps remain possible future organization enhancements; they were not part of the approved Milestone 2 implementation plan.
+## Milestone 2.1 - UX polish and native macro management
+
+- [x] Native mouse caret placement, drag selection, multiline navigation, and scroll tracking in all text fields
+- [x] Enter-to-submit, Escape-to-cancel, and persistent visible validation for category/tag dialogs
+- [x] Atlas-based Favorites in navigation, list rows, and editor state
+- [x] Existing-tag selection plus **Create New Tag...**, excluding already assigned tags
+- [x] Filter-aware scope sections with empty organization sections suppressed
+- [x] Central visible Save/Delete/Create eligibility and defensive action-time revalidation
+- [x] Remove the visible Refresh button while retaining `/ms refresh`
+- [x] Create native macros with name, body, scope, icon, capacity, combat, and limit validation
+- [x] Delete the exact native macro with confirmation, dirty/combat/conflict guards, and metadata isolation
+- [ ] Duplicate Macro (optional; deferred without delaying 2.1)
 
 ## Milestone 3 - Search and filtering
 
 - [ ] Search macro name and body
-- [ ] Search category and tags
-- [ ] Basic filters such as `scope:account`, `scope:character`, `tag:M+`, and `favorite:true`
-- [ ] Favor simple, useful filtering before designing a query language
+- [ ] Search categories and tags
+- [ ] Add simple filters such as `scope:account`, `scope:character`, `tag:M+`, and `favorite:true`
+- [ ] Prefer a small understandable filter language
 
-## Milestone 4 - Full macro management
+## Later native management
 
-- [ ] New and Duplicate Macro
-- [ ] Rename and icon picker
-- [ ] Account/character scope selection
-- [ ] Delete with explicit confirmation
-- [ ] Capacity warnings
-- [ ] Investigate a recoverable Trash concept
-- [ ] Warn on destructive operations when a macro is used on action slots
+- [ ] Rename existing native macros
+- [ ] Change an existing macro's icon or scope
+- [ ] Duplicate Macro
+- [ ] Consider recoverable Trash only with a broader history design
+- [ ] Warn when destructive operations affect macros placed on action slots
 
-All operations must honor combat protection, native name/body/capacity limits, and duplicate names.
+## Backups, import, and export
 
-## Milestone 5 - Backups and history
+- [ ] Selective metadata-only export/import
+- [ ] Categories-only export/import
+- [ ] Full-profile export/import with per-macro include/exclude choices
+- [ ] Preview incoming changes and conflicts before writing
+- [ ] Treat all imported content as untrusted text and never execute it as Lua
+- [ ] Snapshot/version history with timestamps and sensible retention
 
-- [ ] Snapshot name, body, icon, scope, and timestamp before MacroStudio changes/deletes
-- [ ] Browse versions by human-readable time
-- [ ] Explicit restore flow
-- [ ] Sensible retention limits for SavedVariables growth
-- [ ] Trash for macros deleted through MacroStudio, if feasible
+## Launchers
 
-## Milestone 6 - Parser and conservative linter
+- [ ] Add a minimap or addon-compartment launcher
+- [ ] Consider an optional `/m` launcher without replacing Blizzard's `/macro`
 
-- [ ] Deterministic macro tokenizer/parser
-- [ ] Character-budget warnings
-- [ ] Possible duplicate conditionals or commands
-- [ ] Malformed bracket warnings
-- [ ] Suspicious spell/item references where an API can support the check
-- [ ] Maintainable syntax highlighting for commands, conditions, targets, and arguments
+## Parser, action bars, templates, and optimization
 
-The linter must be advisory and must not silently rewrite working macros.
+- [ ] Advisory tokenizer/linter and maintainable syntax highlighting
+- [ ] Action-slot awareness with paging/form/override caveats
+- [ ] Previewable templates and cursor-position snippets
+- [ ] Explained, opt-in character-count reduction suggestions
 
-## Milestone 7 - Action-bar awareness
-
-- [ ] Show raw action slots that reference the selected macro
-- [ ] Map slots to human-friendly bar/button descriptions only where reliable
-- [ ] Account for paging, forms/stances, overrides, possess states, and third-party action-bar presentation
-- [ ] Investigate keybinding awareness later
-
-## Milestone 8 - Templates and snippets
-
-- [ ] Previewable macro templates such as Mouseover Heal, Focus Interrupt, and Arena Target
-- [ ] Insertable snippets such as `[@cursor]`, `[@player]`, and `[mod:shift]`
-- [ ] Insert snippets at the editor cursor
-- [ ] Keep templates as drafts until the user explicitly creates a native macro
-
-## Milestone 9 - Optimization helpers
-
-- [ ] Suggest conservative character-count reductions
-- [ ] Display estimated savings and resulting length
-- [ ] Explain each proposed change
-- [ ] Never silently apply or claim semantic equivalence without sufficient certainty
-
-## Milestone 10 - Import and export
-
-- [ ] Individual macro sharing
-- [ ] Category/template packs
-- [ ] Metadata backup/export
-- [ ] Preview imports before any native write
-- [ ] Treat imported content as untrusted text; never execute imported Lua
+These later tools must never silently rewrite working macros or claim semantic equivalence without sufficient certainty.
