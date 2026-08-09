@@ -178,7 +178,7 @@ function Helpers:ShowTooltip(owner, title, text)
 
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
     if title and title ~= "" then
-        GameTooltip:SetText(title, 1, 0.82, 0, true)
+        GameTooltip:SetText(title, 1, 0.82, 0, 1, true)
     end
     if text and text ~= "" then
         GameTooltip:AddLine(text, 0.82, 0.86, 0.92, true)

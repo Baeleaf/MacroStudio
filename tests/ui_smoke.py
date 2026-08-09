@@ -158,6 +158,25 @@ def run_ui_smoke(root):
         UIParent = CreateFrame("Frame", "UIParent")
         UIParent:SetSize(1920, 1080)
         GameTooltip = CreateFrame("Frame", "GameTooltip")
+        function GameTooltip:SetOwner(owner, anchor)
+            self.tooltipOwner = owner
+            self.tooltipAnchor = anchor
+        end
+        function GameTooltip:SetText(text, red, green, blue, alpha, wrap)
+            assert(alpha == nil or type(alpha) == "number",
+                "GameTooltip:SetText alpha must be numeric")
+            assert(wrap == nil or type(wrap) == "boolean",
+                "GameTooltip:SetText wrap must be boolean")
+            self.tooltipTitle = text
+            self.tooltipAlpha = alpha
+            self.tooltipWrap = wrap
+        end
+        function GameTooltip:AddLine(text, red, green, blue, wrap)
+            assert(wrap == nil or type(wrap) == "boolean",
+                "GameTooltip:AddLine wrap must be boolean")
+            self.tooltipBody = text
+        end
+
 
         function StaticPopup_Show(key, text1, text2, data)
             local dialog = CreateFrame("Frame")
@@ -249,6 +268,21 @@ def run_ui_smoke(root):
             assert(edge.color[1] == 0.18 and edge.color[2] == 0.22 and edge.color[3] == 0.28,
                 "every editor edge should receive the normal color")
         end
+
+        ms.Helpers:ShowTooltip(
+            ms.MacroList.newMacroButton,
+            "Create Native Macro",
+            "Create an Account or Character macro."
+        )
+        assert(GameTooltip.tooltipOwner == ms.MacroList.newMacroButton,
+            "button hover should anchor the shared tooltip")
+        assert(GameTooltip.tooltipTitle == "Create Native Macro"
+                and GameTooltip.tooltipBody == "Create an Account or Character macro.",
+            "button hover should populate the expected tooltip")
+        assert(GameTooltip.tooltipAlpha == 1 and GameTooltip.tooltipWrap == true,
+            "tooltip title should pass numeric alpha before the wrap flag")
+        ms.Helpers:HideTooltip()
+        assert(not GameTooltip:IsShown(), "button leave should hide the shared tooltip")
 
         local searchBox = ms.MacroList.searchBox
         local enumerationBeforeSearch = enumerationCalls
