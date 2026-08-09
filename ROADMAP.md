@@ -1,6 +1,6 @@
 # MacroStudio Roadmap
 
-Version 0.2.4 completes Milestones 1, 1.1, 2, 2.1, and 2.2. Search remains the next product milestone; it was intentionally not started as part of the 2.2 work.
+Version 0.3.0 completes Milestones 1 through 3, including safe native macro management, virtual organization, modal creation, and reactive search.
 
 ## Milestone 1 - Native macro editor
 
@@ -48,10 +48,19 @@ Version 0.2.4 completes Milestones 1, 1.1, 2, 2.1, and 2.2. Search remains the n
 
 ## Milestone 3 - Search and filtering
 
-- [ ] Search macro name and body
-- [ ] Search categories and tags
-- [ ] Add simple filters such as `scope:account`, `scope:character`, `tag:M+`, and `favorite:true`
-- [ ] Prefer a small understandable filter language
+- [x] Search macro names and complete bodies with case-insensitive plain-text matching
+- [x] Search assigned category names and tags
+- [x] Combine search with All, Account, Character, Favorites, and category navigation
+- [x] Update results immediately without native re-enumeration, reconciliation, or SavedVariables writes
+- [x] Preserve selected and dirty editor buffers when search hides their macro row
+- [x] Preserve search/filter state through metadata changes, Create, Delete, and modal interaction
+- [x] Suppress empty scope sections during search and show one query-specific no-match message
+- [x] Clear search without changing the current navigation filter
+
+## Future advanced search syntax
+
+- [ ] Add filters such as `scope:account`, `scope:character`, `tag:interrupt`, `category:mythic+`, `favorite:true`, `body:mouseover`, and `name:kick`
+- [ ] Support understandable combinations such as `tag:interrupt focus` only after defining predictable parsing rules
 
 ## Later native management
 

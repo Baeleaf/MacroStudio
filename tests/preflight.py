@@ -99,7 +99,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "0.2.2"
+namespace.VERSION = "0.3.0"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -111,6 +111,7 @@ globals_.MacroStudioDB = None
 load_addon_file("Utils/Helpers.lua", namespace)
 load_addon_file("MacroRepository.lua", namespace)
 load_addon_file("MetadataRepository.lua", namespace)
+load_addon_file("Search.lua", namespace)
 load_addon_file("UI/MacroList.lua", namespace)
 load_addon_file("UI/MainFrame.lua", namespace)
 
@@ -132,6 +133,7 @@ tests = load(
     local _, ms = ...
     local repo = ms.MacroRepository
     local metadata = ms.MetadataRepository
+    local search = ms.Search
 
     local macros = repo:Refresh()
     assert(#macros == 3, "refresh should enumerate both scopes")
@@ -189,6 +191,26 @@ tests = load(
     ok, tag = metadata:AddTag(second, "raid")
     assert(ok and tag == "Raid", "existing tag spelling should be canonical")
     assert(#metadata:GetAllTags() == 1, "tag choices should be unique")
+    local category = metadata:CreateCategory("Mythic+")
+    assert(category and metadata:SetCategory(first, category.id), "search category setup")
+
+    assert(search:Matches(first, "TWIN"), "search should match names case-insensitively")
+    assert(search:Matches(first, "say first"), "search should match the complete body")
+    assert(search:Matches(first, "RAID"), "search should match tags case-insensitively")
+    assert(search:Matches(first, "mythic+"), "search should match assigned category names")
+    assert(not search:Matches(first, "missing"), "unmatched search should reject the macro")
+
+    ms.activeFilter = { kind = "favorites" }
+    ms.searchQuery = "twin"
+    local filtered = ms:GetFilteredMacros()
+    assert(#filtered == 1 and filtered[1].name == "Twin",
+        "navigation and search should combine against the in-memory repository")
+    ms.activeFilter = { kind = "account" }
+    ms.searchQuery = "new"
+    filtered = ms:GetFilteredMacros()
+    assert(#filtered == 1 and filtered[1].name == "New", "Account plus search")
+    ms.activeFilter = { kind = "all" }
+    ms.searchQuery = ""
 
     local _, firstRecordId = metadata:GetRecordForMacro(first)
     metadata:OnMacroDeleted(first, firstRecordId)
@@ -198,6 +220,7 @@ tests = load(
 
     local list = ms.MacroList
     local sectionTitles = {}
+    local emptyMessage
     list.ReleaseVisibleItems = function(self)
         self.visibleRows, self.visibleHeaders, self.visibleEmptyLabels = {}, {}, {}
     end
@@ -206,7 +229,10 @@ tests = load(
         sectionTitles[#sectionTitles + 1] = title
         return y + 1, true
     end
-    list.AddEmptyMessage = function(self, _, y) return y + 1 end
+    list.AddEmptyMessage = function(self, message, y)
+        emptyMessage = message
+        return y + 1
+    end
     list.SetSelected = function() end
     list.scrollChild = { SetHeight = function() end }
     list.scrollFrame = { GetHeight = function() return 100 end }
@@ -220,6 +246,15 @@ tests = load(
     sectionTitles = {}
     list:Rebuild({ second }, nil, { kind = "favorites" })
     assert(#sectionTitles == 1, "organization filters should omit empty scope headers")
+    sectionTitles = {}
+    list:Rebuild({ first }, nil, { kind = "all" }, "twin")
+    assert(#sectionTitles == 1 and sectionTitles[1] == "ACCOUNT MACROS",
+        "active search should suppress empty scope sections")
+    sectionTitles = {}
+    emptyMessage = nil
+    list:Rebuild({}, nil, { kind = "all" }, "mouseover")
+    assert(#sectionTitles == 0 and emptyMessage == 'No macros match "mouseover".',
+        "empty search should show one query-specific message")
     """,
     "@preflight-tests",
 )
@@ -231,6 +266,7 @@ editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
 macro_dialog_source = (ROOT / "UI" / "MacroDialog.lua").read_text(encoding="utf-8")
 main_frame_source = (ROOT / "UI" / "MainFrame.lua").read_text(encoding="utf-8")
 icon_picker_source = (ROOT / "UI" / "IconPicker.lua").read_text(encoding="utf-8")
+search_source = (ROOT / "Search.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
 dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
 
@@ -253,7 +289,14 @@ assert "SetMainWindowModalBlocked(false)" in macro_dialog_source
 assert 'titleBar:RegisterForDrag("LeftButton")' in macro_dialog_source
 assert "getIconIdentity" in icon_picker_source and "GetFileIDFromPath" in icon_picker_source
 assert 'basename == "inv_misc_questionmark"' in icon_picker_source
+assert "macro.name" in search_source and "macro.body" in search_source
+assert "presentation.categoryName" in search_source and "presentation.tags" in search_source
+assert "MacroRepository" not in search_source and "SavedVariables" not in search_source
+assert 'searchBox:HookScript("OnTextChanged"' in macro_list_source
+assert 'searchBox:HookScript("OnEscapePressed"' in macro_list_source
+assert "self:RefreshMacroList()" in main_frame_source
+assert 'self.activeFilter = { kind = "all" }\n    if macro then' not in main_frame_source
 assert '"OnEnterPressed"' in dialogs_source and '"OnEscapePressed"' in dialogs_source
 
 run_ui_smoke(ROOT)
-print("PASS MacroStudio Milestone 2.2 preflight")
+print("PASS MacroStudio Milestone 3 preflight")

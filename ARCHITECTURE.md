@@ -1,8 +1,8 @@
 # MacroStudio Architecture
 
-## Scope of version 0.2.4
+## Scope of version 0.3.0
 
-Version 0.2.4 edits, creates, and deletes Blizzard-native macros, provides virtual organization, and makes native macro creation modal and movable. It does not implement search, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, launchers, or action-bar integration.
+Version 0.3.0 edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, launchers, and action-bar integration remain unimplemented.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
@@ -14,6 +14,7 @@ Core.lua
 |-- MacroRepository.lua
 |-- MetadataRepository.lua
 |-- Utils/Helpers.lua
+|-- Search.lua
 `-- UI/MainFrame.lua
     |-- UI/Dialogs.lua
     |-- UI/IconPicker.lua
@@ -26,6 +27,7 @@ Core.lua
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, or `DeleteMacro`.
 - `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
+- `Search.lua` performs read-only matching against native macro fields and attached metadata.
 - `UI/Editor.lua` derives Save/Delete state and owns the editor's complete four-edge focus treatment.
 - `UI/MacroDialog.lua` derives Create state and owns the movable dialog and modal lifecycle.
 - `UI/IconPicker.lua` uses Blizzard's icon provider when available and compatible API fallbacks otherwise.
@@ -66,6 +68,29 @@ Meaningful metadata records reconcile against currently unclaimed macros using d
 
 Ambiguous or unmatched records remain stored but unattached. Each current macro can receive at most one record. Empty records are pruned.
 
+## Search and filter flow
+
+```text
+MacroRepository:GetAll() (already refreshed in memory)
+        |
+        v
+active navigation predicate
+        |
+        v
+Search:Matches(name, complete body, category, tags)
+        |
+        v
+MacroList:Rebuild(visible matches)
+
+selected macro + editor draft --------------------> unchanged
+```
+
+Each search keystroke updates only the in-memory query and rebuilds pooled macro-list rows. It does not call Blizzard enumeration APIs, reconcile metadata, rebuild the sidebar/editor, or write SavedVariables. A straightforward substring scan is sufficient for Retail's bounded macro collection, so no debounce is used.
+
+Search refines the active All, Account, Character, Favorites, or category view. While a query is active, empty scope sections are omitted and one query-specific message represents zero results. Clearing the query retains the navigation filter.
+
+Selection is intentionally independent from visibility. Search can hide the selected row while its editor and dirty draft remain intact. Metadata mutations rebuild the list immediately; Create and Delete preserve both query and navigation state. The query remains in memory while the window is toggled and resets when the addon initializes after `/reload` or login.
+
 ## Central editor and action state
 
 `Editor:UpdateEditorState()` derives:
@@ -95,7 +120,7 @@ Favorites use Blizzard's `PetJournal-FavoritesIcon` atlas rather than Unicode fo
 
 Showing Create Macro activates a full-size, mouse-enabled overlay above every main-window control and below the `FULLSCREEN_DIALOG` creation frame. The overlay consumes clicks and mouse-wheel input; it is functional input blocking, not only a dimming effect. Metadata menus and tooltips are closed as modal state begins.
 
-The dialog can move only from its dedicated title bar. Name, body, scope, and icon controls do not start movement, and the frame remains clamped to the screen.
+The dialog can move only from its dedicated title bar. Name, body, scope, icon, and the blocked underlying search control do not start movement, and the frame remains clamped to the screen.
 
 The dialog's `OnHide` path is the single cleanup point for Cancel, Escape, the close button, successful creation, and main-window closure. It clears form focus, closes a child icon picker, hides the modal overlay, and restores focus to an enabled selected editor when the main window remains open. Combat state updates validation in place: form contents and modal blocking remain, Create stays blocked, and leaving combat never submits automatically.
 

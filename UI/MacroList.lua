@@ -38,8 +38,59 @@ function MacroList:Create(parent)
     end)
     self.newMacroButton = newMacroButton
 
+    local clearSearchButton = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
+    clearSearchButton:SetSize(22, 22)
+    clearSearchButton:SetPoint("TOPRIGHT", -10, -42)
+    clearSearchButton:Hide()
+    self.clearSearchButton = clearSearchButton
+
+    local searchBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    searchBox:SetHeight(24)
+    searchBox:SetPoint("TOPLEFT", 14, -42)
+    searchBox:SetPoint("TOPRIGHT", clearSearchButton, "TOPLEFT", -4, 0)
+    searchBox:SetMaxLetters(120)
+    MacroStudio.Helpers:ConfigureEditBox(searchBox)
+    self.searchBox = searchBox
+
+    local searchPlaceholder = MacroStudio.Helpers:CreateLabel(searchBox, "GameFontDisableSmall", "Search macros...")
+    searchPlaceholder:SetPoint("LEFT", 7, 0)
+    searchPlaceholder:SetTextColor(0.48, 0.54, 0.62)
+    self.searchPlaceholder = searchPlaceholder
+
+    local function updateSearchPresentation()
+        local empty = searchBox:GetText() == ""
+        searchPlaceholder:SetShown(empty and not searchBox:HasFocus())
+        clearSearchButton:SetShown(not empty)
+    end
+
+    searchBox:HookScript("OnTextChanged", function(box)
+        updateSearchPresentation()
+        MacroStudio:SetSearchQuery(box:GetText())
+    end)
+    searchBox:HookScript("OnEditFocusGained", function()
+        updateSearchPresentation()
+    end)
+    searchBox:HookScript("OnEditFocusLost", function()
+        updateSearchPresentation()
+    end)
+    searchBox:HookScript("OnEscapePressed", function(box)
+        if box:GetText() ~= "" then
+            self:ClearSearch(true)
+        else
+            box:ClearFocus()
+        end
+    end)
+    searchBox:HookScript("OnEnterPressed", function(box)
+        box:ClearFocus()
+    end)
+    clearSearchButton:SetScript("OnClick", function()
+        self:ClearSearch(true)
+    end)
+    MacroStudio.Helpers:SetButtonTooltip(clearSearchButton, "Clear Search", "Keep the current navigation filter and show all of its macros.")
+    updateSearchPresentation()
+
     local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -42)
+    scrollFrame:SetPoint("TOPLEFT", 10, -73)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)
     self.scrollFrame = scrollFrame
 
@@ -54,6 +105,23 @@ function MacroList:Create(parent)
     end)
 
     return panel
+end
+
+function MacroList:ClearSearch(keepFocus)
+    if not self.searchBox then
+        return
+    end
+
+    if self.searchBox:GetText() ~= "" then
+        self.searchBox:SetText("")
+    else
+        MacroStudio:SetSearchQuery("")
+    end
+    if keepFocus then
+        self.searchBox:SetFocus()
+    else
+        self.searchBox:ClearFocus()
+    end
 end
 
 function MacroList:SetNewMacroState(enabled, reason)
@@ -214,8 +282,9 @@ function MacroList:AddSection(title, macros, yOffset, showEmpty)
     return yOffset, true
 end
 
-function MacroList:Rebuild(macros, selectedMacro, activeFilter)
+function MacroList:Rebuild(macros, selectedMacro, activeFilter, searchQuery)
     self:ReleaseVisibleItems()
+    local visibleQuery = MacroStudio.Helpers:Trim(searchQuery or "")
 
     local accountMacros = {}
     local characterMacros = {}
@@ -230,7 +299,8 @@ function MacroList:Rebuild(macros, selectedMacro, activeFilter)
     local filterKind = activeFilter and activeFilter.kind or "all"
     local showAccount = filterKind ~= "character"
     local showCharacter = filterKind ~= "account"
-    local showEmptySections = filterKind == "all" or filterKind == "account" or filterKind == "character"
+    local showEmptySections = visibleQuery == ""
+        and (filterKind == "all" or filterKind == "account" or filterKind == "character")
     local yOffset = 2
     local addedSection = false
 
@@ -248,7 +318,13 @@ function MacroList:Rebuild(macros, selectedMacro, activeFilter)
         addedSection = addedSection or added
     end
     if not addedSection then
-        yOffset = self:AddEmptyMessage("No macros match this filter.", yOffset + 8)
+        local message
+        if visibleQuery ~= "" then
+            message = string.format('No macros match "%s".', visibleQuery)
+        else
+            message = "No macros match this filter."
+        end
+        yOffset = self:AddEmptyMessage(message, yOffset + 8)
     end
 
     self.contentHeight = yOffset + 4

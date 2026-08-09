@@ -114,7 +114,7 @@ function MacroStudio:CreateMainFrame()
     title:SetPoint("LEFT", 15, 0)
     title:SetTextColor(0.35, 0.75, 1)
 
-    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " | Milestone 2.2")
+    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " | Milestone 3")
     version:SetPoint("LEFT", title, "RIGHT", 10, -2)
 
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -202,6 +202,7 @@ function MacroStudio:Initialize()
     end
 
     self.activeFilter = { kind = "all" }
+    self.searchQuery = ""
     self:CreateMainFrame()
     self.initialized = true
     self:RefreshMacros("initial")
@@ -211,6 +212,7 @@ end
 function MacroStudio:GetFilteredMacros()
     local filtered = {}
     local filter = self.activeFilter or { kind = "all" }
+    local query = self.searchQuery or ""
 
     for _, macro in ipairs(self.MacroRepository:GetAll()) do
         local include = filter.kind == "all"
@@ -218,7 +220,7 @@ function MacroStudio:GetFilteredMacros()
             or (filter.kind == "character" and macro.scope == "CHARACTER")
             or (filter.kind == "favorites" and self.MetadataRepository:IsFavorite(macro))
             or (filter.kind == "category" and self.MetadataRepository:GetCategoryId(macro) == filter.categoryId)
-        if include then
+        if include and self.Search:Matches(macro, query) then
             filtered[#filtered + 1] = macro
         end
     end
@@ -250,9 +252,34 @@ function MacroStudio:UpdateActionControls()
     end
 end
 
+function MacroStudio:GetSearchQuery()
+    return self.searchQuery or ""
+end
+
+function MacroStudio:SetSearchQuery(query)
+    query = type(query) == "string" and query or ""
+    if query == self.searchQuery then
+        return
+    end
+
+    self.searchQuery = query
+    if self.MacroList and self.MacroList.scrollFrame then
+        self:RefreshMacroList()
+    end
+end
+
+function MacroStudio:RefreshMacroList()
+    self.MacroList:Rebuild(
+        self:GetFilteredMacros(),
+        self.selectedMacro,
+        self.activeFilter,
+        self:GetSearchQuery()
+    )
+end
+
 function MacroStudio:RefreshOrganizationUI()
     self.Sidebar:Rebuild(self.activeFilter)
-    self.MacroList:Rebuild(self:GetFilteredMacros(), self.selectedMacro, self.activeFilter)
+    self:RefreshMacroList()
     self.Editor:RefreshMetadata()
     self:UpdateActionControls()
 end
@@ -554,7 +581,6 @@ function MacroStudio:CreateNativeMacro(request)
     end
 
     self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
-    self.activeFilter = { kind = "all" }
     if macro then
         self:SelectMacro(macro)
         self.Editor:SetNotice("Native macro created.", false)

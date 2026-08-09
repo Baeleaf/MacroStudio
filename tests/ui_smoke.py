@@ -18,6 +18,7 @@ def run_ui_smoke(root):
         StaticPopupDialogs = {}
         MacroStudioDB = nil
         combat = false
+        enumerationCalls = 0
 
         local Frame = {}
         local focusedFrame = nil
@@ -124,6 +125,7 @@ def run_ui_smoke(root):
         function Frame:SetColorTexture(red, green, blue, alpha)
             self.color = { red, green, blue, alpha }
         end
+        function Frame:TriggerScript(event, ...) RunHandlers(self, event, ...) end
         function Frame:CreateFontString()
             return setmetatable({ scripts = {}, hooks = {}, shown = true, text = "" }, Frame)
         end
@@ -166,9 +168,12 @@ def run_ui_smoke(root):
 
         function InCombatLockdown() return combat end
         function strlenutf8(value) return #value end
-        function GetNumMacros() return 1, 1 end
+        function GetNumMacros()
+            enumerationCalls = enumerationCalls + 1
+            return 1, 1
+        end
         function GetMacroInfo(index)
-            if index == 1 then return "Account", 101, "/say account" end
+            if index == 1 then return "Account", 101, "/cast [@mouseover] Heal" end
             if index == 4 then return "Character", 102, "/say character" end
             return nil
         end
@@ -198,6 +203,7 @@ def run_ui_smoke(root):
         "Database.lua",
         "MacroRepository.lua",
         "MetadataRepository.lua",
+        "Search.lua",
         "UI/Dialogs.lua",
         "UI/IconPicker.lua",
         "UI/MacroDialog.lua",
@@ -244,12 +250,80 @@ def run_ui_smoke(root):
                 "every editor edge should receive the normal color")
         end
 
+        local searchBox = ms.MacroList.searchBox
+        local enumerationBeforeSearch = enumerationCalls
+        assert(searchBox and searchBox:IsEnabled(), "search box should construct as an enabled native EditBox")
+        assert(ms.MacroList.searchPlaceholder:IsShown(), "empty unfocused search should show its placeholder")
+        searchBox:SetFocus()
+        searchBox:SetText("@mouseover")
+        assert(ms:GetSearchQuery() == "@mouseover", "search state should update while typing")
+        assert(#ms.MacroList.visibleRows == 1 and ms.MacroList.visibleRows[1].macro.name == "Account",
+            "search should match complete macro body text")
+        assert(not ms.MacroList.searchPlaceholder:IsShown() and ms.MacroList.clearSearchButton:IsShown(),
+            "active search should hide its placeholder and show Clear")
+
+        searchBox:SetText("ACCOUNT")
+        assert(#ms.MacroList.visibleRows == 1 and ms.MacroList.visibleRows[1].macro.name == "Account",
+            "search should match macro names case-insensitively")
+        ms:SetFilter("character")
+        assert(#ms.MacroList.visibleRows == 0,
+            "navigation filters should combine with, not be replaced by, search")
+        assert(ms.MacroList.visibleEmptyLabels[1]:GetText() == 'No macros match "ACCOUNT".',
+            "empty search results should use one query-specific message")
+        searchBox:SetText("character")
+        assert(#ms.MacroList.visibleRows == 1 and ms.MacroList.visibleRows[1].macro.scope == "CHARACTER",
+            "Character plus query should show only matching Character macros")
+
+        ms:SetFilter("all")
+        searchBox:SetText("")
+        local category = ms.MetadataRepository:CreateCategory("Mythic+")
+        assert(category, "search smoke category should be created")
+        assert(ms.MetadataRepository:SetCategory(ms.selectedMacro, category.id),
+            "search smoke category should be assigned")
+        assert(ms.MetadataRepository:AddTag(ms.selectedMacro, "Interrupt"),
+            "search smoke tag should be assigned")
+        ms.MetadataRepository:ToggleFavorite(ms.selectedMacro)
+        ms:RefreshOrganizationUI()
+
+        ms:SetFilter("favorites")
+        searchBox:SetText("INTERRUPT")
+        assert(#ms.MacroList.visibleRows == 1 and ms.MacroList.visibleRows[1].macro.name == "Account",
+            "Favorites plus query should match assigned tags case-insensitively")
+        ms:SetFilter("category", category.id)
+        searchBox:SetText("mythic+")
+        assert(#ms.MacroList.visibleRows == 1,
+            "category-filtered search should match the assigned category name")
+        ms.MacroList.clearSearchButton:GetScript("OnClick")(ms.MacroList.clearSearchButton)
+        assert(ms:GetSearchQuery() == "" and ms.activeFilter.kind == "category",
+            "Clear should preserve the current navigation filter")
+
+        ms:SetFilter("all")
+        ms.Editor.editBox:SetText("/say unsaved search draft")
+        searchBox:SetText("character")
+        assert(ms.Editor:GetBody() == "/say unsaved search draft" and ms.Editor:IsDirty(),
+            "search hiding the selected macro must preserve its dirty editor draft")
+        assert(ms.selectedMacro.name == "Account" and #ms.MacroList.visibleRows == 1,
+            "hidden selection should remain selected independently of visible results")
+        ms.Editor:SetEditorText(ms.Editor.savedBody)
+
+        searchBox:SetText("temporary")
+        searchBox:TriggerScript("OnEscapePressed")
+        assert(ms:GetSearchQuery() == "" and searchBox:HasFocus(),
+            "Escape should clear a nonempty query while keeping search focus")
+        searchBox:TriggerScript("OnEscapePressed")
+        assert(not searchBox:HasFocus(), "Escape on an empty search should release focus")
+        assert(enumerationCalls == enumerationBeforeSearch,
+            "live search and navigation refinement must not re-enumerate Blizzard macros")
+
+        searchBox:SetText("account")
         ms.Dialogs:ShowNewCategory(function() return true end)
         assert(ms.Dialogs.inputFrame:IsShown(), "category input should open before modal test")
         ms.MacroDialog:Open({ scope = "ACCOUNT", icon = ms.DEFAULT_ICON })
         assert(not ms.Dialogs.inputFrame:IsShown(),
             "entering Create Macro modal state should close other main-window input")
         assert(ms.MacroDialog:IsShown(), "new macro dialog should construct and open")
+        assert(ms:GetSearchQuery() == "account" and searchBox:GetText() == "account",
+            "opening the modal should preserve search state")
         assert(ms:IsMainWindowModalBlocked(), "new macro dialog should enter modal state")
         assert(ms.modalOverlay:IsShown() and ms.modalOverlay.mouseEnabled and ms.modalOverlay.mouseWheelEnabled,
             "modal overlay should consume main-window mouse and wheel interaction")
@@ -294,6 +368,8 @@ def run_ui_smoke(root):
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
         assert(ms.IconPicker.frame:IsShown(), "icon picker should construct and open")
         ms.MacroDialog:Close()
+        assert(ms:GetSearchQuery() == "account" and searchBox:GetText() == "account",
+            "closing the modal should restore interaction without clearing search")
         assert(not ms.MacroDialog:IsShown() and not ms:IsMainWindowModalBlocked(),
             "closing the dialog should completely clear modal state")
         assert(not ms.modalOverlay:IsShown() and not ms.IconPicker.frame:IsShown(),

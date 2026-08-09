@@ -1,4 +1,4 @@
-# MacroStudio Milestone 2.2 Testing
+# MacroStudio Milestone 3 Testing
 
 Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 
@@ -10,7 +10,7 @@ With Python 3 and `lupa` installed, run from the addon root:
 py .\tests\preflight.py
 ```
 
-The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, metadata reconciliation, filters, native scrolling EditBoxes, all four focus-border edges, modal overlay entry/cleanup, title-bar movement, and combat form preservation. Actual frame layering and mouse behavior still require the live-client tests below.
+The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, icon identity deduplication, metadata reconciliation, reactive name/body/category/tag search, navigation combinations, no native re-enumeration while typing, dirty-draft independence, native scrolling EditBoxes, focus borders, and modal safety. Actual frame layering and mouse behavior still require the live-client tests below.
 
 ## Load and window lifecycle
 
@@ -20,6 +20,35 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for nati
 - [ ] Confirm the visible macro-list header has **+ New Macro** and no Refresh button.
 - [ ] Confirm `/ms refresh` still refreshes and opens the window.
 - [ ] Confirm schema 1 settings migrate to schema 2 and organization data survives reload/login.
+
+## Live search and filtering
+
+- [ ] Search an exact macro-name fragment; only case-insensitive matches remain.
+- [ ] Search text found only in the complete body, such as `@mouseover`, `nodead`, `Flash Heal`, or `/cast`; the correct macro appears even when the text is outside its preview.
+- [ ] Search an assigned tag and an assigned category name; matching macros appear even when those words are absent from name/body.
+- [ ] Verify `MOUSEOVER`, `mouseover`, and `MouseOver` produce equivalent results.
+- [ ] Combine a query with All, Account, Character, Favorites, and a category; only their matching macros appear.
+- [ ] With search active, confirm empty scope sections disappear and zero results show one message: `No macros match "query".`
+- [ ] Type character by character; results update immediately without Enter, Refresh, or visible editor/sidebar rebuilding.
+- [ ] Use click placement, Home/End, Ctrl+A, Backspace/Delete, copy/paste, and the visible native caret in Search.
+- [ ] Press Escape with text present; the query clears but the current navigation filter and search focus remain. Press Escape again; focus releases.
+- [ ] Click the clear X; the query clears, the current navigation filter remains selected, and its full results return.
+- [ ] Close/reopen MacroStudio in the same session; the query remains. `/reload`; the query resets.
+
+## Search state safety
+
+- [ ] Make a dirty draft, then search so its selected macro disappears; the macro remains selected and the draft stays byte-for-byte intact.
+- [ ] With search active, add/remove a matching tag, change category, and toggle Favorite in the Favorites view; results update immediately without manual Refresh.
+- [ ] Open Create Macro while searching; the modal overlay blocks Search and closing the dialog preserves the query.
+- [ ] Create a macro that matches the current search/filter; it appears normally and becomes selected.
+- [ ] Create one that does not match; query/filter remain unchanged and the new macro remains selected in the editor while hidden from the list.
+- [ ] Delete a matching disposable macro; it disappears automatically while query and navigation filter remain unchanged.
+
+## Icon picker identity
+
+- [ ] Open the icon picker and confirm exactly one question-mark option appears.
+- [ ] Select it, create a `#showtooltip` macro, and confirm the selected icon remains stable and behaves normally.
+- [ ] Confirm all non-question-mark icons remain available.
 
 ## Native caret and keyboard behavior
 
@@ -82,7 +111,6 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for nati
 - [ ] Account shows only Account; Character shows only Character.
 - [ ] Favorites and category filters omit zero-result scope sections and show one generic no-match message when empty.
 - [ ] Changing filters never alters the selected editor body.
-- [ ] Search controls are absent.
 
 ## Create native macro
 
