@@ -1,6 +1,6 @@
 # MacroStudio
 
-MacroStudio is a standalone World of Warcraft Retail addon for editing, organizing, creating, and deleting Blizzard-native macros. Version 0.2.2 completes Milestone 2.1: UX polish and safe native macro management.
+MacroStudio is a standalone World of Warcraft Retail addon for editing, organizing, creating, and deleting Blizzard-native macros. Version 0.2.3 completes Milestone 2.1 and uses Blizzard's scrolling edit-box template for reliable caret and selection behavior.
 
 MacroStudio does not replace WoW's macro execution system. Saved and created macros remain ordinary Blizzard macros that work when MacroStudio is disabled. Categories, Favorites, and tags are local MacroStudio organization metadata.
 

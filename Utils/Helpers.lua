@@ -36,38 +36,54 @@ function Helpers:ConfigureEditBox(editBox, options)
 
     options = options or {}
     editBox:EnableMouse(true)
+    if editBox.SetMouseClickEnabled then
+        editBox:SetMouseClickEnabled(true)
+    end
+    if editBox.SetMouseMotionEnabled then
+        editBox:SetMouseMotionEnabled(true)
+    end
     editBox:SetAutoFocus(options.autoFocus == true)
     if editBox.SetAltArrowKeyMode then
         editBox:SetAltArrowKeyMode(false)
     end
 end
 
-function Helpers:ConnectScrollableEditBox(editBox, scrollFrame)
-    if not editBox or not scrollFrame then
-        return
+function Helpers:CreateNativeScrollingEditBox(parent, inset)
+    if not ScrollUtil or not ScrollUtil.RegisterScrollBoxWithScrollBar then
+        error("MacroStudio requires Retail's ScrollingEditBoxTemplate support.")
     end
 
+    inset = tonumber(inset) or 5
+    local host = CreateFrame("Frame", nil, parent, "ScrollingEditBoxTemplate")
+    local scrollBar = CreateFrame("EventFrame", nil, parent, "MinimalScrollBar")
+    scrollBar:SetWidth(12)
+    scrollBar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -inset, -inset)
+    scrollBar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -inset, inset)
+    scrollBar:SetHideIfUnscrollable(true)
+
+    host:SetPoint("TOPLEFT", parent, "TOPLEFT", inset, -inset)
+    host:SetPoint("BOTTOMRIGHT", scrollBar, "BOTTOMLEFT", -4, 0)
+
+    local editBox = host:GetEditBox()
+    local scrollBox = host:GetScrollBox()
+    ScrollUtil.RegisterScrollBoxWithScrollBar(scrollBox, scrollBar)
+    scrollBar:SetFrameLevel(host:GetFrameLevel() + 10)
+
     self:ConfigureEditBox(editBox)
-    editBox:SetScript("OnCursorChanged", function(_, _, y, _, cursorHeight)
-        local cursorTop = -y
-        local cursorBottom = cursorTop + (cursorHeight or 0)
-        local offset = scrollFrame:GetVerticalScroll()
-        local height = scrollFrame:GetHeight()
+    editBox:SetMultiLine(true)
+    editBox:SetMaxLetters(0)
+    editBox:SetCountInvisibleLetters(false)
+    if editBox.SetHistoryLines then
+        editBox:SetHistoryLines(0)
+    end
 
-        if cursorTop < offset then
-            scrollFrame:SetVerticalScroll(math.max(cursorTop, 0))
-        elseif cursorBottom > offset + height then
-            scrollFrame:SetVerticalScroll(math.max(cursorBottom - height, 0))
-        end
-    end)
+    return host, editBox, scrollBox, scrollBar
+end
 
-    scrollFrame:EnableMouse(true)
-    scrollFrame:SetScript("OnMouseUp", function(_, button)
-        if button == "LeftButton" and not editBox:HasFocus() then
-            editBox:SetFocus()
-            editBox:SetCursorPosition(editBox:GetNumLetters())
-        end
-    end)
+function Helpers:ResetNativeScrollingEditBox(scrollBox)
+    if scrollBox and scrollBox.ScrollToBegin then
+        scrollBox:ScrollToBegin()
+    end
 end
 
 function Helpers:Clamp(value, minimum, maximum)

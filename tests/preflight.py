@@ -228,6 +228,7 @@ tests("MacroStudio", namespace)
 macro_list_source = (ROOT / "UI" / "MacroList.lua").read_text(encoding="utf-8")
 sidebar_source = (ROOT / "UI" / "Sidebar.lua").read_text(encoding="utf-8")
 editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
+macro_dialog_source = (ROOT / "UI" / "MacroDialog.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
 dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
 
@@ -235,8 +236,12 @@ assert 'SetAtlas("PetJournal-FavoritesIcon")' in macro_list_source
 assert 'atlas = "PetJournal-FavoritesIcon"' in sidebar_source and "SetAtlas(atlas)" in sidebar_source
 assert 'SetAtlas("PetJournal-FavoritesIcon")' in editor_source
 assert "favoritePrefix" not in macro_list_source
-assert "EnableMouse(true)" in helpers_source and '"OnCursorChanged"' in helpers_source
-assert "ConnectScrollableEditBox(editBox, scrollFrame)" in editor_source
+assert '"ScrollingEditBoxTemplate"' in helpers_source
+assert "SetMouseClickEnabled(true)" in helpers_source
+assert "SetMouseMotionEnabled(true)" in helpers_source
+assert "CreateNativeScrollingEditBox(editBorder, 5)" in editor_source
+assert "CreateNativeScrollingEditBox(bodyBorder, 5)" in macro_dialog_source
+assert '"OnCursorChanged"' not in helpers_source
 assert '"OnEnterPressed"' in dialogs_source and '"OnEscapePressed"' in dialogs_source
 
 run_ui_smoke(ROOT)

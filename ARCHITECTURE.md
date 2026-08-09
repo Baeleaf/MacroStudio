@@ -1,8 +1,8 @@
 # MacroStudio Architecture
 
-## Scope of version 0.2.2
+## Scope of version 0.2.3
 
-Version 0.2.2 edits, creates, and deletes Blizzard-native macros and provides virtual organization through categories, Favorites, and tags. It does not implement search, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, or launchers.
+Version 0.2.3 edits, creates, and deletes Blizzard-native macros and provides virtual organization through categories, Favorites, and tags. It does not implement search, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, or launchers.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
@@ -25,7 +25,7 @@ Core.lua
 
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, or `DeleteMacro`.
 - `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
-- `Utils/Helpers.lua` centralizes native EditBox mouse/focus/cursor scrolling, tooltips, and disabled styling.
+- `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, mouse/focus configuration, tooltips, and disabled styling.
 - `UI/Editor.lua` derives Save/Delete state from the draft, combat, conflict, length, and exact target snapshot.
 - `UI/MacroDialog.lua` derives Create state from name/body/icon/scope/capacity/combat validation.
 - `UI/IconPicker.lua` uses Blizzard's icon provider when available and compatible API fallbacks otherwise.
@@ -77,7 +77,7 @@ canSave, saveReason, canRevert, canDelete, deleteReason
 
 Save requires a selected dirty target, at most 255 characters, no combat, no external conflict, and an exact current snapshot. Delete additionally requires a clean buffer. Create is disabled while combat-locked, at capacity, or while automatic selection would discard a dirty draft. Repository methods repeat the important validation defensively.
 
-The editor uses the native multiline `EditBox`. `EnableMouse(true)` preserves click placement and drag selection; `OnCursorChanged` only adjusts the enclosing ScrollFrame to keep the native caret visible. A hidden FontString measures content because Retail EditBox objects do not provide `GetStringHeight()`.
+The main editor and creation dialog use Blizzard's `ScrollingEditBoxTemplate` with a registered `MinimalScrollBar`. The template owns caret rendering, mouse drag selection, multiline keyboard navigation, and cursor scrolling; MacroStudio hooks its scripts without replacing that native behavior.
 
 Programmatic loads suppress text-change handling, then recompute once. External refresh never overwrites a dirty draft.
 

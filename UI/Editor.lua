@@ -42,20 +42,6 @@ local function createMenuRow(menu)
     return row
 end
 
-function Editor:ResizeEditBox()
-    if not self.editBox or not self.scrollFrame then
-        return
-    end
-
-    local availableHeight = math.max(1, self.scrollFrame:GetHeight())
-    local contentHeight = 0
-    if self.measureText then
-        self.measureText:SetWidth(math.max(1, self.editBox:GetWidth() - 16))
-        self.measureText:SetText(self.editBox:GetText() or "")
-        contentHeight = tonumber(self.measureText:GetStringHeight()) or 0
-    end
-    self.editBox:SetHeight(math.max(availableHeight, contentHeight + 24))
-end
 
 function Editor:CreateFavoriteButton(parent)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
@@ -186,54 +172,32 @@ function Editor:Create(parent)
     editBorder:SetBackdropColor(0.018, 0.024, 0.035, 1)
     self.editBorder = editBorder
 
-    local measureText = editBorder:CreateFontString(nil, "ARTWORK", "ChatFontNormal")
-    measureText:SetPoint("TOPLEFT", editBorder, "TOPLEFT", 0, 0)
-    measureText:SetWidth(400)
-    measureText:SetJustifyH("LEFT")
-    measureText:SetWordWrap(true)
-    measureText:SetNonSpaceWrap(true)
-    measureText:SetAlpha(0)
-    self.measureText = measureText
-
-    local scrollFrame = CreateFrame("ScrollFrame", nil, editBorder, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 5, -5)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -27, 5)
-    self.scrollFrame = scrollFrame
-
-    local editBox = CreateFrame("EditBox", nil, scrollFrame)
-    editBox:SetMultiLine(true)
-    editBox:SetFontObject(ChatFontNormal)
-    editBox:SetTextColor(0.9, 0.92, 0.96)
-    editBox:SetTextInsets(8, 8, 8, 8)
-    editBox:SetJustifyH("LEFT")
-    editBox:SetJustifyV("TOP")
-    editBox:SetMaxLetters(0)
-    editBox:SetWidth(400)
-    editBox:SetHeight(100)
-    MacroStudio.Helpers:ConnectScrollableEditBox(editBox, scrollFrame)
-    scrollFrame:SetScrollChild(editBox)
+    local editorHost, editBox, scrollBox, scrollBar = MacroStudio.Helpers:CreateNativeScrollingEditBox(editBorder, 5)
+    self.editorHost = editorHost
+    self.scrollBox = scrollBox
+    self.scrollBar = scrollBar
     self.editBox = editBox
 
-    editBox:SetScript("OnEscapePressed", function(box)
+    editBox:SetFontObject(ChatFontNormal)
+    editBox:SetTextColor(0.9, 0.92, 0.96)
+    editBox:SetTextInsets(6, 6, 6, 6)
+    editBox:SetJustifyH("LEFT")
+    editBox:SetJustifyV("TOP")
+
+    editBox:HookScript("OnEscapePressed", function(box)
         box:ClearFocus()
     end)
-    editBox:SetScript("OnEditFocusGained", function()
+    editBox:HookScript("OnEditFocusGained", function()
         editBorder:SetBackdropBorderColor(0.25, 0.62, 1, 1)
     end)
-    editBox:SetScript("OnEditFocusLost", function()
+    editBox:HookScript("OnEditFocusLost", function()
         editBorder:SetBackdropBorderColor(0.18, 0.22, 0.28, 1)
     end)
-    editBox:SetScript("OnTextChanged", function(_, userInput)
-        self:ResizeEditBox()
+    editBox:HookScript("OnTextChanged", function(_, userInput)
         if not self.suppressTextChanged then
             self.notice = nil
             self:UpdateEditorState(userInput and "user" or "unsuppressed")
         end
-    end)
-
-    scrollFrame:SetScript("OnSizeChanged", function(frame)
-        editBox:SetWidth(math.max(1, frame:GetWidth() - 4))
-        self:ResizeEditBox()
     end)
 
     local countText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormal", "0 / 255")
@@ -287,9 +251,8 @@ function Editor:SetEditorText(text)
     self.suppressTextChanged = true
     self.editBox:SetText(type(text) == "string" and text or "")
     self.editBox:SetCursorPosition(0)
-    self.scrollFrame:SetVerticalScroll(0)
+    MacroStudio.Helpers:ResetNativeScrollingEditBox(self.scrollBox)
     self.suppressTextChanged = false
-    self:ResizeEditBox()
     self:UpdateEditorState("programmatic")
 end
 

@@ -24,6 +24,15 @@ def run_ui_smoke(root):
             return Frame[key] or function() end
         end
 
+        local function RunHandlers(frame, event, ...)
+            if frame.scripts[event] then
+                frame.scripts[event](frame, ...)
+            end
+            for _, handler in ipairs(frame.hooks[event] or {}) do
+                handler(frame, ...)
+            end
+        end
+
         function Frame:SetSize(width, height) self.width, self.height = width, height end
         function Frame:SetWidth(width) self.width = width end
         function Frame:SetHeight(height) self.height = height end
@@ -36,21 +45,25 @@ def run_ui_smoke(root):
         end
         function Frame:GetPoint() return "CENTER", UIParent, "CENTER", 0, 0 end
         function Frame:GetName() return rawget(self, "name") end
+        function Frame:GetFrameLevel() return rawget(self, "frameLevel") or 1 end
         function Frame:SetText(value)
             self.text = tostring(value or "")
-            if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self, false) end
+            RunHandlers(self, "OnTextChanged", false)
         end
         function Frame:GetText() return rawget(self, "text") or "" end
         function Frame:GetNumLetters() return #(rawget(self, "text") or "") end
         function Frame:SetScript(event, handler) self.scripts[event] = handler end
-        function Frame:HookScript(event, handler) self.hooks[event] = handler end
+        function Frame:HookScript(event, handler)
+            self.hooks[event] = self.hooks[event] or {}
+            table.insert(self.hooks[event], handler)
+        end
         function Frame:GetScript(event) return self.scripts[event] end
         function Frame:Show() self.shown = true end
         function Frame:Hide() self.shown = false end
         function Frame:IsShown() return rawget(self, "shown") == true end
         function Frame:SetShown(shown) self.shown = shown and true or false end
-        function Frame:SetFocus() self.focused = true end
-        function Frame:ClearFocus() self.focused = false end
+        function Frame:SetFocus() self.focused = true; RunHandlers(self, "OnEditFocusGained") end
+        function Frame:ClearFocus() self.focused = false; RunHandlers(self, "OnEditFocusLost") end
         function Frame:HasFocus() return self.focused == true end
         function Frame:SetEnabled(enabled) self.enabled = enabled and true or false end
         function Frame:IsEnabled() return rawget(self, "enabled") ~= false end
@@ -68,9 +81,11 @@ def run_ui_smoke(root):
             return setmetatable({ scripts = {}, hooks = {}, shown = true, text = "" }, Frame)
         end
 
-        function CreateFrame(_, name)
+        function CreateFrame(_, name, parent, template)
             local frame = setmetatable({
                 name = name,
+                parent = parent,
+                template = template,
                 scripts = {},
                 hooks = {},
                 shown = true,
@@ -78,8 +93,18 @@ def run_ui_smoke(root):
                 text = "",
             }, Frame)
             frame.Text = frame:CreateFontString()
+            if template == "ScrollingEditBoxTemplate" then
+                local editBox = CreateFrame("EditBox", nil, frame)
+                local scrollBox = CreateFrame("Frame", nil, frame)
+                frame.GetEditBox = function() return editBox end
+                frame.GetScrollBox = function() return scrollBox end
+            end
             return frame
         end
+
+        ScrollUtil = {
+            RegisterScrollBoxWithScrollBar = function() end,
+        }
 
         UIParent = CreateFrame("Frame", "UIParent")
         UIParent:SetSize(1920, 1080)
@@ -142,8 +167,12 @@ def run_ui_smoke(root):
         assert(ms.frame and not ms.frame:IsShown(), "main window should remain hidden on login")
         assert(ms.selectedMacro and ms.selectedMacro.name == "Account", "initial refresh should select a macro")
         assert(ms.Editor.editBox:IsEnabled(), "selected macro editor should be enabled")
+        assert(ms.Editor.editorHost.template == "ScrollingEditBoxTemplate",
+            "main editor should use Blizzard's native scrolling edit box")
         ms.MacroDialog:Open({ scope = "ACCOUNT", icon = ms.DEFAULT_ICON })
         assert(ms.MacroDialog:IsShown(), "new macro dialog should construct and open")
+        assert(ms.MacroDialog.bodyHost.template == "ScrollingEditBoxTemplate",
+            "macro dialog should use Blizzard's native scrolling edit box")
         ms.MacroDialog.nameBox:SetText("Smoke")
         assert(ms.MacroDialog.createButton:IsEnabled(), "valid dialog should enable Create")
         ms.Editor.editBox:SetText("/say dirty")

@@ -10,18 +10,6 @@ local NORMAL_COLOR = { 0.82, 0.86, 0.92 }
 local WARNING_COLOR = { 1, 0.68, 0.2 }
 local ERROR_COLOR = { 1, 0.3, 0.3 }
 
-function MacroDialog:ResizeBody()
-    if not self.bodyBox or not self.bodyScroll then
-        return
-    end
-
-    local availableHeight = math.max(1, self.bodyScroll:GetHeight())
-    self.measureText:SetWidth(math.max(1, self.bodyBox:GetWidth() - 16))
-    self.measureText:SetText(self.bodyBox:GetText() or "")
-    local contentHeight = tonumber(self.measureText:GetStringHeight()) or 0
-    self.bodyBox:SetHeight(math.max(availableHeight, contentHeight + 24))
-end
-
 function MacroDialog:SetScope(scope)
     self.scope = scope == "CHARACTER" and "CHARACTER" or "ACCOUNT"
     self.accountButton:SetText(self.scope == "ACCOUNT" and "Account (selected)" or "Account")
@@ -210,38 +198,18 @@ function MacroDialog:Create()
     bodyBorder:SetPoint("BOTTOMRIGHT", -18, 90)
     bodyBorder:SetBackdropColor(0.018, 0.024, 0.035, 1)
 
-    local measureText = bodyBorder:CreateFontString(nil, "ARTWORK", "ChatFontNormal")
-    measureText:SetPoint("TOPLEFT")
-    measureText:SetWidth(480)
-    measureText:SetWordWrap(true)
-    measureText:SetNonSpaceWrap(true)
-    measureText:SetAlpha(0)
-    self.measureText = measureText
-
-    local bodyScroll = CreateFrame("ScrollFrame", nil, bodyBorder, "UIPanelScrollFrameTemplate")
-    bodyScroll:SetPoint("TOPLEFT", 5, -5)
-    bodyScroll:SetPoint("BOTTOMRIGHT", -27, 5)
-    self.bodyScroll = bodyScroll
-
-    local bodyBox = CreateFrame("EditBox", nil, bodyScroll)
-    bodyBox:SetMultiLine(true)
-    bodyBox:SetFontObject(ChatFontNormal)
-    bodyBox:SetTextInsets(8, 8, 8, 8)
-    bodyBox:SetJustifyH("LEFT")
-    bodyBox:SetJustifyV("TOP")
-    bodyBox:SetMaxLetters(0)
-    bodyBox:SetSize(480, 120)
-    MacroStudio.Helpers:ConfigureEditBox(bodyBox)
-    MacroStudio.Helpers:ConnectScrollableEditBox(bodyBox, bodyScroll)
-    bodyScroll:SetScrollChild(bodyBox)
+    local bodyHost, bodyBox, bodyScrollBox, bodyScrollBar =
+        MacroStudio.Helpers:CreateNativeScrollingEditBox(bodyBorder, 5)
+    self.bodyHost = bodyHost
+    self.bodyScrollBox = bodyScrollBox
+    self.bodyScrollBar = bodyScrollBar
     self.bodyBox = bodyBox
 
-    bodyScroll:SetScript("OnSizeChanged", function(scroll)
-        bodyBox:SetWidth(math.max(1, scroll:GetWidth() - 4))
-        self:ResizeBody()
-    end)
-    bodyBox:SetScript("OnTextChanged", function()
-        self:ResizeBody()
+    bodyBox:SetFontObject(ChatFontNormal)
+    bodyBox:SetTextInsets(6, 6, 6, 6)
+    bodyBox:SetJustifyH("LEFT")
+    bodyBox:SetJustifyV("TOP")
+    bodyBox:HookScript("OnTextChanged", function()
         self:UpdateState()
     end)
 
@@ -286,7 +254,7 @@ function MacroDialog:Create()
     nameBox:SetScript("OnEscapePressed", function()
         frame:Hide()
     end)
-    bodyBox:SetScript("OnEscapePressed", function()
+    bodyBox:HookScript("OnEscapePressed", function()
         frame:Hide()
     end)
 
@@ -308,8 +276,7 @@ function MacroDialog:Open(preset)
     self.bodyBox:SetText(type(preset.body) == "string" and preset.body or "")
     self:SetScope(preset.scope)
     self:SetIcon(preset.icon or MacroStudio.DEFAULT_ICON)
-    self.bodyScroll:SetVerticalScroll(0)
-    self:ResizeBody()
+    MacroStudio.Helpers:ResetNativeScrollingEditBox(self.bodyScrollBox)
     self:UpdateState()
 
     frame:Show()
