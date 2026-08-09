@@ -1,20 +1,39 @@
 # Editors and operating-system files
 .idea/
 .vscode/
+.history/
 *.swp
 *.swo
 *.tmp
 *.bak
+*.user
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # Local test/build artifacts
 .luacheckcache
 coverage/
+test-results/
 tests/.artifacts/
 __pycache__/
 *.py[cod]
 
+# Release packages are generated locally
+dist/
+*.zip
+
+# Local environments and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
 # SavedVariables exports do not belong in the addon repository
+WTF/
+SavedVariables/
 MacroStudioDB.lua
 MacroStudioDB.lua.bak

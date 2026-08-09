@@ -1,4 +1,4 @@
-# MacroStudio Milestone 3 Testing
+# MacroStudio 1.0.0 Release Candidate Testing
 
 Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 

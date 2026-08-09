@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible MacroStudio problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve MacroStudio. Please remove personal information from logs and screenshots.
+  - type: input
+    id: macrostudio_version
+    attributes:
+      label: MacroStudio version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: wow_version
+    attributes:
+      label: WoW Retail version
+      description: Include the game version or build shown on the login screen.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open MacroStudio with /ms
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: lua_error
+    attributes:
+      label: Lua error
+      description: Paste the complete error if one appeared; otherwise write "None."
+      render: text
+  - type: textarea
+    id: addons
+    attributes:
+      label: Relevant addons
+      description: List addons that modify macros, action bars, or the UI, and note whether the issue occurs with them disabled.
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag in a privacy-reviewed screenshot if it helps explain the problem.

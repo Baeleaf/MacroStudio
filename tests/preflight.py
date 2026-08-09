@@ -99,7 +99,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "0.3.0"
+namespace.VERSION = "1.0.0"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -299,4 +299,4 @@ assert 'self.activeFilter = { kind = "all" }\n    if macro then' not in main_fra
 assert '"OnEnterPressed"' in dialogs_source and '"OnEscapePressed"' in dialogs_source
 
 run_ui_smoke(ROOT)
-print("PASS MacroStudio Milestone 3 preflight")
+print("PASS MacroStudio 1.0.0 preflight")

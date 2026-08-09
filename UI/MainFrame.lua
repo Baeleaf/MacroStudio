@@ -114,7 +114,7 @@ function MacroStudio:CreateMainFrame()
     title:SetPoint("LEFT", 15, 0)
     title:SetTextColor(0.35, 0.75, 1)
 
-    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION .. " | Milestone 3")
+    local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION)
     version:SetPoint("LEFT", title, "RIGHT", 10, -2)
 
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")

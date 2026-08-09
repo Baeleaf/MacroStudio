@@ -1,8 +1,8 @@
 ## Interface: 120007
 ## Title: MacroStudio
-## Notes: A larger, safer editor for native World of Warcraft macros.
+## Notes: A modern macro editor and organizer for World of Warcraft.
 ## Author: MacroStudio Contributors
-## Version: 0.3.0
+## Version: 1.0.0
 ## SavedVariables: MacroStudioDB
 
 Core.lua

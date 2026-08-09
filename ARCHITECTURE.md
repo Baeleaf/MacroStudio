@@ -1,8 +1,8 @@
 # MacroStudio Architecture
 
-## Scope of version 0.3.0
+## Scope of version 1.0.0
 
-Version 0.3.0 edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, launchers, and action-bar integration remain unimplemented.
+Version 1.0.0 is the initial public-release candidate. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, launchers, and action-bar integration remain unimplemented.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
