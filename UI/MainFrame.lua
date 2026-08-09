@@ -47,6 +47,7 @@ end
 
 function MacroStudio:CreateMainFrame()
     local frame = CreateFrame("Frame", "MacroStudioMainFrame", UIParent, "BackdropTemplate")
+    frame:Hide() -- Keep startup failures from leaving a partially built window visible.
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
     frame:SetMovable(true)

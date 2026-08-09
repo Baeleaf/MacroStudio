@@ -1,7 +1,7 @@
 local addonName, MacroStudio = ...
 
 MacroStudio.ADDON_NAME = addonName
-MacroStudio.VERSION = "0.2.0"
+MacroStudio.VERSION = "0.2.1"
 MacroStudio.MAX_BODY_LENGTH = 255
 MacroStudio.BODY_WARNING_LENGTH = 230
 MacroStudio.DEFAULT_WIDTH = 1100

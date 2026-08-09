@@ -2,7 +2,7 @@
 ## Title: MacroStudio
 ## Notes: A larger, safer editor for native World of Warcraft macros.
 ## Author: MacroStudio Contributors
-## Version: 0.2.0
+## Version: 0.2.1
 ## SavedVariables: MacroStudioDB
 
 Core.lua

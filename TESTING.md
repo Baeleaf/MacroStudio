@@ -15,6 +15,7 @@ After a WoW update, compare current addon TOCs or the installed build before cha
 ## First load and migration
 
 - [ ] Create the Junction using the README command and restart WoW if MacroStudio was not previously installed.
+- [ ] Log in or run `/reload`; confirm MacroStudio stays closed until `/macrostudio` or `/ms` is entered.
 - [ ] Confirm MacroStudio is enabled and loads without a Lua error.
 - [ ] Run `/macrostudio` and `/ms`; confirm both toggle the window.
 - [ ] Close with X and Escape; confirm the window can reopen.
@@ -24,6 +25,7 @@ After a WoW update, compare current addon TOCs or the installed build before cha
 
 ## Milestone 1.1 reactive-state regression
 
+- [ ] Confirm typing and scrolling a multiline macro produces no `GetStringHeight` Lua error.
 - [ ] Select a macro and type one character. Without clicking Refresh, confirm all four update immediately: character count, **Unsaved changes**, Save enabled, Revert enabled.
 - [ ] Delete that character. Confirm the clean state and disabled Save/Revert return immediately.
 - [ ] Type, paste, cut, undo, and redo where supported; confirm each text change updates state immediately.
@@ -112,3 +114,4 @@ After a WoW update, compare current addon TOCs or the installed build before cha
 - Unique index-movement reconciliation and ambiguous-record preservation.
 - Immediate dirty/count/Save/Revert transitions and programmatic-load suppression.
 - Save, clean external reload, dirty conflict preservation, Revert, and combat gating in a headless WoW API/UI stub.
+- Retail API regression: the EditBox stub intentionally omits `GetStringHeight`; only the FontString measurement object provides it.

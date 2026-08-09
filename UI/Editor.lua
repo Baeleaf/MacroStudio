@@ -45,8 +45,17 @@ function Editor:ResizeEditBox()
     if not self.editBox or not self.scrollFrame then
         return
     end
+
     local availableHeight = math.max(1, self.scrollFrame:GetHeight())
-    self.editBox:SetHeight(math.max(availableHeight, self.editBox:GetStringHeight() + 24))
+    local contentHeight = 0
+    if self.measureText then
+        self.measureText:SetWidth(math.max(1, self.editBox:GetWidth() - 16))
+        self.measureText:SetText(self.editBox:GetText() or "")
+        contentHeight = tonumber(self.measureText:GetStringHeight()) or 0
+    end
+
+    -- GetStringHeight belongs to FontString, not EditBox, on Retail.
+    self.editBox:SetHeight(math.max(availableHeight, contentHeight + 24))
 end
 
 function Editor:Create(parent)
@@ -142,6 +151,15 @@ function Editor:Create(parent)
     editBorder:SetPoint("BOTTOMRIGHT", -14, 70)
     editBorder:SetBackdropColor(0.018, 0.024, 0.035, 1)
     self.editBorder = editBorder
+
+    local measureText = editBorder:CreateFontString(nil, "ARTWORK", "ChatFontNormal")
+    measureText:SetPoint("TOPLEFT", editBorder, "TOPLEFT", 0, 0)
+    measureText:SetWidth(400)
+    measureText:SetJustifyH("LEFT")
+    measureText:SetWordWrap(true)
+    measureText:SetNonSpaceWrap(true)
+    measureText:SetAlpha(0)
+    self.measureText = measureText
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, editBorder, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 5, -5)

@@ -1,6 +1,6 @@
 # MacroStudio Roadmap
 
-Version 0.2.0 completes Milestones 1, 1.1, and 2. Later milestones remain intentionally out of scope until the completed work has been tested in game.
+Version 0.2.1 completes Milestones 1, 1.1, and 2, including the Retail multiline-editor compatibility hotfix. Later milestones remain intentionally out of scope until the completed work has been tested in game.
 
 ## Milestone 1 - Native macro editor
 

@@ -1,6 +1,6 @@
 # MacroStudio
 
-MacroStudio is a standalone World of Warcraft Retail addon that provides a larger, safer editor and organization workspace for Blizzard-native macros. Version 0.2.0 completes the reactive editor update (Milestone 1.1) and the first organization milestone (Milestone 2).
+MacroStudio is a standalone World of Warcraft Retail addon that provides a larger, safer editor and organization workspace for Blizzard-native macros. Version 0.2.1 completes the reactive editor update (Milestone 1.1), the first organization milestone (Milestone 2), and a Retail multiline-editor compatibility fix.
 
 MacroStudio never replaces the macro execution system. Every saved macro remains an ordinary Blizzard macro and continues to work if MacroStudio is disabled or removed. Categories, favorites, and tags are virtual organization data stored only by MacroStudio.
 
@@ -103,7 +103,7 @@ The removal script verifies the destination before acting and leaves the Git rep
 
 ## Known limitations
 
-- Version 0.2.0 edits only macro bodies. Renaming, icon changes, creation, duplication, deletion, and scope changes are postponed.
+- Version 0.2.1 edits only macro bodies. Renaming, icon changes, creation, duplication, deletion, and scope changes are postponed.
 - Blizzard's native 255-character limit is enforced. Longer drafts remain visible but cannot be saved.
 - Macro indexes are current enumeration handles, not durable identities. Unresolved metadata stays preserved but unattached when reconciliation is ambiguous.
 - Categories, favorites, and tags are local SavedVariables metadata. They do not change Blizzard's Macro UI or sync through Blizzard's macro storage.

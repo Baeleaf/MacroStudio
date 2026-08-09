@@ -1,8 +1,8 @@
 # MacroStudio Architecture
 
-## Scope of version 0.2.0
+## Scope of version 0.2.1
 
-Version 0.2.0 edits bodies of existing Blizzard-native macros and adds virtual organization through categories, favorites, and tags. It does not implement search or native macro creation, rename, icon change, duplication, deletion, or scope changes. Native WoW frames and APIs are used directly; there is no addon framework or third-party runtime dependency.
+Version 0.2.1 edits bodies of existing Blizzard-native macros and adds virtual organization through categories, favorites, and tags. It also uses a hidden FontString to measure multiline editor content because Retail EditBox objects do not expose `GetStringHeight()`. It does not implement search or native macro creation, rename, icon change, duplication, deletion, or scope changes. Native WoW frames and APIs are used directly; there is no addon framework or third-party runtime dependency.
 
 ## Module responsibilities
 
