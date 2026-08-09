@@ -117,4 +117,4 @@ Development architecture and live-client checks are documented in [ARCHITECTURE.
 
 ## License
 
-A license has not yet been selected. A `LICENSE` file must be chosen and added by the project owner before the repository is made public. Until then, no open-source license is granted.
+MacroStudio is available under the [MIT License](LICENSE). Copyright (c) 2026 Baeleaf.
