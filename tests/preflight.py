@@ -230,6 +230,7 @@ sidebar_source = (ROOT / "UI" / "Sidebar.lua").read_text(encoding="utf-8")
 editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
 macro_dialog_source = (ROOT / "UI" / "MacroDialog.lua").read_text(encoding="utf-8")
 main_frame_source = (ROOT / "UI" / "MainFrame.lua").read_text(encoding="utf-8")
+icon_picker_source = (ROOT / "UI" / "IconPicker.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
 dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
 
@@ -250,6 +251,8 @@ assert "modalOverlay:EnableMouseWheel(true)" in main_frame_source
 assert "SetMainWindowModalBlocked(true)" in macro_dialog_source
 assert "SetMainWindowModalBlocked(false)" in macro_dialog_source
 assert 'titleBar:RegisterForDrag("LeftButton")' in macro_dialog_source
+assert "getIconIdentity" in icon_picker_source and "GetFileIDFromPath" in icon_picker_source
+assert 'basename == "inv_misc_questionmark"' in icon_picker_source
 assert '"OnEnterPressed"' in dialogs_source and '"OnEscapePressed"' in dialogs_source
 
 run_ui_smoke(ROOT)

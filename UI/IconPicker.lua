@@ -17,9 +17,33 @@ local GRID_HEIGHT = VISIBLE_ROWS * PITCH
 local WINDOW_WIDTH = GRID_WIDTH + 58
 local WINDOW_HEIGHT = GRID_HEIGHT + 92
 
+local function getIconIdentity(icon)
+    if type(icon) == "number" then
+        return "file:" .. tostring(icon)
+    end
+    if type(icon) ~= "string" or icon == "" then
+        return nil
+    end
+
+    if type(GetFileIDFromPath) == "function" then
+        local ok, fileId = pcall(GetFileIDFromPath, icon)
+        if ok and type(fileId) == "number" and fileId > 0 then
+            return "file:" .. tostring(fileId)
+        end
+    end
+
+    local normalized = icon:lower():gsub("/", "\\"):gsub("%.blp$", "")
+    local basename = normalized:match("([^\\]+)$") or normalized
+    if basename == "inv_misc_questionmark" then
+        return "file:" .. tostring(MacroStudio.DEFAULT_ICON)
+    end
+    return "path:" .. normalized
+end
+
 local function appendUnique(result, seen, icon)
-    if (type(icon) == "number" or type(icon) == "string") and icon ~= "" and not seen[icon] then
-        seen[icon] = true
+    local identity = getIconIdentity(icon)
+    if identity and not seen[identity] then
+        seen[identity] = true
         result[#result + 1] = icon
     end
 end

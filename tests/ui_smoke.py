@@ -174,9 +174,17 @@ def run_ui_smoke(root):
         end
         function GetMacroIcons(list)
             list[#list + 1] = 134400
+            list[#list + 1] = "Interface\\Icons\\INV_Misc_QuestionMark"
+            list[#list + 1] = "INV_Misc_QuestionMark"
             list[#list + 1] = 135000
         end
         function GetMacroItemIcons() end
+        function GetFileIDFromPath(path)
+            if type(path) == "string" and path:lower():find("inv_misc_questionmark", 1, true) then
+                return 134400
+            end
+            return nil
+        end
         function EditMacro(index, _, _, body) return index end
         function CreateMacro() return 2 end
         function DeleteMacro() end
@@ -280,6 +288,9 @@ def run_ui_smoke(root):
         assert(not ms.MacroDialog.createButton:IsEnabled(), "dirty editor should disable dialog Create")
         ms.Editor:SetEditorText(ms.Editor.savedBody)
         assert(ms.MacroDialog.createButton:IsEnabled(), "clean editor should restore valid dialog Create")
+        local pickerIcons = ms.IconPicker:BuildIconList()
+        assert(#pickerIcons == 2 and pickerIcons[1] == ms.DEFAULT_ICON,
+            "icon picker should canonicalize numeric/path question-mark references to one option")
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
         assert(ms.IconPicker.frame:IsShown(), "icon picker should construct and open")
         ms.MacroDialog:Close()
