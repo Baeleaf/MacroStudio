@@ -62,11 +62,25 @@ end
 local eventFrame = CreateFrame("Frame")
 MacroStudio.eventFrame = eventFrame
 
+local actionBarEvents = {
+    PLAYER_ENTERING_WORLD = true,
+    ACTIONBAR_SLOT_CHANGED = true,
+    ACTIONBAR_PAGE_CHANGED = true,
+    UPDATE_BONUS_ACTIONBAR = true,
+    UPDATE_VEHICLE_ACTIONBAR = true,
+    UPDATE_OVERRIDE_ACTIONBAR = true,
+    UPDATE_SHAPESHIFT_FORM = true,
+    UPDATE_POSSESS_BAR = true,
+}
+
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("UPDATE_MACROS")
+for event in pairs(actionBarEvents) do
+    eventFrame:RegisterEvent(event)
+end
 
 eventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -82,5 +96,7 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
         MacroStudio:OnCombatEvent(false)
     elseif event == "UPDATE_MACROS" and MacroStudio.OnMacrosChanged then
         MacroStudio:OnMacrosChanged("UPDATE_MACROS")
+    elseif actionBarEvents[event] and MacroStudio.OnActionBarChanged then
+        MacroStudio:OnActionBarChanged(event, ...)
     end
 end)

@@ -45,7 +45,7 @@ MacroStudio 1.0.0 is the initial public-release candidate. The roadmap records s
 - [x] Drag Blizzard-native macros from MacroStudio onto action bars outside combat.
 - [x] Preserve protected-action rules and hand off a native macro cursor payload without hardcoded action-bar frames.
 - [ ] Validate third-party action-bar compatibility with public testers.
-- [ ] Inspect which action slots use a selected macro, including paging and override caveats.
+- [x] Inspect native action slots and show exact saved-macro usage counts and raw slot locations.
 - [ ] Report associated keybinds only when the result is reliable.
 
 ## Portability, backups, and history

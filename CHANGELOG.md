@@ -4,6 +4,10 @@ Notable user-facing changes to MacroStudio are documented here.
 
 ## Unreleased
 
+### Added
+
+- Show exact saved native macro usage counts and raw action-slot locations in the macro list and selected editor detail.
+
 ## 1.1.0
 
 ### Added

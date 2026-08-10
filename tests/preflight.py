@@ -100,6 +100,20 @@ lua.execute(
     function PickupMacro(index)
         pickedUpMacros[#pickedUpMacros + 1] = index
     end
+
+    actionSlots = {
+        [3] = { "macro", 2 },
+        [9] = { "spell", 9001 },
+        [15] = { "macro", 2 },
+        [25] = { "macro", 4 },
+    }
+    actionInfoCalls = 0
+    function GetActionInfo(slot)
+        actionInfoCalls = actionInfoCalls + 1
+        local action = actionSlots[slot]
+        if not action then return nil end
+        return action[1], action[2]
+    end
     """
 )
 
@@ -115,6 +129,7 @@ globals_.MacroStudioDB = None
 
 load_addon_file("Utils/Helpers.lua", namespace)
 load_addon_file("MacroRepository.lua", namespace)
+load_addon_file("ActionBarRepository.lua", namespace)
 load_addon_file("MetadataRepository.lua", namespace)
 load_addon_file("Search.lua", namespace)
 load_addon_file("UI/MacroList.lua", namespace)
@@ -137,6 +152,7 @@ tests = load(
     r"""
     local _, ms = ...
     local repo = ms.MacroRepository
+    local actionBars = ms.ActionBarRepository
     local metadata = ms.MetadataRepository
     local search = ms.Search
 
@@ -145,6 +161,31 @@ tests = load(
     assert(repo.accountCount == 2 and repo.characterCount == 1, "scope counts")
     assert(macros[1].duplicateName and macros[2].duplicateName, "duplicate detection")
     assert(macros[3].scope == "CHARACTER" and macros[3].index == 4, "character index offset")
+
+    actionBars:Refresh()
+    assert(actionBars:GetScanCount() == 1 and actionInfoCalls == actionBars.MAX_ACTION_SLOTS,
+        "one refresh should scan the bounded native action-slot range once")
+    local unusedCount = actionBars:GetUsage(macros[1])
+    local duplicateCount, duplicateSlots = actionBars:GetUsage(macros[2])
+    local characterCount, characterSlots = actionBars:GetUsage(macros[3])
+    assert(unusedCount == 0, "an unused same-name duplicate should not be marked")
+    assert(duplicateCount == 2 and duplicateSlots[1] == 3 and duplicateSlots[2] == 15,
+        "all placements should map to the exact Account macro index")
+    assert(characterCount == 1 and characterSlots[1] == 25,
+        "Character usage should honor the account-capacity index offset")
+
+    actionSlots[3] = nil
+    actionSlots[15] = { "spell", 9002 }
+    actionBars:Refresh()
+    duplicateCount = actionBars:GetUsage(macros[2])
+    assert(duplicateCount == 0, "removed and replaced macro actions should disappear")
+
+    actionSlots[3] = { "macro", 2 }
+    actionSlots[15] = { "macro", 2 }
+    actionBars:Refresh()
+    duplicateCount, duplicateSlots = actionBars:GetUsage(macros[2])
+    assert(duplicateCount == 2 and duplicateSlots[1] == 3 and duplicateSlots[2] == 15,
+        "restored native macro actions should reappear after one refresh")
 
     local firstTwin = ms.Helpers:CopyMacro(macros[1])
     local secondTwin = ms.Helpers:CopyMacro(macros[2])
@@ -168,12 +209,19 @@ tests = load(
     combat = false
 
     accountMacros[2].body = "/say externally changed"
+    actionBars:Refresh()
+    duplicateCount = actionBars:GetUsage(secondTwin)
+    assert(duplicateCount == 0,
+        "usage should be omitted when the cached macro identity no longer matches its native index")
     picked, pickupTarget, pickupReason = repo:Pickup(secondTwin)
     assert(not picked and not pickupTarget and pickupReason:find("changed")
             and #pickedUpMacros == pickupCount,
         "stale snapshots should refuse pickup instead of targeting the current index occupant")
     accountMacros[2].body = "/say second"
     repo:Refresh()
+    actionBars:Refresh()
+    duplicateCount = actionBars:GetUsage(secondTwin)
+    assert(duplicateCount == 2, "usage should return after exact native identity reconciliation")
 
     local valid, reason = repo:ValidateCreateRequest({
         name = "", body = "", icon = 134400, scope = "ACCOUNT",
@@ -194,6 +242,10 @@ tests = load(
         name = "New", body = "/say new", icon = 134400, scope = "ACCOUNT",
     })
     assert(created and createdMacro and createdMacro.index == 3, "create should return exact new macro")
+    actionSlots[40] = { "macro", createdMacro.index }
+    actionBars:Refresh()
+    local createdCount = actionBars:GetUsage(createdMacro)
+    assert(createdCount == 1, "newly placed macro should use its current native index")
     valid, reason = repo:ValidateCreateRequest({
         name = "Full", body = "", icon = 134400, scope = "ACCOUNT",
     })
@@ -203,6 +255,15 @@ tests = load(
     assert(deleted, deleteReason)
     assert(accountMacros[1].body == firstTwin.body, "delete should preserve first duplicate")
     assert(accountMacros[2].name == "New", "delete should target duplicate by exact index")
+    actionSlots[3] = nil
+    actionSlots[15] = nil
+    actionSlots[40] = { "macro", 2 }
+    actionBars:Refresh()
+    local shiftedMacro = repo:FindByIndex(2)
+    local shiftedCount, shiftedSlots = actionBars:GetUsage(shiftedMacro)
+    duplicateCount = actionBars:GetUsage(secondTwin)
+    assert(shiftedCount == 1 and shiftedSlots[1] == 40 and duplicateCount == 0,
+        "index changes should reconcile to the exact current snapshot without retaining stale usage")
     deleted = repo:Delete(secondTwin)
     assert(not deleted, "stale snapshot should not delete shifted neighbor")
     assert(accountMacros[2].name == "New", "stale delete must leave neighbor intact")
@@ -313,6 +374,8 @@ search_source = (ROOT / "Search.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
 dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
 repository_source = (ROOT / "MacroRepository.lua").read_text(encoding="utf-8")
+action_bar_source = (ROOT / "ActionBarRepository.lua").read_text(encoding="utf-8")
+core_source = (ROOT / "Core.lua").read_text(encoding="utf-8")
 
 assert 'SetAtlas("PetJournal-FavoritesIcon")' in macro_list_source
 assert 'atlas = "PetJournal-FavoritesIcon"' in sidebar_source and "SetAtlas(atlas)" in sidebar_source
@@ -346,6 +409,15 @@ assert 'button:SetScript("OnDragStart"' in macro_list_source
 assert "PickupMacro(current.index)" in repository_source
 assert "ClearCursor" not in repository_source and "PlaceAction" not in repository_source
 assert "RequestPickupMacro" in main_frame_source
+assert 'GetActionInfo(slot)' in action_bar_source and 'actionType == "macro"' in action_bar_source
+assert "GetActionInfo" not in macro_list_source and "GetActionInfo" not in editor_source
+assert 'SetScript("OnUpdate"' not in action_bar_source and 'SetScript("OnUpdate"' not in main_frame_source
+assert 'ACTIONBAR_SLOT_CHANGED = true' in core_source
+assert 'PLAYER_ENTERING_WORLD = true' in core_source
+assert 'UPDATE_BONUS_ACTIONBAR = true' in core_source
+assert 'UPDATE_VEHICLE_ACTIONBAR = true' in core_source
+assert 'UPDATE_OVERRIDE_ACTIONBAR = true' in core_source
+assert 'C_Timer.After(0, refresh)' in main_frame_source
 
 run_ui_smoke(ROOT)
 print("PASS MacroStudio 1.1.0 preflight")

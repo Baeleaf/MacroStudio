@@ -10,7 +10,41 @@ With Python 3 and `lupa` installed, run from the addon root:
 py .\tests\preflight.py
 ```
 
-The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, exact Account and Character pickup indices, duplicate-name and filtered-row drag targeting, stale/combat refusal, dirty-draft independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, search/navigation combinations, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify which index reaches `PickupMacro`; they cannot validate the real cursor or action-bar drop.
+The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, exact Account and Character pickup and action-slot indices, multiple placements, action removal/replacement, duplicate-name isolation, stale identity omission and reconciliation, dirty-draft independence, filtered cached indicators, event-driven refresh, search scan independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify API call and cache behavior; they cannot prove real-client cursor, action-slot, paging, combat, or taint behavior.
+
+## Milestone 5: action-bar usage
+
+### Phase 1: Basic detection
+
+- [ ] Place one Account macro and one Character macro on native action slots.
+- [ ] Verify both row indicators and selected-macro details.
+- [ ] Remove each macro and verify its indicator disappears automatically.
+
+### Phase 2: Multiple slots
+
+- [ ] Place one macro in several slots and verify the count and raw slot list.
+- [ ] Remove one copy and verify both update automatically.
+
+### Phase 3: Duplicate names
+
+- [ ] Create same-name macros with different bodies and icons.
+- [ ] Place only one on a bar and verify only that exact macro is marked.
+
+### Phase 4: Live changes
+
+- [ ] Drag from MacroStudio, move the action, replace it, and remove it.
+- [ ] Verify every change appears without Refresh or `/reload`.
+
+### Phase 5: Search and organization
+
+- [ ] Verify indicators through search, Favorites, a category, and combined search/category views.
+- [ ] Verify Account and Character filters preserve the correct usage state.
+
+### Phase 6: Combat
+
+- [ ] Enter combat and change or use action bars as the client permits.
+- [ ] Confirm there are no Lua, taint, blocked-action, or protected-action errors.
+- [ ] Verify usage remains current or reconciles automatically afterward.
 
 ## Drag native macros to action bars (1.1.0)
 

@@ -97,6 +97,18 @@ function Editor:Create(parent)
     dirtyText:SetTextColor(1, 0.68, 0.2)
     self.dirtyText = dirtyText
 
+    local usageButton = CreateFrame("Button", nil, panel)
+    usageButton:SetSize(170, 20)
+    usageButton:SetPoint("TOPRIGHT", -14, -11)
+    local usageText = MacroStudio.Helpers:CreateLabel(usageButton, "GameFontNormalSmall", "")
+    usageText:SetAllPoints(usageButton)
+    usageText:SetJustifyH("RIGHT")
+    usageText:SetTextColor(0.35, 0.75, 1)
+    usageButton.Text = usageText
+    usageButton:Hide()
+    MacroStudio.Helpers:SetButtonTooltip(usageButton)
+    self.usageButton = usageButton
+
     local icon = panel:CreateTexture(nil, "ARTWORK")
     icon:SetSize(46, 46)
     icon:SetPoint("TOPLEFT", 14, -43)
@@ -433,6 +445,35 @@ function Editor:RefreshState()
     self:UpdateEditorState("refresh")
 end
 
+function Editor:RefreshActionBarUsage()
+    if not self.usageButton then
+        return
+    end
+
+    local count, slots = MacroStudio.ActionBarRepository:GetUsage(self.macro)
+    if count == 0 then
+        self.usageButton:Hide()
+        MacroStudio.Helpers:SetButtonTooltip(self.usageButton)
+        return
+    end
+
+    self.usageButton.Text:SetText(string.format(
+        "On action bars: %d %s",
+        count,
+        count == 1 and "slot" or "slots"
+    ))
+    local lines = { "This saved native macro is currently placed on:" }
+    for _, slot in ipairs(slots) do
+        lines[#lines + 1] = string.format("Action Bar slot %d", slot)
+    end
+    MacroStudio.Helpers:SetButtonTooltip(
+        self.usageButton,
+        "Action Bar Usage",
+        table.concat(lines, "\n")
+    )
+    self.usageButton:Show()
+end
+
 function Editor:RefreshMetadata()
     local hasMacro = self.macro ~= nil
     local presentation = MacroStudio.MetadataRepository:GetPresentation(self.macro)
@@ -459,6 +500,7 @@ function Editor:RefreshMetadata()
     MacroStudio.Helpers:SetButtonEnabled(self.categoryButton, hasMacro)
     MacroStudio.Helpers:SetButtonEnabled(self.addTagButton, hasMacro)
     MacroStudio.Helpers:SetButtonEnabled(self.removeTagButton, hasMacro and #presentation.tags > 0)
+    self:RefreshActionBarUsage()
 end
 
 function Editor:HideMetadataMenus()

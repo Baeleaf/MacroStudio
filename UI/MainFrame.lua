@@ -353,12 +353,48 @@ function MacroStudio:RequestPickupMacro(macro)
     return true, current
 end
 
+function MacroStudio:RefreshActionBarUsage(reason)
+    if not self.initialized or not self.ActionBarRepository then
+        return
+    end
+
+    self.ActionBarRepository:Refresh()
+    if self.MacroList and self.MacroList.RefreshUsage then
+        self.MacroList:RefreshUsage()
+    end
+    if self.Editor and self.Editor.RefreshActionBarUsage then
+        self.Editor:RefreshActionBarUsage()
+    end
+    self:Debug("action-bar event handled", reason or "unknown")
+end
+
+function MacroStudio:OnActionBarChanged(reason)
+    if not self.initialized or self.pendingActionBarUsageRefresh then
+        return
+    end
+
+    self.pendingActionBarUsageRefresh = true
+    local function refresh()
+        self.pendingActionBarUsageRefresh = false
+        self:RefreshActionBarUsage(reason)
+    end
+
+    if C_Timer and type(C_Timer.After) == "function" then
+        C_Timer.After(0, refresh)
+    else
+        refresh()
+    end
+end
+
 function MacroStudio:RefreshMacros(reason)
     if not self.initialized then
         return
     end
 
     local macros = self.MacroRepository:Refresh()
+    if self.ActionBarRepository then
+        self.ActionBarRepository:Refresh()
+    end
     self.MetadataRepository:Reconcile(macros)
     local editorWasDirty = self.Editor:IsDirty()
     local exactSelection
