@@ -199,7 +199,7 @@ function Helpers:SetButtonTooltip(button, title, text)
 
     button.macroStudioTooltipTitle = title
     button.macroStudioTooltipText = text
-    if button.macroStudioTooltipInstalled then
+    if button.macroStudioTooltipInstalled == true then
         return
     end
 

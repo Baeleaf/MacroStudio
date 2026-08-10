@@ -95,6 +95,11 @@ lua.execute(
             table.remove(characterMacros, index - MAX_ACCOUNT_MACROS)
         end
     end
+
+    pickedUpMacros = {}
+    function PickupMacro(index)
+        pickedUpMacros[#pickedUpMacros + 1] = index
+    end
     """
 )
 
@@ -141,6 +146,35 @@ tests = load(
     assert(macros[1].duplicateName and macros[2].duplicateName, "duplicate detection")
     assert(macros[3].scope == "CHARACTER" and macros[3].index == 4, "character index offset")
 
+    local firstTwin = ms.Helpers:CopyMacro(macros[1])
+    local secondTwin = ms.Helpers:CopyMacro(macros[2])
+    local solo = ms.Helpers:CopyMacro(macros[3])
+    local picked, pickupTarget, pickupReason = repo:Pickup(firstTwin)
+    assert(picked and pickupTarget.index == 1 and pickedUpMacros[#pickedUpMacros] == 1,
+        "Account pickup should use the exact native index")
+    picked, pickupTarget = repo:Pickup(secondTwin)
+    assert(picked and pickupTarget.index == 2 and pickedUpMacros[#pickedUpMacros] == 2,
+        "duplicate names should pick up the exact requested macro index")
+    picked, pickupTarget = repo:Pickup(solo)
+    assert(picked and pickupTarget.index == 4 and pickedUpMacros[#pickedUpMacros] == 4,
+        "Character pickup should use the account-capacity offset index")
+
+    local pickupCount = #pickedUpMacros
+    combat = true
+    picked, pickupTarget, pickupReason = repo:Pickup(secondTwin)
+    assert(not picked and not pickupTarget and pickupReason:find("combat")
+            and #pickedUpMacros == pickupCount,
+        "combat should refuse pickup without changing the cursor payload")
+    combat = false
+
+    accountMacros[2].body = "/say externally changed"
+    picked, pickupTarget, pickupReason = repo:Pickup(secondTwin)
+    assert(not picked and not pickupTarget and pickupReason:find("changed")
+            and #pickedUpMacros == pickupCount,
+        "stale snapshots should refuse pickup instead of targeting the current index occupant")
+    accountMacros[2].body = "/say second"
+    repo:Refresh()
+
     local valid, reason = repo:ValidateCreateRequest({
         name = "", body = "", icon = 134400, scope = "ACCOUNT",
     })
@@ -165,8 +199,6 @@ tests = load(
     })
     assert(not valid and reason:find("full"), "capacity should block creation")
 
-    local firstTwin = ms.Helpers:CopyMacro(repo:GetAll()[1])
-    local secondTwin = ms.Helpers:CopyMacro(repo:GetAll()[2])
     local deleted, deleteReason = repo:Delete(secondTwin)
     assert(deleted, deleteReason)
     assert(accountMacros[1].body == firstTwin.body, "delete should preserve first duplicate")
@@ -193,6 +225,17 @@ tests = load(
     assert(#metadata:GetAllTags() == 1, "tag choices should be unique")
     local category = metadata:CreateCategory("Mythic+")
     assert(category and metadata:SetCategory(first, category.id), "search category setup")
+    local metadataBeforePickup = metadata:GetPresentation(first)
+    pickupCount = #pickedUpMacros
+    picked, pickupTarget, pickupReason = repo:Pickup(first)
+    local metadataAfterPickup = metadata:GetPresentation(first)
+    assert(picked and pickupTarget.index == first.index and #pickedUpMacros == pickupCount + 1,
+        pickupReason or "metadata pickup should succeed")
+    assert(metadataAfterPickup.favorite == metadataBeforePickup.favorite
+            and metadataAfterPickup.categoryId == metadataBeforePickup.categoryId
+            and table.concat(metadataAfterPickup.tags, "\031")
+                == table.concat(metadataBeforePickup.tags, "\031"),
+        "pickup must not change categories, tags, or Favorites")
 
     assert(search:Matches(first, "TWIN"), "search should match names case-insensitively")
     assert(search:Matches(first, "say first"), "search should match the complete body")
@@ -269,6 +312,7 @@ icon_picker_source = (ROOT / "UI" / "IconPicker.lua").read_text(encoding="utf-8"
 search_source = (ROOT / "Search.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
 dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
+repository_source = (ROOT / "MacroRepository.lua").read_text(encoding="utf-8")
 
 assert 'SetAtlas("PetJournal-FavoritesIcon")' in macro_list_source
 assert 'atlas = "PetJournal-FavoritesIcon"' in sidebar_source and "SetAtlas(atlas)" in sidebar_source
@@ -297,6 +341,11 @@ assert 'searchBox:HookScript("OnEscapePressed"' in macro_list_source
 assert "self:RefreshMacroList()" in main_frame_source
 assert 'self.activeFilter = { kind = "all" }\n    if macro then' not in main_frame_source
 assert '"OnEnterPressed"' in dialogs_source and '"OnEscapePressed"' in dialogs_source
+assert 'button:RegisterForDrag("LeftButton")' in macro_list_source
+assert 'button:SetScript("OnDragStart"' in macro_list_source
+assert "PickupMacro(current.index)" in repository_source
+assert "ClearCursor" not in repository_source and "PlaceAction" not in repository_source
+assert "RequestPickupMacro" in main_frame_source
 
 run_ui_smoke(ROOT)
 print("PASS MacroStudio 1.0.0 preflight")

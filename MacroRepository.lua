@@ -167,6 +167,28 @@ function MacroRepository:IsSnapshotCurrent(snapshot)
     return self:SnapshotsEqual(self:GetByIndex(snapshot.index, snapshot.scope), snapshot)
 end
 
+function MacroRepository:Pickup(snapshot)
+    if type(snapshot) ~= "table" or type(snapshot.index) ~= "number" then
+        return false, nil, "This macro is no longer available to drag."
+    end
+    if isInCombat() then
+        return false, nil, "Macros can't be moved to action bars during combat."
+    end
+    if type(PickupMacro) ~= "function" then
+        return false, nil, "WoW's native macro pickup API is unavailable."
+    end
+
+    local current = self:GetByIndex(snapshot.index, snapshot.scope)
+    if not self:SnapshotsEqual(current, snapshot) then
+        return false, nil, "This macro changed before the drag started. Try again after the list updates."
+    end
+
+    -- Match Blizzard's Macro UI: hand the exact native slot to WoW and let
+    -- its cursor and action-bar system own the payload from this point on.
+    PickupMacro(current.index)
+    return true, current
+end
+
 function MacroRepository:ResolveLatest(snapshot, refreshFirst)
     if type(snapshot) ~= "table" then
         return nil, "No macro is selected."

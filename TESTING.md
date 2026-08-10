@@ -1,4 +1,4 @@
-# MacroStudio 1.0.0 Release Candidate Testing
+# MacroStudio Testing
 
 Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 
@@ -10,7 +10,43 @@ With Python 3 and `lupa` installed, run from the addon root:
 py .\tests\preflight.py
 ```
 
-The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, icon identity deduplication, metadata reconciliation, reactive name/body/category/tag search, navigation combinations, no native re-enumeration while typing, dirty-draft independence, native scrolling EditBoxes, focus borders, and modal safety. Actual frame layering and mouse behavior still require the live-client tests below.
+The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, exact Account and Character pickup indices, duplicate-name and filtered-row drag targeting, stale/combat refusal, dirty-draft independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, search/navigation combinations, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify which index reaches `PickupMacro`; they cannot validate the real cursor or action-bar drop.
+
+## Milestone 4: drag native macros to action bars (unreleased)
+
+This feature is not included in MacroStudio 1.0.0. Test it from the `feature/action-bar-drag` branch with Lua errors enabled.
+
+### Basic drag and replacement
+
+- [ ] Drag an Account macro to an empty action-bar slot, click it, and confirm normal macro behavior.
+- [ ] Drag a Character macro to an empty action-bar slot, click it, and confirm normal macro behavior.
+- [ ] Drag a macro onto an occupied slot and confirm Blizzard's normal replacement or swap behavior.
+- [ ] Repeat on more than one standard Blizzard action bar.
+- [ ] Confirm normal row clicks still select macros and list scrolling remains usable.
+
+### Identity, search, and organization
+
+- [ ] Create same-name macros with different icons and bodies. Drag each and confirm the correct native macro reaches the bar.
+- [ ] Drag from search results, Favorites, a category, and a combined search/category view. Confirm every visible row targets the expected macro.
+- [ ] Confirm dragging does not change category, tags, Favorite state, body, name, icon, or scope.
+
+### Dirty drafts and stale rows
+
+- [ ] Make an unsaved edit, then drag the selected macro. Confirm the draft stays dirty and is not saved.
+- [ ] Confirm the action bar receives the existing saved native macro, not the unsaved draft.
+- [ ] Change or delete a visible macro through Blizzard's Macro UI immediately before dragging it. Confirm MacroStudio refuses a stale target instead of picking up a neighbor.
+
+### Combat and cursor behavior
+
+- [ ] Attempt a drag during combat. Confirm the cursor is unchanged and MacroStudio reports that macros cannot be moved during combat.
+- [ ] Confirm there are no Lua errors, blocked-action errors, or protected-action errors.
+- [ ] Pick up a macro, then cancel with right-click or Escape as supported by WoW. Confirm the cursor returns to normal and MacroStudio stays usable.
+- [ ] Drop a macro and confirm no Save, Refresh, or Reload is required afterward.
+
+### Optional third-party action bars
+
+- [ ] If available, repeat a basic drag with a popular action-bar addon.
+- [ ] Record the addon and version. Compatibility is useful feedback, not a milestone requirement.
 
 ## Load and window lifecycle
 
@@ -100,7 +136,7 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for nati
 
 ## Favorites, tags, categories, and filter sections
 
-- [ ] Favorites show a reliable Blizzard atlas in navigation, rows, and editor—no missing-box glyphs.
+- [ ] Favorites show a reliable Blizzard atlas in navigation, rows, and editor, with no missing-box glyphs.
 - [ ] Toggle Favorite; editor state is obvious from icon treatment, label, and backdrop. Tooltip explains it.
 - [ ] **+ Add** lists existing unassigned tags and **Create New Tag...**; assigned tags are absent.
 - [ ] Choosing an existing tag assigns it immediately. Case-only variants reuse canonical spelling.

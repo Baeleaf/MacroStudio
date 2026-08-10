@@ -4,6 +4,10 @@ Notable user-facing changes to MacroStudio are documented here.
 
 ## Unreleased
 
+### Added
+
+- Drag native macros directly from MacroStudio onto action bars.
+
 ## 1.0.0
 
 Initial public release candidate.

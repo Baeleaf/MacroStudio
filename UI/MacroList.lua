@@ -157,6 +157,7 @@ function MacroList:AcquireRow()
     button = CreateFrame("Button", nil, self.scrollChild, "BackdropTemplate")
     button:SetHeight(ROW_HEIGHT)
     button:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    button:RegisterForDrag("LeftButton")
 
     local icon = button:CreateTexture(nil, "ARTWORK")
     icon:SetSize(34, 34)
@@ -201,6 +202,12 @@ function MacroList:AcquireRow()
             MacroStudio:RequestSelectMacro(row.macro)
         end
     end)
+    button:SetScript("OnDragStart", function(row)
+        if row.macro then
+            MacroStudio:RequestPickupMacro(row.macro)
+        end
+    end)
+    MacroStudio.Helpers:SetButtonTooltip(button)
 
     return button
 end
@@ -264,7 +271,9 @@ function MacroList:AddSection(title, macros, yOffset, showEmpty)
         row.macro = macro
         row.icon:SetTexture(macro.icon or MacroStudio.DEFAULT_ICON)
         row.favorite:SetShown(MacroStudio.MetadataRepository:IsFavorite(macro))
-        row.nameText:SetText(macro.name ~= "" and macro.name or "Unnamed Macro")
+        local displayName = macro.name ~= "" and macro.name or "Unnamed Macro"
+        row.nameText:SetText(displayName)
+        MacroStudio.Helpers:SetButtonTooltip(row, displayName, "Click to select\nDrag to place on an action bar")
 
         local length = MacroStudio.Helpers:TextLength(macro.body)
         local preview = MacroStudio.Helpers:FirstLine(macro.body, 28)

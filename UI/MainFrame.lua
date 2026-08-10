@@ -324,6 +324,35 @@ function MacroStudio:RequestSelectMacro(macro)
     self:SelectMacro(macro)
 end
 
+function MacroStudio:RequestPickupMacro(macro)
+    if not macro then
+        return false
+    end
+
+    local draggingDirtySelection = self.selectedMacro
+        and self.MacroRepository:SnapshotsEqual(self.selectedMacro, macro)
+        and self.Editor
+        and self.Editor:IsDirty()
+    local pickedUp, current, message = self.MacroRepository:Pickup(macro)
+    if not pickedUp then
+        message = message or "This macro could not be placed on the cursor."
+        if self.Editor then
+            self.Editor:SetNotice(message, true)
+        end
+        self:Print(message)
+        return false
+    end
+
+    if draggingDirtySelection then
+        self.Editor:SetNotice(
+            "You have unsaved changes. The saved version was placed on the cursor.",
+            false
+        )
+    end
+    self:Debug("native macro picked up", current.index)
+    return true, current
+end
+
 function MacroStudio:RefreshMacros(reason)
     if not self.initialized then
         return

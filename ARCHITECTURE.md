@@ -2,7 +2,9 @@
 
 ## Scope of version 1.0.0
 
-Version 1.0.0 is the initial public-release candidate. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, launchers, and action-bar integration remain unimplemented.
+Version 1.0.0 is the initial public release. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, and launchers remain unimplemented.
+
+Current unreleased development also hands native macros to WoW's normal cursor system so players can drag them onto action bars. This is not part of the public 1.0.0 build.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
@@ -24,17 +26,17 @@ Core.lua
     `-- UI/Editor.lua
 ```
 
-- `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, or `DeleteMacro`.
+- `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, `DeleteMacro`, or `PickupMacro`.
 - `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
 - `Search.lua` performs read-only matching against native macro fields and attached metadata.
 - `UI/Editor.lua` derives Save/Delete state and owns the editor's complete four-edge focus treatment.
 - `UI/MacroDialog.lua` derives Create state and owns the movable dialog and modal lifecycle.
 - `UI/IconPicker.lua` uses Blizzard's icon provider when available and compatible API fallbacks otherwise.
-- `UI/MacroList.lua` decides which scope headers are meaningful for the active filter.
-- `UI/MainFrame.lua` coordinates selection, native mutations, organization refresh, dialogs, and the interaction-blocking modal overlay.
+- `UI/MacroList.lua` decides which scope headers are meaningful for the active filter and starts native left-button row drags.
+- `UI/MainFrame.lua` coordinates selection, native mutations and pickup notices, organization refresh, dialogs, and the interaction-blocking modal overlay.
 
-UI modules never call raw native macro mutation APIs.
+UI modules never call raw native macro mutation or pickup APIs.
 
 ## Blizzard-owned and MacroStudio-owned data
 
@@ -55,6 +57,16 @@ Every Save and Delete starts from a copied snapshot. Immediately before the muta
 Save passes the enumerated index to `EditMacro`, refreshes, and resolves the returned/original/unique full-field result. Create refreshes capacity, validates all fields, calls `CreateMacro`, refreshes, and selects the returned or uniquely matching record. Delete refreshes, revalidates the exact snapshot, calls `DeleteMacro(index)`, and requires the relevant scope count to decrease by one.
 
 `UPDATE_MACROS` can fire around a native mutation. `UI/MainFrame.lua` defers that event while the repository is operating, then performs one controlled metadata reconciliation. For Delete, the trusted metadata record is removed first so a shifted neighbor cannot inherit it.
+
+## Native action-bar drag handoff
+
+Macro-list rows register for Blizzard's native left-button drag gesture. `OnDragStart` passes the row's saved snapshot to `MacroRepository:Pickup`, which re-reads the same native index and requires index, scope, name, icon, and body to match before calling `PickupMacro(index)`. It never looks up a macro by name, so duplicate names remain safe. A stale row is refused rather than redirected to a shifted neighbor.
+
+`PickupMacro` is unavailable during combat lockdown. MacroStudio checks `InCombatLockdown()` first, leaves the cursor unchanged, and shows a concise message instead of attempting a secure workaround. It also does not call `ClearCursor`, matching Blizzard's own Macro UI handoff behavior when the cursor already holds something.
+
+Pickup uses the saved native macro. It never saves an editor draft, creates a temporary macro, or changes category, tag, Favorite, body, name, icon, or scope metadata. When the dragged row is the dirty editor selection, MacroStudio explains that the saved version was placed on the cursor.
+
+MacroStudio stops after `PickupMacro(index)`. Blizzard's standard action buttons receive the normal cursor payload and perform their own drop, swap, and cancel behavior. MacroStudio does not call `PlaceAction`, emulate action buttons, or hardcode action-bar frame names. Compatible third-party bars can consume the same native payload, but real-client testing is still required.
 
 ## Duplicate names and metadata reconciliation
 

@@ -19,6 +19,8 @@ def run_ui_smoke(root):
         MacroStudioDB = nil
         combat = false
         enumerationCalls = 0
+        pickupCalls = {}
+        editCalls = 0
 
         local Frame = {}
         local focusedFrame = nil
@@ -209,9 +211,15 @@ def run_ui_smoke(root):
             end
             return nil
         end
-        function EditMacro(index, _, _, body) return index end
+        function EditMacro(index, _, _, body)
+            editCalls = editCalls + 1
+            return index
+        end
         function CreateMacro() return 2 end
         function DeleteMacro() end
+        function PickupMacro(index)
+            pickupCalls[#pickupCalls + 1] = index
+        end
         """
     )
 
@@ -247,6 +255,38 @@ def run_ui_smoke(root):
         assert(ms.frame and not ms.frame:IsShown(), "main window should remain hidden on login")
         assert(ms.selectedMacro and ms.selectedMacro.name == "Account", "initial refresh should select a macro")
         ms.frame:Show()
+
+        local accountRow = ms.MacroList.visibleRows[1]
+        assert(accountRow and accountRow.dragButton == "LeftButton",
+            "macro rows should register for native left-button dragging")
+        accountRow:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Account"
+                and GameTooltip.tooltipBody == "Click to select\nDrag to place on an action bar",
+            "row tooltip should explain click selection and action-bar dragging: "
+                .. tostring(GameTooltip.tooltipTitle) .. " | "
+                .. tostring(GameTooltip.tooltipBody))
+        accountRow:TriggerScript("OnLeave")
+        accountRow:GetScript("OnDragStart")(accountRow)
+        assert(pickupCalls[#pickupCalls] == 1,
+            "Account row drag should pick up its exact native index")
+        assert(ms.selectedMacro.name == "Account",
+            "dragging should not change normal row selection")
+
+        ms:SetFilter("character")
+        local characterRow = ms.MacroList.visibleRows[1]
+        assert(characterRow and characterRow.macro.scope == "CHARACTER",
+            "Character filter should expose the Character row")
+        characterRow:GetScript("OnDragStart")(characterRow)
+        assert(pickupCalls[#pickupCalls] == 4,
+            "Character row drag should use its account-capacity offset index")
+        assert(ms.selectedMacro.name == "Account",
+            "dragging an unselected row should leave selection intact")
+        characterRow:GetScript("OnClick")(characterRow)
+        assert(ms.selectedMacro.name == "Character",
+            "normal clicking should still select a draggable row")
+        ms:SelectMacro(ms.MacroRepository:GetAll()[1])
+        ms:SetFilter("all")
+
         assert(ms.Editor.editBox:IsEnabled(), "selected macro editor should be enabled")
         assert(ms.Editor.editorHost.template == "ScrollingEditBoxTemplate",
             "main editor should use Blizzard's native scrolling edit box")
@@ -288,6 +328,32 @@ def run_ui_smoke(root):
         local enumerationBeforeSearch = enumerationCalls
         assert(searchBox and searchBox:IsEnabled(), "search box should construct as an enabled native EditBox")
         assert(ms.MacroList.searchPlaceholder:IsShown(), "empty unfocused search should show its placeholder")
+
+        searchBox:SetText("account")
+        local dirtyDragRow = ms.MacroList.visibleRows[1]
+        ms.Editor.editBox:SetText("/say unsaved action-bar draft")
+        local editCallsBeforeDrag = editCalls
+        dirtyDragRow:GetScript("OnDragStart")(dirtyDragRow)
+        assert(pickupCalls[#pickupCalls] == 1 and editCalls == editCallsBeforeDrag,
+            "dirty dragging should pick up the saved native macro without calling Save")
+        assert(ms.Editor:GetBody() == "/say unsaved action-bar draft" and ms.Editor:IsDirty(),
+            "dirty dragging should preserve the unsaved editor draft")
+        assert(ms.Editor.notice and ms.Editor.notice.message:find("saved version"),
+            "dirty dragging should explain that the saved version was picked up")
+
+        local pickupCountBeforeCombat = #pickupCalls
+        combat = true
+        ms:UpdateCombatState()
+        dirtyDragRow:GetScript("OnDragStart")(dirtyDragRow)
+        assert(#pickupCalls == pickupCountBeforeCombat,
+            "combat should refuse row pickup without changing the cursor payload")
+        assert(ms.Editor.notice and ms.Editor.notice.message:find("during combat"),
+            "combat refusal should show a concise player-facing message")
+        combat = false
+        ms:UpdateCombatState()
+        ms.Editor:SetEditorText(ms.Editor.savedBody)
+        searchBox:SetText("")
+
         searchBox:SetFocus()
         searchBox:SetText("@mouseover")
         assert(ms:GetSearchQuery() == "@mouseover", "search state should update while typing")
@@ -323,10 +389,16 @@ def run_ui_smoke(root):
         searchBox:SetText("INTERRUPT")
         assert(#ms.MacroList.visibleRows == 1 and ms.MacroList.visibleRows[1].macro.name == "Account",
             "Favorites plus query should match assigned tags case-insensitively")
+        ms.MacroList.visibleRows[1]:GetScript("OnDragStart")(ms.MacroList.visibleRows[1])
+        assert(pickupCalls[#pickupCalls] == 1,
+            "Favorites-filtered rows should retain the exact native pickup index")
         ms:SetFilter("category", category.id)
         searchBox:SetText("mythic+")
         assert(#ms.MacroList.visibleRows == 1,
             "category-filtered search should match the assigned category name")
+        ms.MacroList.visibleRows[1]:GetScript("OnDragStart")(ms.MacroList.visibleRows[1])
+        assert(pickupCalls[#pickupCalls] == 1,
+            "search plus category rows should retain the exact native pickup index")
         ms.MacroList.clearSearchButton:GetScript("OnClick")(ms.MacroList.clearSearchButton)
         assert(ms:GetSearchQuery() == "" and ms.activeFilter.kind == "category",
             "Clear should preserve the current navigation filter")
