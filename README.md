@@ -2,30 +2,30 @@
 
 **A bigger, searchable, organized macro editor for World of Warcraft.**
 
-Blizzard's macro window is tiny and makes large collections difficult to manage. MacroStudio gives you a roomy editor, fast search, and simple organization while keeping your macros native to WoW.
+Blizzard's macro window is tiny. MacroStudio gives you more room to edit, search, and organize your macros without changing how they work in WoW.
 
 ![MacroStudio main editor with navigation, macro list, and native macro editing workspace](screenshots/main-editor.png)
 
-*Browse, organize, and edit Account and Character macros in one place.*
+*Your Account and Character macros, all in one place.*
 
 ## Features
 
-- **Search everything** — Find macros by name, body text, category, or tag.
-- **Stay organized** — Use categories, multiple tags, and Favorites.
-- **Edit comfortably** — Work in a large, movable, resizable multiline editor.
-- **Browse both collections** — Switch between Account and Character macros instantly.
-- **Create native macros** — Build standard WoW macros without opening Blizzard's macro window.
-- **Delete safely** — Confirmation and draft protections help prevent mistakes.
-- **Watch the limit** — A live counter warns you before a macro exceeds 255 characters.
-- **Stay in sync** — MacroStudio updates automatically when your native macros change.
-- **Keep your setup** — Categories, tags, Favorites, and window placement survive reloads.
-- **Combat-safe** — Keep your draft while WoW blocks protected macro changes.
+- **Big macro editor:** Actually see what you're working on in a resizable multiline editor.
+- **Search everything:** Find macros by name, text inside them, category, or tag.
+- **Categories and tags:** Stop digging through one giant macro list.
+- **Favorites:** Keep the macros you use most easy to find.
+- **Account + Character macros:** Browse both without bouncing between tabs.
+- **Create and delete macros:** Manage native WoW macros right inside MacroStudio.
+- **Live character count:** Know when you're getting close to WoW's 255-character limit.
+- **Automatic updates:** Changes show up without hitting Refresh.
+- **Remembers your setup:** Categories, tags, Favorites, and window placement survive reloads.
+- **Combat-safe editing:** Your draft stays put if WoW blocks macro changes in combat.
 
 ## Find Macros Fast
 
 ![MacroStudio live search showing matching native macros](screenshots/search.png)
 
-*Find a macro instantly—even by text inside the macro body.*
+*Find a macro instantly, even by text inside the macro body.*
 
 ## Create Macros
 
@@ -35,11 +35,11 @@ Blizzard's macro window is tiny and makes large collections difficult to manage.
 
 ## Coming Soon
 
-- Drag macros directly onto action bars.
-- Import and export MacroStudio profiles.
-- Restore macros with backups and history.
-- Check and improve macros with linting tools.
-- Open MacroStudio from additional launcher options.
+- Drag macros straight onto action bars.
+- Import and export your MacroStudio setup.
+- Roll back mistakes with macro backups and history.
+- Catch common macro problems with linting tools.
+- More ways to open MacroStudio.
 
 Want the full plan? See the [roadmap](ROADMAP.md).
 
@@ -55,7 +55,7 @@ Open MacroStudio with `/ms` or `/macrostudio`.
 
 ## Feedback
 
-Found a bug or have an idea? [Open a GitHub Issue](https://github.com/Baeleaf/MacroStudio/issues).
+Found a bug or have an idea? [Tell me through GitHub Issues](https://github.com/Baeleaf/MacroStudio/issues).
 
 ## More
 

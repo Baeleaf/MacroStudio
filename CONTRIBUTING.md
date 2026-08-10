@@ -1,18 +1,25 @@
 # Contributing to MacroStudio
 
-Bug reports and feature requests are welcome through [GitHub Issues](https://github.com/Baeleaf/MacroStudio/issues). Please use the provided issue forms and include enough detail to reproduce or understand the request.
+MacroStudio is not accepting code contributions or pull requests right now. The best way to help is by sharing bugs, ideas, and feedback through GitHub Issues.
 
-Pull requests are welcome. Keep changes focused, explain user-visible behavior, and preserve MacroStudio's core safety rules:
+## Found a bug?
 
-- Never bypass World of Warcraft combat restrictions or protected-action rules.
-- Revalidate the exact native macro immediately before Save, Create, or Delete operations.
-- Preserve dirty drafts and avoid guessing when native macro identity is ambiguous.
-- Treat imported or user-entered macro content as text, never executable Lua.
+[Open a Bug Report](https://github.com/Baeleaf/MacroStudio/issues/new?template=bug_report.yml).
 
-Test changes in the current World of Warcraft Retail client. When applicable, run the automated preflight from the repository root:
+Helpful bug reports include:
 
-```powershell
-py .\tests\preflight.py
-```
+- Your MacroStudio version.
+- Your WoW version.
+- What you were doing.
+- What you expected to happen.
+- What actually happened.
+- The Lua error, if one appeared.
+- A screenshot, if it helps explain the problem.
 
-Update tests and documentation when behavior changes. Do not include SavedVariables, account data, screenshots containing personal information, generated ZIPs, or local development artifacts in a pull request.
+## Have an idea?
+
+[Open a Feature Request](https://github.com/Baeleaf/MacroStudio/issues/new?template=feature_request.yml).
+
+## General feedback?
+
+[Choose an issue form](https://github.com/Baeleaf/MacroStudio/issues/new/choose).
