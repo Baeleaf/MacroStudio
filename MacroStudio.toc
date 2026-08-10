@@ -2,7 +2,7 @@
 ## Title: MacroStudio
 ## Notes: A modern macro editor and organizer for World of Warcraft.
 ## Author: Baeleaf
-## Version: 1.0.0
+## Version: 1.1.0
 ## SavedVariables: MacroStudioDB
 
 Core.lua

@@ -12,9 +12,9 @@ py .\tests\preflight.py
 
 The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, exact Account and Character pickup indices, duplicate-name and filtered-row drag targeting, stale/combat refusal, dirty-draft independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, search/navigation combinations, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify which index reaches `PickupMacro`; they cannot validate the real cursor or action-bar drop.
 
-## Milestone 4: drag native macros to action bars (unreleased)
+## Drag native macros to action bars (1.1.0)
 
-This feature is complete on `main` but is not included in MacroStudio 1.0.0. Test the current development build with Lua errors enabled.
+This feature is included in MacroStudio 1.1.0. Test the current development build with Lua errors enabled.
 
 ### Basic drag and replacement
 
@@ -51,6 +51,14 @@ This feature is complete on `main` but is not included in MacroStudio 1.0.0. Tes
 ## 12.1 PTR Compatibility
 
 Record the PTR client build, verified Interface number, and MacroStudio commit before testing. Do not change `MacroStudio.toc` or add compatibility code until the PTR client exposes a real problem. This is a focused regression pass; use the historical checks below only when a phase fails.
+
+### Branch workflow
+
+- Test 12.1 from the current `main` branch.
+- If no changes are needed, do not create a compatibility branch.
+- If a 12.1-specific fix is needed, create `fix/12.1-compat`, make and verify the focused fix there, then merge it back into `main`.
+- Release a patch version if the compatibility fix needs to ship after 1.1.0.
+- Do not create a permanent PTR branch or make speculative fixes.
 
 ### Phase 1: Addon load
 

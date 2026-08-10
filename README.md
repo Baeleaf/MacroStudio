@@ -22,8 +22,6 @@ Blizzard's macro window is tiny. MacroStudio gives you more room to edit, search
 - **Remembers your setup:** Categories, tags, Favorites, and window placement survive reloads.
 - **Combat-safe editing:** Your draft stays put if WoW blocks macro changes in combat.
 
-> **Unreleased development:** Action-bar dragging is complete in the current development build, but it is not part of the public 1.0.0 release yet.
-
 ## Find Macros Fast
 
 ![MacroStudio live search showing matching native macros](screenshots/search.png)

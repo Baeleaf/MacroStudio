@@ -104,7 +104,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "1.0.0"
+namespace.VERSION = "1.1.0"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -348,4 +348,4 @@ assert "ClearCursor" not in repository_source and "PlaceAction" not in repositor
 assert "RequestPickupMacro" in main_frame_source
 
 run_ui_smoke(ROOT)
-print("PASS MacroStudio 1.0.0 preflight")
+print("PASS MacroStudio 1.1.0 preflight")

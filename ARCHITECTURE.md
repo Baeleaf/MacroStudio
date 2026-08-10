@@ -4,7 +4,7 @@
 
 Version 1.0.0 is the initial public release. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, and launchers remain unimplemented.
 
-Current unreleased development also hands native macros to WoW's normal cursor system so players can drag them onto action bars. This is not part of the public 1.0.0 build.
+Version 1.1.0 hands native macros to WoW's normal cursor system so players can drag saved macros onto action bars.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 

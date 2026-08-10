@@ -1,0 +1,14 @@
+package-as: MacroStudio
+license-output: LICENSE
+
+ignore:
+  - .github
+  - assets
+  - screenshots
+  - tests
+  - scripts
+  - dist
+  - ARCHITECTURE.md
+  - TESTING.md
+  - ROADMAP.md
+  - CONTRIBUTING.md
