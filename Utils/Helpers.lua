@@ -150,6 +150,15 @@ function Helpers:CopyMacro(macro)
         scope = macro.scope,
         duplicateName = macro.duplicateName,
         duplicateCount = macro.duplicateCount,
+        source = macro.source,
+        characterKey = macro.characterKey,
+        characterGUID = macro.characterGUID,
+        characterName = macro.characterName,
+        realm = macro.realm,
+        characterDisplayName = macro.characterDisplayName,
+        lastSynced = macro.lastSynced,
+        snapshotOrder = macro.snapshotOrder,
+        identityCertain = macro.identityCertain,
     }
 end
 

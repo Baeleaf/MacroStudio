@@ -8,6 +8,8 @@ Version 1.1.0 hands native macros to WoW's normal cursor system so players can d
 
 The Unreleased action-bar usage feature observes native Retail action slots and reports where exact saved macros are present. It does not manage bars or inspect action-bar addon frames.
 
+The Unreleased cross-character library keeps the current character native and live while exposing account-wide, read-only snapshots for previously seen offline characters. It can copy snapshot data into a new native Character macro; it does not provide offline native access.
+
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
 ## Module responsibilities
@@ -16,6 +18,7 @@ Native WoW frames and APIs are used directly. Runtime addon code has no third-pa
 Core.lua
 |-- Database.lua
 |-- MacroRepository.lua
+|-- CharacterMacroLibrary.lua
 |-- ActionBarRepository.lua
 |-- MetadataRepository.lua
 |-- Utils/Helpers.lua
@@ -30,6 +33,7 @@ Core.lua
 ```
 
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, `DeleteMacro`, or `PickupMacro`.
+- `CharacterMacroLibrary.lua` resolves conservative character identity, replaces the current character snapshot from saved live repository data, builds cross-character views, and forgets offline snapshots.
 - `ActionBarRepository.lua` owns native action-slot inspection and builds a conservative, read-only exact macro snapshot to raw-slot lookup.
 - `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
@@ -46,13 +50,74 @@ UI modules never call raw native macro mutation or pickup APIs.
 
 Blizzard owns every native macro's name, body, icon, scope, and current enumeration index. MacroStudio writes through the native macro APIs and never creates a parallel execution mechanism.
 
-`MacroStudioDB` schema 2 stores only settings and virtual metadata. Organization records use opaque IDs and carry a reconciliation snapshot:
+`MacroStudioDB` schema 3 stores settings, virtual metadata, and the account-wide character snapshot library. Organization records use opaque IDs and carry a reconciliation snapshot:
 
 ```text
 scope, lastKnownIndex, name, icon, body
 ```
 
 The last-known index is evidence, not a durable key. Categories, Favorites, and tags have no effect on native execution.
+
+## Cross-character macro library
+
+### Retail API research
+
+Research used installed Retail `12.0.7.68974` and matching Blizzard UI source `12.0.7 (68974)`. Blizzard Macro UI uses `GetNumMacros()` for Account/current-character counts and `GetMacroInfo(index)` over the loaded native collection; Character indices are offset by `MAX_ACCOUNT_MACROS`. `CreateMacro`, `EditMacro`, `DeleteMacro`, and `PickupMacro` likewise operate only on that loaded collection.
+
+Generated Retail `C_Macro` documentation provides no supported way to enumerate or select another offline character's macros. MacroStudio therefore never invents an offline native handle. `UnitGUID("player")` provides the preferred durable character identity, while `UnitFullName`, `UnitName`, `GetRealmName`, and `GetNormalizedRealmName` provide display data. `UPDATE_MACROS`, login, and deferred `PLAYER_ENTERING_WORLD` handling refresh the current native repository and snapshot.
+
+### Storage, identity, and lifecycle
+
+Schema 3 adds this account-wide SavedVariables model:
+
+```text
+characterLibrary
+|-- order[] -> character key
+`-- characters[character key]
+    |-- id, guid, name, realm, displayName, normalizedDisplay
+    |-- identityCertain, lastSynced
+    `-- macros[]
+        `-- order, name, body, icon
+```
+
+The normal key is `guid:<player GUID>`. A rename or realm transfer updates the display fields on that same GUID record. Different GUIDs remain separate even when Name-Realm is identical. When a GUID is unavailable, MacroStudio creates a new uncertain identity instead of merging by name; this preserves data and fails safely.
+
+Every successful refresh replaces that character's complete stored macro array. It copies only saved live Character macro fields and never editor drafts, Account macros, native indices, action-bar slots, or organization metadata. Save, Create, Delete, `UPDATE_MACROS`, login, manual refresh, and world entry feed the same event-driven path; there is no per-frame scan.
+
+```text
+current native macro event
+        |
+        v
+MacroRepository refresh
+        |
+        v
+replace current GUID snapshot
+
+navigation/search
+        |
+        v
+read live current data + stored offline data
+```
+
+### Live and offline safety
+
+Cross-character records carry an explicit `source`: `LIVE` for the current character and `SNAPSHOT` for offline characters. Current-character views always rebuild from `MacroRepository`; the stored copy never overrides live data. Offline records never contain a native index, so they cannot target `EditMacro`, `DeleteMacro`, `PickupMacro`, or action-bar usage.
+
+Offline editor text remains enabled for native selection, scrolling, and copy shortcuts, but any mutation is immediately restored from the snapshot. Save, Revert, Delete, drag, action-bar usage, Favorite, category, and tag controls are unavailable. Organization metadata is intentionally not associated with offline snapshots because the existing metadata identity is scoped to loaded native macros.
+
+Copy to Current Character re-resolves the exact offline record, then calls the existing `CreateNativeMacro` path with only name, body, icon, and Character scope. Native name/body/icon validation, capacity, combat lockdown, question-mark icon behavior, duplicate names, repository refresh, and current snapshot refresh remain owned by the existing creation path. Copy never transfers organization metadata or modifies the source snapshot.
+
+Forget Character is limited to offline records, requires confirmation, and deletes only that character key from `characterLibrary`. It cannot forget the current character or touch Blizzard macros, Account macros, or unrelated MacroStudio data.
+
+The cross-character invariants are:
+
+1. Offline snapshots are data copies, never native macro handles.
+2. Native macro indices are never persisted as offline identity.
+3. Character identity is never merged by display name alone.
+4. Duplicate macro names remain legal and isolated by character.
+5. Current-character live data always wins over its stored snapshot.
+6. Offline data cannot invoke Save, Delete, pickup, or action-bar lookup against a native index.
+7. Ambiguous identity preserves separate data rather than mutating another character.
 
 ## Exact native mutation rules
 

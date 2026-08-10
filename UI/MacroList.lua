@@ -269,6 +269,15 @@ function MacroList:AddEmptyMessage(message, yOffset)
 end
 
 function MacroList:UpdateRowUsageTooltip(row)
+    if MacroStudio:IsOfflineMacro(row.macro) then
+        local tooltip = "Click to view this read-only snapshot."
+            .. "\nViewing " .. (row.macro.characterDisplayName or "offline character")
+            .. "\nLast synced: "
+            .. MacroStudio.CharacterMacroLibrary:FormatLastSynced(row.macro.lastSynced)
+        MacroStudio.Helpers:SetButtonTooltip(row, row.displayName, tooltip)
+        return
+    end
+
     local count = row.actionBarUsageCount or 0
     local tooltip = "Click to select\nDrag to place on an action bar"
     if count == 1 then
@@ -285,6 +294,14 @@ function MacroList:UpdateRowUsageTooltip(row)
 end
 
 function MacroList:UpdateRowUsage(row)
+    if MacroStudio:IsOfflineMacro(row.macro) then
+        row.actionBarUsageCount = 0
+        row.actionBarUsageSlots = nil
+        row.usageText:Hide()
+        self:UpdateRowUsageTooltip(row)
+        return
+    end
+
     local count, slots = MacroStudio.ActionBarRepository:GetUsage(row.macro)
     row.actionBarUsageCount = count
     row.actionBarUsageSlots = slots
@@ -298,7 +315,7 @@ function MacroList:RefreshUsage()
     end
 end
 
-function MacroList:AddSection(title, macros, yOffset, showEmpty)
+function MacroList:AddSection(title, macros, yOffset, showEmpty, emptyMessage)
     if #macros == 0 and not showEmpty then
         return yOffset, false
     end
@@ -311,17 +328,23 @@ function MacroList:AddSection(title, macros, yOffset, showEmpty)
     yOffset = yOffset + HEADER_HEIGHT
 
     if #macros == 0 then
-        return self:AddEmptyMessage("No macros in this scope", yOffset), true
+        return self:AddEmptyMessage(emptyMessage or "No macros in this scope", yOffset), true
     end
 
     for _, macro in ipairs(macros) do
         local row = self:AcquireRow()
+        local offline = MacroStudio:IsOfflineMacro(macro)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
         row:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
+        if offline then
+            row:RegisterForDrag()
+        else
+            row:RegisterForDrag("LeftButton")
+        end
         row.macro = macro
         row.icon:SetTexture(macro.icon or MacroStudio.DEFAULT_ICON)
-        row.favorite:SetShown(MacroStudio.MetadataRepository:IsFavorite(macro))
+        row.favorite:SetShown(not offline and MacroStudio.MetadataRepository:IsFavorite(macro))
         local displayName = macro.name ~= "" and macro.name or "Unnamed Macro"
         row.displayName = displayName
         row.nameText:SetText(displayName)
@@ -335,6 +358,9 @@ function MacroList:AddSection(title, macros, yOffset, showEmpty)
         if macro.duplicateName then
             preview = "Duplicate name - " .. preview
         end
+        if offline then
+            preview = "Read-only - " .. preview
+        end
         row.detailText:SetText(string.format("%d / %d  |  %s", length, MacroStudio.MAX_BODY_LENGTH, preview))
         self.visibleRows[#self.visibleRows + 1] = row
         yOffset = yOffset + ROW_HEIGHT + CONTENT_GAP
@@ -343,9 +369,48 @@ function MacroList:AddSection(title, macros, yOffset, showEmpty)
     return yOffset, true
 end
 
-function MacroList:Rebuild(macros, selectedMacro, activeFilter, searchQuery)
+function MacroList:Rebuild(macros, selectedMacro, activeFilter, searchQuery, characterGroups)
     self:ReleaseVisibleItems()
     local visibleQuery = MacroStudio.Helpers:Trim(searchQuery or "")
+    local filterKind = activeFilter and activeFilter.kind or "all"
+    local yOffset = 2
+    local addedSection = false
+
+    if filterKind == "characters" or filterKind == "libraryCharacter" then
+        for _, group in ipairs(characterGroups or {}) do
+            if addedSection then
+                yOffset = yOffset + 8
+            end
+            local title = (group.character.displayName or "Character"):upper()
+                .. (group.character.isCurrent and "  (CURRENT)" or "")
+            local emptyMessage = visibleQuery ~= ""
+                and string.format('No macros match "%s".', visibleQuery)
+                or "No character macros."
+            local added
+            yOffset, added = self:AddSection(title, group.macros, yOffset, true, emptyMessage)
+            addedSection = addedSection or added
+        end
+
+        if not addedSection then
+            local message = visibleQuery ~= ""
+                and string.format('No character macros match "%s".', visibleQuery)
+                or "No character snapshots are available."
+            yOffset = self:AddEmptyMessage(message, yOffset + 8)
+        elseif filterKind == "characters"
+            and visibleQuery == ""
+            and #(characterGroups or {}) == 1
+            and characterGroups[1].character.isCurrent then
+            yOffset = self:AddEmptyMessage(
+                "Log into another character with MacroStudio enabled to add it to your library.",
+                yOffset + 4
+            )
+        end
+
+        self.contentHeight = yOffset + 4
+        self.scrollChild:SetHeight(math.max(self.scrollFrame:GetHeight(), self.contentHeight))
+        self:SetSelected(selectedMacro)
+        return
+    end
 
     local accountMacros = {}
     local characterMacros = {}
@@ -357,13 +422,10 @@ function MacroList:Rebuild(macros, selectedMacro, activeFilter, searchQuery)
         end
     end
 
-    local filterKind = activeFilter and activeFilter.kind or "all"
     local showAccount = filterKind ~= "character"
     local showCharacter = filterKind ~= "account"
     local showEmptySections = visibleQuery == ""
         and (filterKind == "all" or filterKind == "account" or filterKind == "character")
-    local yOffset = 2
-    local addedSection = false
 
     if showAccount then
         local added
@@ -395,7 +457,7 @@ end
 
 function MacroList:SetSelected(selectedMacro)
     for _, row in ipairs(self.visibleRows or {}) do
-        local selected = MacroStudio.MacroRepository:SnapshotsEqual(row.macro, selectedMacro)
+        local selected = MacroStudio:MacroRecordsEqual(row.macro, selectedMacro)
         row.selected = selected
         if selected then
             row:SetBackdropColor(0.12, 0.32, 0.5, 1)

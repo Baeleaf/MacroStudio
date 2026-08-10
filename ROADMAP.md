@@ -48,6 +48,14 @@ MacroStudio 1.0.0 is the initial public-release candidate. The roadmap records s
 - [x] Inspect native action slots and show exact saved-macro usage counts and raw slot locations.
 - [ ] Report associated keybinds only when the result is reliable.
 
+## Unreleased: cross-character macro library
+
+- [x] Store complete account-wide, GUID-keyed snapshots of Character macros for characters seen by MacroStudio.
+- [x] Browse all known characters or one character with live current-character data and read-only offline snapshots.
+- [x] Copy an offline snapshot into the current character through the existing native creation safeguards.
+- [x] Search offline macro names, complete bodies, character names, and realms without native rescans.
+- [x] Forget one offline snapshot with confirmation while preserving Blizzard macros and unrelated MacroStudio data.
+
 ## Portability, backups, and history
 
 - [ ] Full-profile import/export.

@@ -7,6 +7,7 @@ local KEYS = {
     DISCARD = "MACROSTUDIO_DISCARD_EDITOR_CHANGES",
     DELETE_CATEGORY = "MACROSTUDIO_DELETE_CATEGORY",
     DELETE_MACRO = "MACROSTUDIO_DELETE_NATIVE_MACRO",
+    FORGET_CHARACTER = "MACROSTUDIO_FORGET_CHARACTER",
 }
 
 local function getData(dialog, data)
@@ -50,6 +51,23 @@ if StaticPopupDialogs then
     StaticPopupDialogs[KEYS.DELETE_MACRO] = {
         text = "Delete the %s macro \"%s\"? This permanently deletes the Blizzard-native macro and its MacroStudio metadata.",
         button1 = "Delete Macro",
+        button2 = CANCEL,
+        OnAccept = function(dialog, data)
+            data = getData(dialog, data)
+            if data and data.callback then
+                data.callback()
+            end
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        showAlert = true,
+        preferredIndex = 3,
+    }
+
+    StaticPopupDialogs[KEYS.FORGET_CHARACTER] = {
+        text = "Forget %s?\n\nThis removes only MacroStudio's saved macro snapshot for this character. It does not delete any WoW macros.",
+        button1 = "Forget Character",
         button2 = CANCEL,
         OnAccept = function(dialog, data)
             data = getData(dialog, data)
@@ -218,4 +236,8 @@ end
 function Dialogs:ShowDeleteMacro(macro, callback)
     local scope = macro.scope == "CHARACTER" and "Character" or "Account"
     StaticPopup_Show(KEYS.DELETE_MACRO, scope, macro.name or "Unnamed Macro", { callback = callback })
+end
+
+function Dialogs:ShowForgetCharacter(character, callback)
+    StaticPopup_Show(KEYS.FORGET_CHARACTER, character.displayName or "this character", nil, { callback = callback })
 end
