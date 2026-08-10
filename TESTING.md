@@ -10,7 +10,7 @@ With Python 3 and `lupa` installed, run from the addon root:
 py .\tests\preflight.py
 ```
 
-The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, exact Account and Character pickup and action-slot indices, multiple placements, action removal/replacement, duplicate-name isolation, stale identity omission and reconciliation, dirty-draft independence, filtered cached indicators, event-driven refresh, search scan independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify API call and cache behavior; they cannot prove real-client cursor, action-slot, paging, combat, or taint behavior.
+The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, resolved spell/item/plain action identities, accidental ID/index collisions, duplicate ambiguity, exact Account and Character pickup, multiple placements, removal/replacement, stale identity omission and reconciliation, dirty-draft independence, filtered cached indicators, event-driven refresh, search scan independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify API call and cache behavior; they cannot prove real-client cursor, action-slot, paging, combat, or taint behavior.
 
 ## Milestone 5: action-bar usage
 
@@ -29,6 +29,7 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for nati
 
 - [ ] Create same-name macros with different bodies and icons.
 - [ ] Place only one on a bar and verify only that exact macro is marked.
+- [ ] Use `/ms debug on` and capture the structural slot identity lines if either macro is unresolved or ambiguous.
 
 ### Phase 4: Live changes
 

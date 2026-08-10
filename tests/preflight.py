@@ -44,11 +44,12 @@ lua.execute(
 
     accountMacros = {
         { name = "Twin", icon = 101, body = "/say first" },
-        { name = "Twin", icon = 102, body = "/say second" },
+        { name = "Twin", icon = 102, body = "/cast SecondSpell", spellID = 2002 },
     }
     characterMacros = {
-        { name = "Solo", icon = 103, body = "/cast Spell" },
+        { name = "Solo", icon = 103, body = "/use Test Item", itemID = 3004 },
     }
+    debugMessages = {}
 
     function GetNumMacros()
         return #accountMacros, #characterMacros
@@ -64,6 +65,30 @@ lua.execute(
         if not macro then return nil end
         return macro.name, macro.icon, macro.body
     end
+
+    local function GetNativeMacro(index)
+        if index <= MAX_ACCOUNT_MACROS then
+            return accountMacros[index]
+        end
+        return characterMacros[index - MAX_ACCOUNT_MACROS]
+    end
+
+    function GetMacroSpell(index)
+        local macro = GetNativeMacro(index)
+        return macro and macro.spellID or nil
+    end
+
+    function GetMacroItem(index)
+        local macro = GetNativeMacro(index)
+        if not macro or not macro.itemID then return nil end
+        return "Test Item", "item:" .. macro.itemID .. ":0:0:0"
+    end
+
+    C_Item = {
+        GetItemIDForItemInfo = function(itemInfo)
+            return tonumber(type(itemInfo) == "string" and itemInfo:match("item:(%d+)") or itemInfo)
+        end,
+    }
 
     function CreateMacro(name, icon, body, perCharacter)
         local target = perCharacter and characterMacros or accountMacros
@@ -102,18 +127,24 @@ lua.execute(
     end
 
     actionSlots = {
-        [3] = { "macro", 2 },
-        [9] = { "spell", 9001 },
-        [15] = { "macro", 2 },
-        [25] = { "macro", 4 },
+        -- Slot 3 contains macro index 1, but its resolved ID collides with macro index 2.
+        [3] = { "macro", 2, nil, "Twin", 101 },
+        [9] = { "spell", 9001, nil, nil, 9001 },
+        [15] = { "macro", 2002, "spell", "Twin", 102 },
+        [16] = { "macro", 2002, "spell", "Twin", 102 },
+        [25] = { "macro", 3004, "item", "Solo", 103 },
     }
     actionInfoCalls = 0
     function GetActionInfo(slot)
         actionInfoCalls = actionInfoCalls + 1
         local action = actionSlots[slot]
         if not action then return nil end
-        return action[1], action[2]
+        return action[1], action[2], action[3]
     end
+    C_ActionBar = {
+        GetActionText = function(slot) return actionSlots[slot] and actionSlots[slot][4] or nil end,
+        GetActionTexture = function(slot) return actionSlots[slot] and actionSlots[slot][5] or nil end,
+    }
     """
 )
 
@@ -123,7 +154,19 @@ namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
 namespace.BODY_WARNING_LENGTH = 230
-namespace.Debug = lua.eval("function() end")
+namespace.debug = False
+namespace.Debug = lua.eval(
+    r"""
+    function(self, ...)
+        if not self.debug then return end
+        local parts = {}
+        for index = 1, select("#", ...) do
+            parts[index] = tostring(select(index, ...))
+        end
+        debugMessages[#debugMessages + 1] = table.concat(parts, " ")
+    end
+    """
+)
 namespace.Print = lua.eval("function() end")
 globals_.MacroStudioDB = None
 
@@ -165,27 +208,72 @@ tests = load(
     actionBars:Refresh()
     assert(actionBars:GetScanCount() == 1 and actionInfoCalls == actionBars.MAX_ACTION_SLOTS,
         "one refresh should scan the bounded native action-slot range once")
-    local unusedCount = actionBars:GetUsage(macros[1])
-    local duplicateCount, duplicateSlots = actionBars:GetUsage(macros[2])
+    local plainCount, plainSlots = actionBars:GetUsage(macros[1])
+    local spellCount, spellSlots = actionBars:GetUsage(macros[2])
     local characterCount, characterSlots = actionBars:GetUsage(macros[3])
-    assert(unusedCount == 0, "an unused same-name duplicate should not be marked")
-    assert(duplicateCount == 2 and duplicateSlots[1] == 3 and duplicateSlots[2] == 15,
-        "all placements should map to the exact Account macro index")
+    assert(plainCount == 1 and plainSlots[1] == 3,
+        "a plain macro should resolve by name plus fixed action texture")
+    assert(spellCount == 2 and spellSlots[1] == 15 and spellSlots[2] == 16,
+        "a spell-resolving macro should use its resolved spell ID, not treat it as an index")
     assert(characterCount == 1 and characterSlots[1] == 25,
-        "Character usage should honor the account-capacity index offset")
+        "an item-resolving Character macro should use exact item resolution")
+    assert(spellSlots[1] ~= 3,
+        "an action ID equal to macro index 2 must not falsely mark macro index 2")
 
-    actionSlots[3] = nil
+    debugMessages = {}
+    actionBars:Refresh()
+    assert(#debugMessages == 0, "action scanning should stay quiet while debug mode is off")
+    ms.debug = true
+    actionBars:Refresh()
+    local structuralLog
+    for _, message in ipairs(debugMessages) do
+        if message:find("action%-bar macro") and message:find("slot 3") then
+            structuralLog = message
+            break
+        end
+    end
+    assert(structuralLog
+            and structuralLog:find("type macro")
+            and structuralLog:find("id 2")
+            and structuralLog:find("subType nil")
+            and structuralLog:find("text Twin")
+            and structuralLog:find("resolvedIndex 1")
+            and structuralLog:find("identity exact"),
+        "debug mode should log non-sensitive structural identity diagnostics")
+    assert(not structuralLog:find("/say") and not structuralLog:find("/cast"),
+        "action diagnostics must never include macro bodies")
+    ms.debug = false
+
     actionSlots[15] = { "spell", 9002 }
+    actionSlots[16] = nil
     actionBars:Refresh()
-    duplicateCount = actionBars:GetUsage(macros[2])
-    assert(duplicateCount == 0, "removed and replaced macro actions should disappear")
+    spellCount = actionBars:GetUsage(macros[2])
+    assert(spellCount == 0, "removed and replaced spell-macro actions should disappear")
+    plainCount = actionBars:GetUsage(macros[1])
+    assert(plainCount == 1, "replacing another action must not affect the exact plain macro")
 
-    actionSlots[3] = { "macro", 2 }
-    actionSlots[15] = { "macro", 2 }
+    actionSlots[15] = { "macro", 2002, "spell", "Twin", 102 }
+    actionSlots[16] = { "macro", 2002, "spell", "Twin", 102 }
     actionBars:Refresh()
-    duplicateCount, duplicateSlots = actionBars:GetUsage(macros[2])
-    assert(duplicateCount == 2 and duplicateSlots[1] == 3 and duplicateSlots[2] == 15,
-        "restored native macro actions should reappear after one refresh")
+    spellCount, spellSlots = actionBars:GetUsage(macros[2])
+    assert(spellCount == 2 and spellSlots[1] == 15 and spellSlots[2] == 16,
+        "restored resolved macro actions should reappear after one refresh")
+
+    accountMacros[2].icon = 101
+    accountMacros[2].spellID = nil
+    repo:Refresh()
+    actionSlots[15] = { "macro", 2, nil, "Twin", 101 }
+    actionSlots[16] = nil
+    actionBars:Refresh()
+    assert(actionBars:GetUsage(repo:FindByIndex(1)) == 0
+            and actionBars:GetUsage(repo:FindByIndex(2)) == 0,
+        "same-name macros with identical observable identity must remain ambiguous")
+    accountMacros[2].icon = 102
+    accountMacros[2].spellID = 2002
+    actionSlots[15] = { "macro", 2002, "spell", "Twin", 102 }
+    actionSlots[16] = { "macro", 2002, "spell", "Twin", 102 }
+    macros = repo:Refresh()
+    actionBars:Refresh()
 
     local firstTwin = ms.Helpers:CopyMacro(macros[1])
     local secondTwin = ms.Helpers:CopyMacro(macros[2])
@@ -210,18 +298,18 @@ tests = load(
 
     accountMacros[2].body = "/say externally changed"
     actionBars:Refresh()
-    duplicateCount = actionBars:GetUsage(secondTwin)
-    assert(duplicateCount == 0,
+    spellCount = actionBars:GetUsage(secondTwin)
+    assert(spellCount == 0,
         "usage should be omitted when the cached macro identity no longer matches its native index")
     picked, pickupTarget, pickupReason = repo:Pickup(secondTwin)
     assert(not picked and not pickupTarget and pickupReason:find("changed")
             and #pickedUpMacros == pickupCount,
         "stale snapshots should refuse pickup instead of targeting the current index occupant")
-    accountMacros[2].body = "/say second"
+    accountMacros[2].body = "/cast SecondSpell"
     repo:Refresh()
     actionBars:Refresh()
-    duplicateCount = actionBars:GetUsage(secondTwin)
-    assert(duplicateCount == 2, "usage should return after exact native identity reconciliation")
+    spellCount = actionBars:GetUsage(secondTwin)
+    assert(spellCount == 2, "usage should return after exact native identity reconciliation")
 
     local valid, reason = repo:ValidateCreateRequest({
         name = "", body = "", icon = 134400, scope = "ACCOUNT",
@@ -239,13 +327,13 @@ tests = load(
     combat = false
 
     local created, createdMacro = repo:Create({
-        name = "New", body = "/say new", icon = 134400, scope = "ACCOUNT",
+        name = "New", body = "/say new", icon = 104, scope = "ACCOUNT",
     })
     assert(created and createdMacro and createdMacro.index == 3, "create should return exact new macro")
-    actionSlots[40] = { "macro", createdMacro.index }
+    actionSlots[40] = { "macro", 2, nil, "New", 104 }
     actionBars:Refresh()
     local createdCount = actionBars:GetUsage(createdMacro)
-    assert(createdCount == 1, "newly placed macro should use its current native index")
+    assert(createdCount == 1, "plain macros should resolve without using the returned ID as an index")
     valid, reason = repo:ValidateCreateRequest({
         name = "Full", body = "", icon = 134400, scope = "ACCOUNT",
     })
@@ -257,12 +345,13 @@ tests = load(
     assert(accountMacros[2].name == "New", "delete should target duplicate by exact index")
     actionSlots[3] = nil
     actionSlots[15] = nil
-    actionSlots[40] = { "macro", 2 }
+    actionSlots[16] = nil
+    actionSlots[40] = { "macro", 1, nil, "New", 104 }
     actionBars:Refresh()
     local shiftedMacro = repo:FindByIndex(2)
     local shiftedCount, shiftedSlots = actionBars:GetUsage(shiftedMacro)
-    duplicateCount = actionBars:GetUsage(secondTwin)
-    assert(shiftedCount == 1 and shiftedSlots[1] == 40 and duplicateCount == 0,
+    spellCount = actionBars:GetUsage(secondTwin)
+    assert(shiftedCount == 1 and shiftedSlots[1] == 40 and spellCount == 0,
         "index changes should reconcile to the exact current snapshot without retaining stale usage")
     deleted = repo:Delete(secondTwin)
     assert(not deleted, "stale snapshot should not delete shifted neighbor")
@@ -410,7 +499,12 @@ assert "PickupMacro(current.index)" in repository_source
 assert "ClearCursor" not in repository_source and "PlaceAction" not in repository_source
 assert "RequestPickupMacro" in main_frame_source
 assert 'GetActionInfo(slot)' in action_bar_source and 'actionType == "macro"' in action_bar_source
+assert "FindByIndex(actionID)" not in action_bar_source
+assert "GetMacroSpell" in action_bar_source and "GetMacroItem" in action_bar_source
+assert "GetActionText" in action_bar_source and "GetActionTexture" in action_bar_source
+assert '"resolvedIndex"' in action_bar_source and '"identity"' in action_bar_source
 assert "GetActionInfo" not in macro_list_source and "GetActionInfo" not in editor_source
+assert "GetMacroSpell" not in macro_list_source and "GetMacroItem" not in editor_source
 assert 'SetScript("OnUpdate"' not in action_bar_source and 'SetScript("OnUpdate"' not in main_frame_source
 assert 'ACTIONBAR_SLOT_CHANGED = true' in core_source
 assert 'PLAYER_ENTERING_WORLD = true' in core_source

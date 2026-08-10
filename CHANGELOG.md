@@ -8,6 +8,10 @@ Notable user-facing changes to MacroStudio are documented here.
 
 - Show exact saved native macro usage counts and raw action-slot locations in the macro list and selected editor detail.
 
+### Fixed
+
+- Prevent resolved spell or item IDs from being mistaken for native macro indices when detecting action-bar usage.
+
 ## 1.1.0
 
 ### Added

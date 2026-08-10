@@ -23,9 +23,9 @@ def run_ui_smoke(root):
         editCalls = 0
         actionInfoCalls = 0
         actionSlots = {
-            [3] = { "macro", 1 },
-            [15] = { "macro", 1 },
-            [25] = { "macro", 4 },
+            [3] = { "macro", 1001, "spell", "Account", 101 },
+            [15] = { "macro", 1001, "spell", "Account", 101 },
+            [25] = { "macro", 1, nil, "Character", 102 },
         }
 
         local Frame = {}
@@ -213,6 +213,10 @@ def run_ui_smoke(root):
             if index == 4 then return "Character", 102, "/say character" end
             return nil
         end
+        function GetMacroSpell(index)
+            return index == 1 and 1001 or nil
+        end
+        function GetMacroItem() return nil end
         function GetMacroIcons(list)
             list[#list + 1] = 134400
             list[#list + 1] = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -239,8 +243,12 @@ def run_ui_smoke(root):
             actionInfoCalls = actionInfoCalls + 1
             local action = actionSlots[slot]
             if not action then return nil end
-            return action[1], action[2]
+            return action[1], action[2], action[3]
         end
+        C_ActionBar = {
+            GetActionText = function(slot) return actionSlots[slot] and actionSlots[slot][4] or nil end,
+            GetActionTexture = function(slot) return actionSlots[slot] and actionSlots[slot][5] or nil end,
+        }
         """
     )
 
@@ -309,7 +317,7 @@ def run_ui_smoke(root):
             "a native slot event should request one cached usage refresh")
         assert(not accountRow.usageText:IsShown() and not ms.Editor.usageButton:IsShown(),
             "removing and replacing all macro actions should clear row and selected detail state")
-        actionSlots[7] = { "macro", 1 }
+        actionSlots[7] = { "macro", 1001, "spell", "Account", 101 }
         ms.eventFrame:TriggerScript("OnEvent", "ACTIONBAR_SLOT_CHANGED", 7)
         assert(accountRow.usageText:IsShown()
                 and ms.Editor.usageButton.Text:GetText() == "On action bars: 1 slot",

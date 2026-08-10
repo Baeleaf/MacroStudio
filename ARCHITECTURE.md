@@ -30,7 +30,7 @@ Core.lua
 ```
 
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, `DeleteMacro`, or `PickupMacro`.
-- `ActionBarRepository.lua` is the only layer that calls `GetActionInfo`; it builds an exact, read-only native macro-index to raw-slot lookup.
+- `ActionBarRepository.lua` owns native action-slot inspection and builds a conservative, read-only exact macro snapshot to raw-slot lookup.
 - `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
 - `Search.lua` performs read-only matching against native macro fields and attached metadata.
@@ -74,7 +74,11 @@ MacroStudio stops after `PickupMacro(index)`. Blizzard's standard action buttons
 
 ## Native action-bar usage inspection
 
-Research was performed against installed Retail `12.0.7.68974` and the matching `12.0.7 (68974)` Blizzard UI source. Current FrameXML uses `GetActionInfo(slot)` to read an action's type and identifier. For type `macro`, the identifier is passed through MacroStudio's native index model and immediately checked with `GetMacroInfo` through `MacroRepository`; names are never used as identity.
+Research was performed against installed Retail `12.0.7.68974` and the matching `12.0.7 (68974)` Blizzard UI source. Current FrameXML proves that `GetActionInfo(slot)` does not reliably return a native macro index for type `macro`. When the subtype is `spell`, Blizzard compares the returned ID directly with spell IDs; unresolved macros may expose no useful resolved subtype. Treating that number as a macro index can therefore assign a slot to an unrelated macro whose index happens to equal a resolved action ID.
+
+Retail exposes no read-only underlying macro-index getter for an occupied action slot. MacroStudio instead starts from `C_ActionBar.GetActionText(slot)`, then requires current spell/item resolution from `GetMacroSpell` or `GetMacroItem` to agree with the action subtype and ID. A fixed macro icon must also agree with `C_ActionBar.GetActionTexture(slot)`; a dynamic question-mark icon is accepted only when spell or item resolution provides non-name evidence. The action text is one candidate attribute, never identity by itself.
+
+Exactly one candidate must satisfy every available attribute, and its full repository snapshot is re-read before caching. Zero candidates are unresolved; multiple candidates are ambiguous. Both results intentionally omit the indicator. This preserves the invariant: MacroStudio never displays `On Bar` unless action-bar usage can be safely associated with that exact saved native macro.
 
 Retail FrameXML defines 12 slots per action page and page indexes through 18: normal and multi-action pages, followed by vehicle page 16, temporary shapeshift page 17, and override page 18. MacroStudio scans raw slots 1 through 216 and deliberately reports raw slot numbers. It does not infer player-facing bar names because paging, bonus, stance, vehicle, and override states can remap which page the main bar presents.
 
@@ -99,7 +103,7 @@ native action-bar event
 one deferred scan of slots 1..216
         |
         v
-exact macro index + full saved snapshot validation
+unique text + resolution + icon evidence + full snapshot validation
         |
         v
 cached index -> sorted raw slot list
@@ -108,7 +112,7 @@ cached index -> sorted raw slot list
         `--> selected editor count/tooltip
 ```
 
-The scan is event-driven and observational: there is no `OnUpdate`, protected write, secure-frame workaround, `PlaceAction`, or third-party frame inspection. Blizzard reads the same action information in normal action-button update paths, including combat-driven updates, so MacroStudio does not suppress reads during combat. Search, filtering, row rendering, and dirty editor changes only read the cache and never rescan native slots.
+The scan is event-driven and observational: there is no `OnUpdate`, protected write, cursor mutation, secure-frame workaround, `PlaceAction`, or third-party frame inspection. `/ms debug on` logs only structural slot/type/ID/subtype/text/resolution-result fields and never macro bodies. Search, filtering, row rendering, and dirty editor changes only read the cache and never rescan native slots.
 
 ## Duplicate names and metadata reconciliation
 
