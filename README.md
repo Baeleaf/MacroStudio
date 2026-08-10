@@ -1,10 +1,23 @@
 # MacroStudio
 
-> A modern macro editor and organizer for World of Warcraft.
+**A modern macro editor and organizer for World of Warcraft.**
 
-MacroStudio provides a larger, safer workspace for creating, editing, organizing, searching, and deleting World of Warcraft Retail macros. It manages Blizzard-native macros rather than replacing the macro system, so saved macros continue to work normally when MacroStudio is disabled.
+MacroStudio provides a larger, safer workspace for creating, editing, organizing, searching, and deleting World of Warcraft Retail macros. It manages Blizzard-native macros rather than replacing the macro system, so saved macros continue to work normally when MacroStudio is disabled. Open it in game with `/ms` or `/macrostudio`.
 
 Version 1.0.0 is the initial public-release candidate.
+
+## Screenshots
+
+### Main macro editor and organization
+
+![MacroStudio main editor with navigation, macro list, and native macro editing workspace](screenshots/main-editor.png)
+
+A resizable workspace for Account and Character navigation, macro editing, categories, tags, Favorites, and live character-limit feedback.
+
+| Live macro search | Native macro creation |
+| :--: | :--: |
+| <img src="screenshots/search.png" alt="MacroStudio live search showing matching native macros" width="380"> | <img src="screenshots/new-macro.png" alt="MacroStudio native macro creation dialog" width="720"> |
+| Search names, complete bodies, categories, and tags while refining the active navigation view. | Create an Account or Character macro with scope, icon, body, capacity, and validation controls. |
 
 ## Overview
 
@@ -27,20 +40,10 @@ Native macro changes are synchronized automatically from Blizzard events. Unsave
 
 Categories, tags, Favorites, and window settings are stored as MacroStudio metadata. Macro bodies themselves remain standard native World of Warcraft macros.
 
-## Screenshots
-
-No release screenshots are currently stored in the repository. Before the public launch, add screenshots under `docs/screenshots/` showing:
-
-- The full Account/Character editor workspace.
-- Live search combined with categories or tags.
-- The native macro creation dialog and icon picker.
-
-Do not publish screenshots that reveal character names, account details, chat messages, or other personal information.
-
 ## Installation
 
-1. Download `MacroStudio-v1.0.0.zip` when the release package is available.
-2. Extract it into the Retail AddOns directory:
+1. Download the latest MacroStudio ZIP from [GitHub Releases](https://github.com/Baeleaf/MacroStudio/releases).
+2. Extract the ZIP into the WoW Retail AddOns directory:
 
    ```text
    <World of Warcraft>\_retail_\Interface\AddOns
@@ -52,8 +55,8 @@ Do not publish screenshots that reveal character names, account details, chat me
    <World of Warcraft>\_retail_\Interface\AddOns\MacroStudio\MacroStudio.toc
    ```
 
-4. Restart World of Warcraft if it was already running, enable MacroStudio at character selection, and log in.
-5. Run `/macrostudio` or `/ms` to open the editor.
+4. Restart World of Warcraft, or run `/reload` when updating an existing installation. Enable MacroStudio at character selection if needed.
+5. Run `/ms` or `/macrostudio` to open the editor.
 
 ## Usage
 
