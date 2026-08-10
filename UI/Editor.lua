@@ -14,6 +14,18 @@ local SUCCESS_COLOR = { 0.35, 0.9, 0.45 }
 local EDITOR_BORDER_NORMAL = { 0.18, 0.22, 0.28, 1 }
 local EDITOR_BORDER_FOCUSED = { 0.25, 0.62, 1, 1 }
 
+local function formatSlots(slots)
+    local labels = {}
+    for index, slot in ipairs(slots or {}) do
+        labels[index] = tostring(slot)
+    end
+    return table.concat(labels, ", ")
+end
+
+local function isShiftDown()
+    return type(IsShiftKeyDown) == "function" and IsShiftKeyDown() and true or false
+end
+
 local function createPopupMenu(parent, width)
     local menu = MacroStudio.Helpers:CreatePanel(parent)
     menu:SetFrameStrata("TOOLTIP")
@@ -107,6 +119,9 @@ function Editor:Create(parent)
     usageButton.Text = usageText
     usageButton:Hide()
     MacroStudio.Helpers:SetButtonTooltip(usageButton)
+    usageButton:SetScript("OnEnter", function()
+        self:UpdateActionBarUsageTooltip()
+    end)
     self.usageButton = usageButton
 
     local icon = panel:CreateTexture(nil, "ARTWORK")
@@ -445,12 +460,36 @@ function Editor:RefreshState()
     self:UpdateEditorState("refresh")
 end
 
+function Editor:UpdateActionBarUsageTooltip()
+    local count = self.actionBarUsageCount or 0
+    if count == 0 then
+        MacroStudio.Helpers:SetButtonTooltip(self.usageButton)
+        return
+    end
+
+    local tooltip
+    if count == 1 then
+        tooltip = "This saved native macro is on an action bar."
+    else
+        tooltip = string.format(
+            "This saved native macro is on an action bar in %d placements.",
+            count
+        )
+    end
+    if isShiftDown() then
+        tooltip = tooltip .. "\n\nAction Bar slots: " .. formatSlots(self.actionBarUsageSlots)
+    end
+    MacroStudio.Helpers:SetButtonTooltip(self.usageButton, "Action Bar Usage", tooltip)
+end
+
 function Editor:RefreshActionBarUsage()
     if not self.usageButton then
         return
     end
 
     local count, slots = MacroStudio.ActionBarRepository:GetUsage(self.macro)
+    self.actionBarUsageCount = count
+    self.actionBarUsageSlots = slots
     if count == 0 then
         self.usageButton:Hide()
         MacroStudio.Helpers:SetButtonTooltip(self.usageButton)
@@ -462,15 +501,7 @@ function Editor:RefreshActionBarUsage()
         count,
         count == 1 and "slot" or "slots"
     ))
-    local lines = { "This saved native macro is currently placed on:" }
-    for _, slot in ipairs(slots) do
-        lines[#lines + 1] = string.format("Action Bar slot %d", slot)
-    end
-    MacroStudio.Helpers:SetButtonTooltip(
-        self.usageButton,
-        "Action Bar Usage",
-        table.concat(lines, "\n")
-    )
+    self:UpdateActionBarUsageTooltip()
     self.usageButton:Show()
 end
 

@@ -14,6 +14,8 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for nati
 
 ## Milestone 5: action-bar usage
 
+- [ ] Hover normally and confirm raw slots are hidden; hold Shift before hovering the usage indicator and confirm the raw slot list appears.
+
 ### Phase 1: Basic detection
 
 - [ ] Place one Account macro and one Character macro on native action slots.

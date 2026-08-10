@@ -20,6 +20,10 @@ local function formatSlots(slots)
     return table.concat(labels, ", ")
 end
 
+local function isShiftDown()
+    return type(IsShiftKeyDown) == "function" and IsShiftKeyDown() and true or false
+end
+
 local function acquireFontString(pool, parent, fontObject)
     local fontString = pool[#pool]
     if fontString then
@@ -204,6 +208,7 @@ function MacroList:AcquireRow()
     button.detailText = detailText
 
     button:SetScript("OnEnter", function(row)
+        self:UpdateRowUsageTooltip(row)
         if not row.selected then
             row:SetBackdropColor(0.1, 0.13, 0.18, 1)
         end
@@ -263,20 +268,28 @@ function MacroList:AddEmptyMessage(message, yOffset)
     return yOffset + EMPTY_HEIGHT
 end
 
+function MacroList:UpdateRowUsageTooltip(row)
+    local count = row.actionBarUsageCount or 0
+    local tooltip = "Click to select\nDrag to place on an action bar"
+    if count == 1 then
+        tooltip = tooltip .. "\n\nOn an action bar."
+    elseif count > 1 then
+        tooltip = tooltip .. string.format("\n\nOn action bars: %d placements.", count)
+    end
+
+    if count > 0 and isShiftDown() then
+        tooltip = tooltip .. "\nAction Bar slots: " .. formatSlots(row.actionBarUsageSlots)
+    end
+
+    MacroStudio.Helpers:SetButtonTooltip(row, row.displayName, tooltip)
+end
+
 function MacroList:UpdateRowUsage(row)
     local count, slots = MacroStudio.ActionBarRepository:GetUsage(row.macro)
+    row.actionBarUsageCount = count
+    row.actionBarUsageSlots = slots
     row.usageText:SetShown(count > 0)
-
-    local tooltip = "Click to select\nDrag to place on an action bar"
-    if count > 0 then
-        tooltip = tooltip .. string.format(
-            "\n\nOn action bars: %d %s\nAction Bar slots: %s",
-            count,
-            count == 1 and "slot" or "slots",
-            formatSlots(slots)
-        )
-    end
-    MacroStudio.Helpers:SetButtonTooltip(row, row.displayName, tooltip)
+    self:UpdateRowUsageTooltip(row)
 end
 
 function MacroList:RefreshUsage()

@@ -19,6 +19,7 @@ def run_ui_smoke(root):
         MacroStudioDB = nil
         combat = false
         enumerationCalls = 0
+        shiftDown = false
         pickupCalls = {}
         editCalls = 0
         actionInfoCalls = 0
@@ -234,6 +235,7 @@ def run_ui_smoke(root):
             editCalls = editCalls + 1
             return index
         end
+        function IsShiftKeyDown() return shiftDown end
         function CreateMacro() return 2 end
         function DeleteMacro() end
         function PickupMacro(index)
@@ -294,20 +296,39 @@ def run_ui_smoke(root):
         accountRow:TriggerScript("OnEnter")
         assert(GameTooltip.tooltipTitle == "Account"
                 and GameTooltip.tooltipBody == "Click to select\nDrag to place on an action bar"
-                    .. "\n\nOn action bars: 2 slots\nAction Bar slots: 3, 15",
-            "row tooltip should explain click selection and action-bar dragging: "
+                    .. "\n\nOn action bars: 2 placements.",
+            "normal row hover should hide raw action slot numbers: "
                 .. tostring(GameTooltip.tooltipTitle) .. " | "
                 .. tostring(GameTooltip.tooltipBody))
         accountRow:TriggerScript("OnLeave")
+        shiftDown = true
+        accountRow:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Account"
+                and GameTooltip.tooltipBody == "Click to select\nDrag to place on an action bar"
+                    .. "\n\nOn action bars: 2 placements.\nAction Bar slots: 3, 15",
+            "Shift-row hover should reveal raw action slot numbers: "
+                .. tostring(GameTooltip.tooltipTitle) .. " | "
+                .. tostring(GameTooltip.tooltipBody))
+        accountRow:TriggerScript("OnLeave")
+        shiftDown = false
         assert(ms.Editor.usageButton:IsShown()
                 and ms.Editor.usageButton.Text:GetText() == "On action bars: 2 slots",
             "selected macro detail should show the complete cached placement count")
         ms.Editor.usageButton:TriggerScript("OnEnter")
         assert(GameTooltip.tooltipTitle == "Action Bar Usage"
-                and GameTooltip.tooltipBody == "This saved native macro is currently placed on:"
-                    .. "\nAction Bar slot 3\nAction Bar slot 15",
-            "selected macro tooltip should list technically accurate raw slot numbers")
+                and GameTooltip.tooltipBody
+                    == "This saved native macro is on an action bar in 2 placements.",
+            "normal editor hover should hide raw action slot numbers")
         ms.Editor.usageButton:TriggerScript("OnLeave")
+        shiftDown = true
+        ms.Editor.usageButton:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Action Bar Usage"
+                and GameTooltip.tooltipBody
+                    == "This saved native macro is on an action bar in 2 placements."
+                        .. "\n\nAction Bar slots: 3, 15",
+            "Shift-editor hover should reveal raw action slot numbers")
+        ms.Editor.usageButton:TriggerScript("OnLeave")
+        shiftDown = false
 
         local scansBeforeActionChange = ms.ActionBarRepository:GetScanCount()
         actionSlots[3] = nil
