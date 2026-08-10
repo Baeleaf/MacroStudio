@@ -14,6 +14,18 @@ local SUCCESS_COLOR = { 0.35, 0.9, 0.45 }
 local EDITOR_BORDER_NORMAL = { 0.18, 0.22, 0.28, 1 }
 local EDITOR_BORDER_FOCUSED = { 0.25, 0.62, 1, 1 }
 
+local function formatSlots(slots)
+    local labels = {}
+    for index, slot in ipairs(slots or {}) do
+        labels[index] = tostring(slot)
+    end
+    return table.concat(labels, ", ")
+end
+
+local function isShiftDown()
+    return type(IsShiftKeyDown) == "function" and IsShiftKeyDown() and true or false
+end
+
 local function createPopupMenu(parent, width)
     local menu = MacroStudio.Helpers:CreatePanel(parent)
     menu:SetFrameStrata("TOOLTIP")
@@ -96,6 +108,21 @@ function Editor:Create(parent)
     dirtyText:SetPoint("LEFT", heading, "RIGHT", 12, 0)
     dirtyText:SetTextColor(1, 0.68, 0.2)
     self.dirtyText = dirtyText
+
+    local usageButton = CreateFrame("Button", nil, panel)
+    usageButton:SetSize(170, 20)
+    usageButton:SetPoint("TOPRIGHT", -14, -11)
+    local usageText = MacroStudio.Helpers:CreateLabel(usageButton, "GameFontNormalSmall", "")
+    usageText:SetAllPoints(usageButton)
+    usageText:SetJustifyH("RIGHT")
+    usageText:SetTextColor(0.35, 0.75, 1)
+    usageButton.Text = usageText
+    usageButton:Hide()
+    MacroStudio.Helpers:SetButtonTooltip(usageButton)
+    usageButton:SetScript("OnEnter", function()
+        self:UpdateActionBarUsageTooltip()
+    end)
+    self.usageButton = usageButton
 
     local icon = panel:CreateTexture(nil, "ARTWORK")
     icon:SetSize(46, 46)
@@ -433,6 +460,51 @@ function Editor:RefreshState()
     self:UpdateEditorState("refresh")
 end
 
+function Editor:UpdateActionBarUsageTooltip()
+    local count = self.actionBarUsageCount or 0
+    if count == 0 then
+        MacroStudio.Helpers:SetButtonTooltip(self.usageButton)
+        return
+    end
+
+    local tooltip
+    if count == 1 then
+        tooltip = "This saved native macro is on an action bar."
+    else
+        tooltip = string.format(
+            "This saved native macro is on an action bar in %d placements.",
+            count
+        )
+    end
+    if isShiftDown() then
+        tooltip = tooltip .. "\n\nAction Bar slots: " .. formatSlots(self.actionBarUsageSlots)
+    end
+    MacroStudio.Helpers:SetButtonTooltip(self.usageButton, "Action Bar Usage", tooltip)
+end
+
+function Editor:RefreshActionBarUsage()
+    if not self.usageButton then
+        return
+    end
+
+    local count, slots = MacroStudio.ActionBarRepository:GetUsage(self.macro)
+    self.actionBarUsageCount = count
+    self.actionBarUsageSlots = slots
+    if count == 0 then
+        self.usageButton:Hide()
+        MacroStudio.Helpers:SetButtonTooltip(self.usageButton)
+        return
+    end
+
+    self.usageButton.Text:SetText(string.format(
+        "On action bars: %d %s",
+        count,
+        count == 1 and "slot" or "slots"
+    ))
+    self:UpdateActionBarUsageTooltip()
+    self.usageButton:Show()
+end
+
 function Editor:RefreshMetadata()
     local hasMacro = self.macro ~= nil
     local presentation = MacroStudio.MetadataRepository:GetPresentation(self.macro)
@@ -459,6 +531,7 @@ function Editor:RefreshMetadata()
     MacroStudio.Helpers:SetButtonEnabled(self.categoryButton, hasMacro)
     MacroStudio.Helpers:SetButtonEnabled(self.addTagButton, hasMacro)
     MacroStudio.Helpers:SetButtonEnabled(self.removeTagButton, hasMacro and #presentation.tags > 0)
+    self:RefreshActionBarUsage()
 end
 
 function Editor:HideMetadataMenus()

@@ -12,6 +12,18 @@ local HEADER_HEIGHT = 27
 local EMPTY_HEIGHT = 28
 local CONTENT_GAP = 4
 
+local function formatSlots(slots)
+    local labels = {}
+    for index, slot in ipairs(slots or {}) do
+        labels[index] = tostring(slot)
+    end
+    return table.concat(labels, ", ")
+end
+
+local function isShiftDown()
+    return type(IsShiftKeyDown) == "function" and IsShiftKeyDown() and true or false
+end
+
 local function acquireFontString(pool, parent, fontObject)
     local fontString = pool[#pool]
     if fontString then
@@ -172,9 +184,17 @@ function MacroList:AcquireRow()
     favorite:Hide()
     button.favorite = favorite
 
+    local usageText = MacroStudio.Helpers:CreateLabel(button, "GameFontNormalSmall", "On Bar")
+    usageText:SetPoint("TOPRIGHT", button, "TOPRIGHT", -7, -8)
+    usageText:SetWidth(48)
+    usageText:SetJustifyH("RIGHT")
+    usageText:SetTextColor(0.35, 0.75, 1)
+    usageText:Hide()
+    button.usageText = usageText
+
     local nameText = MacroStudio.Helpers:CreateLabel(button, "GameFontNormal", "")
     nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 8, -1)
-    nameText:SetPoint("TOPRIGHT", button, "TOPRIGHT", -7, -8)
+    nameText:SetPoint("TOPRIGHT", usageText, "TOPLEFT", -6, 0)
     nameText:SetJustifyH("LEFT")
     nameText:SetWordWrap(false)
     button.nameText = nameText
@@ -188,6 +208,7 @@ function MacroList:AcquireRow()
     button.detailText = detailText
 
     button:SetScript("OnEnter", function(row)
+        self:UpdateRowUsageTooltip(row)
         if not row.selected then
             row:SetBackdropColor(0.1, 0.13, 0.18, 1)
         end
@@ -247,6 +268,36 @@ function MacroList:AddEmptyMessage(message, yOffset)
     return yOffset + EMPTY_HEIGHT
 end
 
+function MacroList:UpdateRowUsageTooltip(row)
+    local count = row.actionBarUsageCount or 0
+    local tooltip = "Click to select\nDrag to place on an action bar"
+    if count == 1 then
+        tooltip = tooltip .. "\n\nOn an action bar."
+    elseif count > 1 then
+        tooltip = tooltip .. string.format("\n\nOn action bars: %d placements.", count)
+    end
+
+    if count > 0 and isShiftDown() then
+        tooltip = tooltip .. "\nAction Bar slots: " .. formatSlots(row.actionBarUsageSlots)
+    end
+
+    MacroStudio.Helpers:SetButtonTooltip(row, row.displayName, tooltip)
+end
+
+function MacroList:UpdateRowUsage(row)
+    local count, slots = MacroStudio.ActionBarRepository:GetUsage(row.macro)
+    row.actionBarUsageCount = count
+    row.actionBarUsageSlots = slots
+    row.usageText:SetShown(count > 0)
+    self:UpdateRowUsageTooltip(row)
+end
+
+function MacroList:RefreshUsage()
+    for _, row in ipairs(self.visibleRows or {}) do
+        self:UpdateRowUsage(row)
+    end
+end
+
 function MacroList:AddSection(title, macros, yOffset, showEmpty)
     if #macros == 0 and not showEmpty then
         return yOffset, false
@@ -272,8 +323,9 @@ function MacroList:AddSection(title, macros, yOffset, showEmpty)
         row.icon:SetTexture(macro.icon or MacroStudio.DEFAULT_ICON)
         row.favorite:SetShown(MacroStudio.MetadataRepository:IsFavorite(macro))
         local displayName = macro.name ~= "" and macro.name or "Unnamed Macro"
+        row.displayName = displayName
         row.nameText:SetText(displayName)
-        MacroStudio.Helpers:SetButtonTooltip(row, displayName, "Click to select\nDrag to place on an action bar")
+        self:UpdateRowUsage(row)
 
         local length = MacroStudio.Helpers:TextLength(macro.body)
         local preview = MacroStudio.Helpers:FirstLine(macro.body, 28)

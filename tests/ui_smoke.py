@@ -19,8 +19,15 @@ def run_ui_smoke(root):
         MacroStudioDB = nil
         combat = false
         enumerationCalls = 0
+        shiftDown = false
         pickupCalls = {}
         editCalls = 0
+        actionInfoCalls = 0
+        actionSlots = {
+            [3] = { "macro", 1001, "spell", "Account", 101 },
+            [15] = { "macro", 1001, "spell", "Account", 101 },
+            [25] = { "macro", 1, nil, "Character", 102 },
+        }
 
         local Frame = {}
         local focusedFrame = nil
@@ -48,6 +55,11 @@ def run_ui_smoke(root):
         function Frame:EnableMouse(enabled) self.mouseEnabled = enabled and true or false end
         function Frame:EnableMouseWheel(enabled) self.mouseWheelEnabled = enabled and true or false end
         function Frame:RegisterForDrag(button) self.dragButton = button end
+        function Frame:RegisterEvent(event)
+            local registeredEvents = rawget(self, "registeredEvents") or {}
+            registeredEvents[event] = true
+            self.registeredEvents = registeredEvents
+        end
         function Frame:StartMoving() self.moving = true end
         function Frame:StopMovingOrSizing() self.moving = false end
         function Frame:GetWidth() return rawget(self, "width") or 500 end
@@ -153,6 +165,10 @@ def run_ui_smoke(root):
             return frame
         end
 
+        C_Timer = {
+            After = function(_, callback) callback() end,
+        }
+
         ScrollUtil = {
             RegisterScrollBoxWithScrollBar = function() end,
         }
@@ -198,6 +214,10 @@ def run_ui_smoke(root):
             if index == 4 then return "Character", 102, "/say character" end
             return nil
         end
+        function GetMacroSpell(index)
+            return index == 1 and 1001 or nil
+        end
+        function GetMacroItem() return nil end
         function GetMacroIcons(list)
             list[#list + 1] = 134400
             list[#list + 1] = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -215,11 +235,22 @@ def run_ui_smoke(root):
             editCalls = editCalls + 1
             return index
         end
+        function IsShiftKeyDown() return shiftDown end
         function CreateMacro() return 2 end
         function DeleteMacro() end
         function PickupMacro(index)
             pickupCalls[#pickupCalls + 1] = index
         end
+        function GetActionInfo(slot)
+            actionInfoCalls = actionInfoCalls + 1
+            local action = actionSlots[slot]
+            if not action then return nil end
+            return action[1], action[2], action[3]
+        end
+        C_ActionBar = {
+            GetActionText = function(slot) return actionSlots[slot] and actionSlots[slot][4] or nil end,
+            GetActionTexture = function(slot) return actionSlots[slot] and actionSlots[slot][5] or nil end,
+        }
         """
     )
 
@@ -229,6 +260,7 @@ def run_ui_smoke(root):
         "Utils/Helpers.lua",
         "Database.lua",
         "MacroRepository.lua",
+        "ActionBarRepository.lua",
         "MetadataRepository.lua",
         "Search.lua",
         "UI/Dialogs.lua",
@@ -259,13 +291,59 @@ def run_ui_smoke(root):
         local accountRow = ms.MacroList.visibleRows[1]
         assert(accountRow and accountRow.dragButton == "LeftButton",
             "macro rows should register for native left-button dragging")
+        assert(accountRow.usageText:IsShown() and accountRow.usageText:GetText() == "On Bar",
+            "a used Account macro row should show the subtle usage indicator")
         accountRow:TriggerScript("OnEnter")
         assert(GameTooltip.tooltipTitle == "Account"
-                and GameTooltip.tooltipBody == "Click to select\nDrag to place on an action bar",
-            "row tooltip should explain click selection and action-bar dragging: "
+                and GameTooltip.tooltipBody == "Click to select\nDrag to place on an action bar"
+                    .. "\n\nOn action bars: 2 placements.",
+            "normal row hover should hide raw action slot numbers: "
                 .. tostring(GameTooltip.tooltipTitle) .. " | "
                 .. tostring(GameTooltip.tooltipBody))
         accountRow:TriggerScript("OnLeave")
+        shiftDown = true
+        accountRow:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Account"
+                and GameTooltip.tooltipBody == "Click to select\nDrag to place on an action bar"
+                    .. "\n\nOn action bars: 2 placements.\nAction Bar slots: 3, 15",
+            "Shift-row hover should reveal raw action slot numbers: "
+                .. tostring(GameTooltip.tooltipTitle) .. " | "
+                .. tostring(GameTooltip.tooltipBody))
+        accountRow:TriggerScript("OnLeave")
+        shiftDown = false
+        assert(ms.Editor.usageButton:IsShown()
+                and ms.Editor.usageButton.Text:GetText() == "On action bars: 2 slots",
+            "selected macro detail should show the complete cached placement count")
+        ms.Editor.usageButton:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Action Bar Usage"
+                and GameTooltip.tooltipBody
+                    == "This saved native macro is on an action bar in 2 placements.",
+            "normal editor hover should hide raw action slot numbers")
+        ms.Editor.usageButton:TriggerScript("OnLeave")
+        shiftDown = true
+        ms.Editor.usageButton:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Action Bar Usage"
+                and GameTooltip.tooltipBody
+                    == "This saved native macro is on an action bar in 2 placements."
+                        .. "\n\nAction Bar slots: 3, 15",
+            "Shift-editor hover should reveal raw action slot numbers")
+        ms.Editor.usageButton:TriggerScript("OnLeave")
+        shiftDown = false
+
+        local scansBeforeActionChange = ms.ActionBarRepository:GetScanCount()
+        actionSlots[3] = nil
+        actionSlots[15] = { "spell", 12345 }
+        ms.eventFrame:TriggerScript("OnEvent", "ACTIONBAR_SLOT_CHANGED", 3)
+        assert(ms.ActionBarRepository:GetScanCount() == scansBeforeActionChange + 1,
+            "a native slot event should request one cached usage refresh")
+        assert(not accountRow.usageText:IsShown() and not ms.Editor.usageButton:IsShown(),
+            "removing and replacing all macro actions should clear row and selected detail state")
+        actionSlots[7] = { "macro", 1001, "spell", "Account", 101 }
+        ms.eventFrame:TriggerScript("OnEvent", "ACTIONBAR_SLOT_CHANGED", 7)
+        assert(accountRow.usageText:IsShown()
+                and ms.Editor.usageButton.Text:GetText() == "On action bars: 1 slot",
+            "placing a native macro should restore usage automatically without manual refresh")
+
         accountRow:GetScript("OnDragStart")(accountRow)
         assert(pickupCalls[#pickupCalls] == 1,
             "Account row drag should pick up its exact native index")
@@ -276,6 +354,8 @@ def run_ui_smoke(root):
         local characterRow = ms.MacroList.visibleRows[1]
         assert(characterRow and characterRow.macro.scope == "CHARACTER",
             "Character filter should expose the Character row")
+        assert(characterRow.usageText:IsShown(),
+            "Character rows should read usage from their exact offset native index")
         characterRow:GetScript("OnDragStart")(characterRow)
         assert(pickupCalls[#pickupCalls] == 4,
             "Character row drag should use its account-capacity offset index")
@@ -326,6 +406,7 @@ def run_ui_smoke(root):
 
         local searchBox = ms.MacroList.searchBox
         local enumerationBeforeSearch = enumerationCalls
+        local scansBeforeSearch = ms.ActionBarRepository:GetScanCount()
         assert(searchBox and searchBox:IsEnabled(), "search box should construct as an enabled native EditBox")
         assert(ms.MacroList.searchPlaceholder:IsShown(), "empty unfocused search should show its placeholder")
 
@@ -338,6 +419,8 @@ def run_ui_smoke(root):
             "dirty dragging should pick up the saved native macro without calling Save")
         assert(ms.Editor:GetBody() == "/say unsaved action-bar draft" and ms.Editor:IsDirty(),
             "dirty dragging should preserve the unsaved editor draft")
+        assert(ms.Editor.usageButton:IsShown(),
+            "saved-macro usage should remain visible while the editor has a dirty draft")
         assert(ms.Editor.notice and ms.Editor.notice.message:find("saved version"),
             "dirty dragging should explain that the saved version was picked up")
 
@@ -359,6 +442,8 @@ def run_ui_smoke(root):
         assert(ms:GetSearchQuery() == "@mouseover", "search state should update while typing")
         assert(#ms.MacroList.visibleRows == 1 and ms.MacroList.visibleRows[1].macro.name == "Account",
             "search should match complete macro body text")
+        assert(ms.MacroList.visibleRows[1].usageText:IsShown(),
+            "search result rows should preserve cached action-bar usage state")
         assert(not ms.MacroList.searchPlaceholder:IsShown() and ms.MacroList.clearSearchButton:IsShown(),
             "active search should hide its placeholder and show Clear")
 
@@ -420,6 +505,8 @@ def run_ui_smoke(root):
         assert(not searchBox:HasFocus(), "Escape on an empty search should release focus")
         assert(enumerationCalls == enumerationBeforeSearch,
             "live search and navigation refinement must not re-enumerate Blizzard macros")
+        assert(ms.ActionBarRepository:GetScanCount() == scansBeforeSearch,
+            "search and filter rendering must read cached usage without rescanning native action slots")
 
         searchBox:SetText("account")
         ms.Dialogs:ShowNewCategory(function() return true end)

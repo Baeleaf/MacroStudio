@@ -6,6 +6,8 @@ Version 1.0.0 is the initial public release. It edits, creates, deletes, organiz
 
 Version 1.1.0 hands native macros to WoW's normal cursor system so players can drag saved macros onto action bars.
 
+The Unreleased action-bar usage feature observes native Retail action slots and reports where exact saved macros are present. It does not manage bars or inspect action-bar addon frames.
+
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
 ## Module responsibilities
@@ -14,6 +16,7 @@ Native WoW frames and APIs are used directly. Runtime addon code has no third-pa
 Core.lua
 |-- Database.lua
 |-- MacroRepository.lua
+|-- ActionBarRepository.lua
 |-- MetadataRepository.lua
 |-- Utils/Helpers.lua
 |-- Search.lua
@@ -27,6 +30,7 @@ Core.lua
 ```
 
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, `DeleteMacro`, or `PickupMacro`.
+- `ActionBarRepository.lua` owns native action-slot inspection and builds a conservative, read-only exact macro snapshot to raw-slot lookup.
 - `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
 - `Search.lua` performs read-only matching against native macro fields and attached metadata.
@@ -67,6 +71,48 @@ Macro-list rows register for Blizzard's native left-button drag gesture. `OnDrag
 Pickup uses the saved native macro. It never saves an editor draft, creates a temporary macro, or changes category, tag, Favorite, body, name, icon, or scope metadata. When the dragged row is the dirty editor selection, MacroStudio explains that the saved version was placed on the cursor.
 
 MacroStudio stops after `PickupMacro(index)`. Blizzard's standard action buttons receive the normal cursor payload and perform their own drop, swap, and cancel behavior. MacroStudio does not call `PlaceAction`, emulate action buttons, or hardcode action-bar frame names. Compatible third-party bars can consume the same native payload, but real-client testing is still required.
+
+## Native action-bar usage inspection
+
+Research was performed against installed Retail `12.0.7.68974` and the matching `12.0.7 (68974)` Blizzard UI source. Current FrameXML proves that `GetActionInfo(slot)` does not reliably return a native macro index for type `macro`. When the subtype is `spell`, Blizzard compares the returned ID directly with spell IDs; unresolved macros may expose no useful resolved subtype. Treating that number as a macro index can therefore assign a slot to an unrelated macro whose index happens to equal a resolved action ID.
+
+Retail exposes no read-only underlying macro-index getter for an occupied action slot. MacroStudio instead starts from `C_ActionBar.GetActionText(slot)`, then requires current spell/item resolution from `GetMacroSpell` or `GetMacroItem` to agree with the action subtype and ID. A fixed macro icon must also agree with `C_ActionBar.GetActionTexture(slot)`; a dynamic question-mark icon is accepted only when spell or item resolution provides non-name evidence. The action text is one candidate attribute, never identity by itself.
+
+Exactly one candidate must satisfy every available attribute, and its full repository snapshot is re-read before caching. Zero candidates are unresolved; multiple candidates are ambiguous. Both results intentionally omit the indicator. This preserves the invariant: MacroStudio never displays `On Bar` unless action-bar usage can be safely associated with that exact saved native macro.
+
+Retail FrameXML defines 12 slots per action page and page indexes through 18: normal and multi-action pages, followed by vehicle page 16, temporary shapeshift page 17, and override page 18. MacroStudio scans raw slots 1 through 216. Normal hover reports placement presence and, when there are multiple placements, the count; Shift-hover additionally reveals the raw slot numbers for diagnostics. MacroStudio does not infer player-facing bar names because paging, bonus, stance, vehicle, and override states can remap which page the main bar presents.
+
+The generated Retail API documentation identifies `ACTIONBAR_SLOT_CHANGED` as the native content-change event; Blizzard's own action-button handler treats payload `0` as an all-slots change. MacroStudio also refreshes for:
+
+- `PLAYER_ENTERING_WORLD`
+- `ACTIONBAR_PAGE_CHANGED`
+- `UPDATE_BONUS_ACTIONBAR`
+- `UPDATE_VEHICLE_ACTIONBAR`
+- `UPDATE_OVERRIDE_ACTIONBAR`
+- `UPDATE_SHAPESHIFT_FORM`
+- `UPDATE_POSSESS_BAR`
+
+`UPDATE_MACROS` remains part of macro reconciliation. It refreshes the macro repository first and then rebuilds action usage, so shifted or changed indices are checked against the new exact snapshots. An action-only event performs the same current-snapshot validation against the existing repository; a mismatch is omitted until reconciliation instead of being assigned to a neighbor.
+
+The data path is:
+
+```text
+native action-bar event
+        |
+        v
+one deferred scan of slots 1..216
+        |
+        v
+unique text + resolution + icon evidence + full snapshot validation
+        |
+        v
+cached index -> sorted raw slot list
+        |
+        +--> visible row indicator/tooltip
+        `--> selected editor count/tooltip
+```
+
+The scan is event-driven and observational: there is no `OnUpdate`, protected write, cursor mutation, secure-frame workaround, `PlaceAction`, or third-party frame inspection. `/ms debug on` logs only structural slot/type/ID/subtype/text/resolution-result fields and never macro bodies. Search, filtering, row rendering, and dirty editor changes only read the cache and never rescan native slots.
 
 ## Duplicate names and metadata reconciliation
 

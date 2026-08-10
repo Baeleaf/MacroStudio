@@ -9,6 +9,7 @@ Core.lua
 Utils\Helpers.lua
 Database.lua
 MacroRepository.lua
+ActionBarRepository.lua
 MetadataRepository.lua
 Search.lua
 UI\Dialogs.lua

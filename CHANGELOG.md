@@ -4,6 +4,14 @@ Notable user-facing changes to MacroStudio are documented here.
 
 ## Unreleased
 
+### Added
+
+- See which macros are currently placed on your action bars.
+
+### Fixed
+
+- Prevent resolved spell or item IDs from being mistaken for native macro indices when detecting action-bar usage.
+
 ## 1.1.0
 
 ### Added
