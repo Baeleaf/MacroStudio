@@ -14,7 +14,7 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for nati
 
 ## Milestone 4: drag native macros to action bars (unreleased)
 
-This feature is not included in MacroStudio 1.0.0. Test it from the `feature/action-bar-drag` branch with Lua errors enabled.
+This feature is complete on `main` but is not included in MacroStudio 1.0.0. Test the current development build with Lua errors enabled.
 
 ### Basic drag and replacement
 
@@ -47,6 +47,78 @@ This feature is not included in MacroStudio 1.0.0. Test it from the `feature/act
 
 - [ ] If available, repeat a basic drag with a popular action-bar addon.
 - [ ] Record the addon and version. Compatibility is useful feedback, not a milestone requirement.
+
+## 12.1 PTR Compatibility
+
+Record the PTR client build, verified Interface number, and MacroStudio commit before testing. Do not change `MacroStudio.toc` or add compatibility code until the PTR client exposes a real problem. This is a focused regression pass; use the historical checks below only when a phase fails.
+
+### Phase 1: Addon load
+
+- [ ] Record PTR build, Interface number, and MacroStudio version/commit.
+- [ ] Confirm the PTR client recognizes and enables MacroStudio.
+- [ ] Run `/reload` and confirm no Lua errors.
+- [ ] Open MacroStudio with `/ms` and `/macrostudio`.
+- [ ] Confirm the complete window layout renders correctly.
+
+### Phase 2: Native macro APIs
+
+- [ ] Compare Account and Character macro names, icons, bodies, counts, and indices with Blizzard's PTR Macro UI.
+- [ ] Verify Save, Revert, Create, and Delete.
+- [ ] Verify duplicate-name targeting and `UPDATE_MACROS` synchronization.
+- [ ] Note any changed API signature, namespace, return value, behavior, or combat restriction.
+
+### Phase 3: Editor and UI
+
+- [ ] Verify the native caret, mouse placement, selection, copy/paste, and scrolling.
+- [ ] Verify the complete blue focus border and window resizing.
+- [ ] Verify category/tag dialogs, New Macro modal behavior, and the icon picker.
+- [ ] Watch for PTR FrameXML, template, layout, atlas, or texture changes.
+
+### Phase 4: Search and organization
+
+- [ ] Search by name, body, category, and tag.
+- [ ] Verify Favorites plus Account and Character filters.
+- [ ] Run `/reload` and confirm metadata persists.
+
+### Phase 5: Drag to action bars
+
+This is the highest-priority PTR regression phase.
+
+- [ ] Drag an Account macro and a Character macro to action bars.
+- [ ] Drag from search, category, and Favorites results.
+- [ ] Test duplicate-name macros and an occupied action slot.
+- [ ] Cancel a cursor pickup and attempt pickup during combat.
+- [ ] Confirm the native cursor payload is correct and watch for blocked actions, protected-action errors, taint, and Lua errors.
+
+### Phase 6: Combat
+
+- [ ] Confirm a dirty draft survives combat.
+- [ ] Confirm Save, Create, Delete, and macro pickup remain protected according to PTR behavior.
+- [ ] Leave combat and confirm nothing saves, creates, deletes, or moves automatically.
+
+### Phase 7: SavedVariables compatibility
+
+If practical, test with an existing `MacroStudioDB` copied or made available on PTR.
+
+- [ ] Confirm categories, tags, Favorites, and window geometry survive.
+- [ ] Confirm existing metadata reconciles to the correct native macros.
+- [ ] Confirm the client-version change does not reset or destroy existing data.
+
+### Phase 8: Quick full workflow
+
+- [ ] Open MacroStudio, search for a macro, edit and Save it.
+- [ ] Categorize, tag, and Favorite the macro, then drag it to an action bar.
+- [ ] Run `/reload` and confirm the macro, organization, and window state persist without errors.
+
+### PTR development Junction
+
+The existing helper can link this same working tree into any verified Retail or PTR AddOns directory. Pass the actual PTR AddOns directory instead of assuming an installation location:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\setup-junction.ps1" -AddOnsPath "<PTR AddOns directory>"
+```
+
+For example only, `<PTR AddOns directory>` might be a client folder ending in `Interface\AddOns`. The supplied directory must already exist. The helper leaves an existing real `MacroStudio` directory or mismatched Junction untouched and reports the conflict for manual review.
 
 ## Load and window lifecycle
 
