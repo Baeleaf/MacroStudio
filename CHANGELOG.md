@@ -6,7 +6,7 @@ Notable user-facing changes to MacroStudio are documented here.
 
 ### Added
 
-- Show exact saved native macro usage counts and raw action-slot locations in the macro list and selected editor detail.
+- See which macros are currently placed on your action bars.
 
 ### Fixed
 

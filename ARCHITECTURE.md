@@ -80,7 +80,7 @@ Retail exposes no read-only underlying macro-index getter for an occupied action
 
 Exactly one candidate must satisfy every available attribute, and its full repository snapshot is re-read before caching. Zero candidates are unresolved; multiple candidates are ambiguous. Both results intentionally omit the indicator. This preserves the invariant: MacroStudio never displays `On Bar` unless action-bar usage can be safely associated with that exact saved native macro.
 
-Retail FrameXML defines 12 slots per action page and page indexes through 18: normal and multi-action pages, followed by vehicle page 16, temporary shapeshift page 17, and override page 18. MacroStudio scans raw slots 1 through 216 and deliberately reports raw slot numbers. It does not infer player-facing bar names because paging, bonus, stance, vehicle, and override states can remap which page the main bar presents.
+Retail FrameXML defines 12 slots per action page and page indexes through 18: normal and multi-action pages, followed by vehicle page 16, temporary shapeshift page 17, and override page 18. MacroStudio scans raw slots 1 through 216. Normal hover reports placement presence and, when there are multiple placements, the count; Shift-hover additionally reveals the raw slot numbers for diagnostics. MacroStudio does not infer player-facing bar names because paging, bonus, stance, vehicle, and override states can remap which page the main bar presents.
 
 The generated Retail API documentation identifies `ACTIONBAR_SLOT_CHANGED` as the native content-change event; Blizzard's own action-button handler treats payload `0` as an all-slots change. MacroStudio also refreshes for:
 

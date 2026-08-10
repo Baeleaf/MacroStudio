@@ -14,40 +14,40 @@ The harness compiles every Lua source and exercises stubbed Retail APIs for nati
 
 ## Milestone 5: action-bar usage
 
-- [ ] Hover normally and confirm raw slots are hidden; hold Shift before hovering the usage indicator and confirm the raw slot list appears.
+- [x] Hover normally and confirm raw slots are hidden; hold Shift before hovering the usage indicator and confirm the raw slot list appears.
 
 ### Phase 1: Basic detection
 
-- [ ] Place one Account macro and one Character macro on native action slots.
-- [ ] Verify both row indicators and selected-macro details.
-- [ ] Remove each macro and verify its indicator disappears automatically.
+- [x] Place one Account macro and one Character macro on native action slots.
+- [x] Verify both row indicators and selected-macro details.
+- [x] Remove each macro and verify its indicator disappears automatically.
 
 ### Phase 2: Multiple slots
 
-- [ ] Place one macro in several slots and verify the count and raw slot list.
-- [ ] Remove one copy and verify both update automatically.
+- [x] Place one macro in several slots and verify the count and raw slot list.
+- [x] Remove one copy and verify both update automatically.
 
 ### Phase 3: Duplicate names
 
-- [ ] Create same-name macros with different bodies and icons.
-- [ ] Place only one on a bar and verify only that exact macro is marked.
-- [ ] Use `/ms debug on` and capture the structural slot identity lines if either macro is unresolved or ambiguous.
+- [x] Create same-name macros with different bodies and icons.
+- [x] Place only one on a bar and verify only that exact macro is marked.
+- [x] Use `/ms debug on` and capture the structural slot identity lines if either macro is unresolved or ambiguous.
 
 ### Phase 4: Live changes
 
-- [ ] Drag from MacroStudio, move the action, replace it, and remove it.
-- [ ] Verify every change appears without Refresh or `/reload`.
+- [x] Drag from MacroStudio, move the action, replace it, and remove it.
+- [x] Verify every change appears without Refresh or `/reload`.
 
 ### Phase 5: Search and organization
 
-- [ ] Verify indicators through search, Favorites, a category, and combined search/category views.
-- [ ] Verify Account and Character filters preserve the correct usage state.
+- [x] Verify indicators through search, Favorites, a category, and combined search/category views.
+- [x] Verify Account and Character filters preserve the correct usage state.
 
 ### Phase 6: Combat
 
-- [ ] Enter combat and change or use action bars as the client permits.
-- [ ] Confirm there are no Lua, taint, blocked-action, or protected-action errors.
-- [ ] Verify usage remains current or reconciles automatically afterward.
+- [x] Enter combat and change or use action bars as the client permits.
+- [x] Confirm there are no Lua, taint, blocked-action, or protected-action errors.
+- [x] Verify usage remains current or reconciles automatically afterward.
 
 ## Drag native macros to action bars (1.1.0)
 
