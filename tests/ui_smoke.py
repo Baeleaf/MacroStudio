@@ -464,11 +464,38 @@ def run_ui_smoke(root):
         assert(ms.frame:IsShown() and ms.Settings.frame:IsShown()
                 and ms:IsMainWindowModalBlocked(),
             "/ms settings should expose a compact General panel")
+        local sharedSettingsFrame = ms.Settings.frame
         assert(ms.Settings.takeoverCheckbox:GetChecked() and ms.Settings.minimapCheckbox:GetChecked()
                 and ms.Settings.statusText:GetWidth() == 420,
             "General settings should reflect persisted defaults in a minimum-size-safe layout")
         ms.Settings.frame:Hide()
         assert(not ms:IsMainWindowModalBlocked(), "closing Settings should restore main-window input")
+
+        local sharedSettingsOpen = ms.Access.OpenSettings
+        local sharedSettingsOpenCalls = 0
+        ms.Access.OpenSettings = function(access, ...)
+            sharedSettingsOpenCalls = sharedSettingsOpenCalls + 1
+            return sharedSettingsOpen(access, ...)
+        end
+        SlashCmdList.MACROSTUDIO("settings")
+        assert(sharedSettingsOpenCalls == 1 and ms.Settings.frame == sharedSettingsFrame,
+            "/ms settings should use the shared Settings path and existing frame")
+        sharedSettingsFrame:Hide()
+        assert(ms.settingsButton.clickButtons[1] == "LeftButtonUp",
+            "the title Settings button should explicitly dispatch its completed left click")
+        ms.settingsButton:TriggerScript("OnClick", "LeftButton")
+        assert(sharedSettingsOpenCalls == 2 and ms.Settings.frame == sharedSettingsFrame
+                and sharedSettingsFrame:IsShown(),
+            "the title button should use the shared Settings path and reuse the existing frame")
+        ms.settingsButton:TriggerScript("OnClick", "LeftButton")
+        assert(sharedSettingsOpenCalls == 3 and ms.Settings.frame == sharedSettingsFrame
+                and sharedSettingsFrame:IsShown(),
+            "repeated title clicks should raise the same Settings frame without duplication")
+        sharedSettingsFrame:Hide()
+        ms.settingsButton:TriggerScript("OnClick", "LeftButton")
+        assert(sharedSettingsOpenCalls == 4 and sharedSettingsFrame:IsShown(),
+            "the title button should reopen the same Settings frame after it is closed")
+        sharedSettingsFrame:Hide()
         local enumerationsBeforeSlashRefresh = enumerationCalls
         SlashCmdList.MACROSTUDIO("refresh")
         assert(enumerationCalls > enumerationsBeforeSlashRefresh and ms.frame:IsShown(),
@@ -499,7 +526,8 @@ def run_ui_smoke(root):
             "minimap dragging should persist angle without leaving a per-frame update running")
         ms.MinimapButton.button:TriggerScript("OnClick", "LeftButton")
         ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
-        assert(ms.Settings.frame:IsShown(), "right-clicking the minimap launcher should open Settings")
+        assert(sharedSettingsOpenCalls == 5 and ms.Settings.frame == sharedSettingsFrame
+                and ms.Settings.frame:IsShown(), "minimap right-click should use the same Settings frame and path")
         ms.Settings.frame:Hide()
         local editsBeforeCombatAccess, deletesBeforeCombatAccess = editCalls, deleteCalls
         combat = true

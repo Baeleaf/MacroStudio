@@ -942,6 +942,8 @@ assert 'UPDATE_OVERRIDE_ACTIONBAR = true' in core_source
 assert 'C_Timer.After(0, refresh)' in main_frame_source
 
 assert "CURRENT_SCHEMA_VERSION = 4" in database_source
+assert 'settingsButton:RegisterForClicks("LeftButtonUp")' in main_frame_source
+assert "self.Access:OpenSettings()" in main_frame_source
 assert "## Interface: 120007" in toc_source
 assert "## Version: 1.1.0" in toc_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
