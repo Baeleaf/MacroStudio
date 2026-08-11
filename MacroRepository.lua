@@ -37,6 +37,21 @@ local function isInCombat()
     return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
 end
 
+local function getSelectedIcon(index, fallback)
+    local provider = C_Macro and C_Macro.GetSelectedMacroIcon
+    if type(provider) == "function" then
+        local ok, icon = pcall(provider, index)
+        if ok and (type(icon) == "number" or (type(icon) == "string" and icon ~= "")) then
+            return icon
+        end
+    end
+    return fallback or MacroStudio.DEFAULT_ICON
+end
+
+local function iconForIdentity(macro)
+    return macro and (macro.selectedIcon or macro.icon)
+end
+
 function MacroRepository:GetScopeForIndex(index)
     if type(index) ~= "number" then
         return nil
@@ -63,6 +78,7 @@ function MacroRepository:GetByIndex(index, expectedScope)
         index = index,
         name = name,
         icon = icon or MacroStudio.DEFAULT_ICON,
+        selectedIcon = getSelectedIcon(index, icon),
         body = type(body) == "string" and body or "",
         scope = scope,
     }
@@ -156,7 +172,7 @@ function MacroRepository:SnapshotsEqual(first, second)
         and first.index == second.index
         and first.scope == second.scope
         and first.name == second.name
-        and first.icon == second.icon
+        and MacroStudio.Helpers:IconsEqual(iconForIdentity(first), iconForIdentity(second))
         and first.body == second.body
 end
 
@@ -204,7 +220,7 @@ function MacroRepository:ResolveLatest(snapshot, refreshFirst)
     for _, macro in ipairs(self.macros) do
         if macro.scope == snapshot.scope
             and macro.name == snapshot.name
-            and macro.icon == snapshot.icon
+            and MacroStudio.Helpers:IconsEqual(iconForIdentity(macro), iconForIdentity(snapshot))
             and macro.body == snapshot.body then
             exactMatch = macro
             exactMatches = exactMatches + 1
@@ -219,32 +235,195 @@ function MacroRepository:ResolveLatest(snapshot, refreshFirst)
     for _, macro in ipairs(self.macros) do
         if macro.scope == snapshot.scope
             and macro.name == snapshot.name
-            and macro.icon == snapshot.icon then
+            and MacroStudio.Helpers:IconsEqual(iconForIdentity(macro), iconForIdentity(snapshot)) then
             likelyMatch = macro
             likelyMatches = likelyMatches + 1
         end
     end
     if likelyMatches == 1 then
         return likelyMatch
+    elseif likelyMatches > 1 then
+        return nil, "The selected macro is ambiguous because duplicate macros match it."
+    end
+
+    local iconAndBodyMatch
+    local iconAndBodyMatches = 0
+    for _, macro in ipairs(self.macros) do
+        if macro.scope == snapshot.scope
+            and MacroStudio.Helpers:IconsEqual(iconForIdentity(macro), iconForIdentity(snapshot))
+            and macro.body == snapshot.body then
+            iconAndBodyMatch = macro
+            iconAndBodyMatches = iconAndBodyMatches + 1
+        end
+    end
+    if iconAndBodyMatches == 1 then
+        return iconAndBodyMatch
+    elseif iconAndBodyMatches > 1 then
+        return nil, "The selected macro is ambiguous after its name changed outside MacroStudio."
+    end
+
+    local nameAndBodyMatch
+    local nameAndBodyMatches = 0
+    for _, macro in ipairs(self.macros) do
+        if macro.scope == snapshot.scope
+            and macro.name == snapshot.name
+            and macro.body == snapshot.body then
+            nameAndBodyMatch = macro
+            nameAndBodyMatches = nameAndBodyMatches + 1
+        end
+    end
+    if nameAndBodyMatches == 1 then
+        return nameAndBodyMatch
+    elseif nameAndBodyMatches > 1 then
+        return nil, "The selected macro is ambiguous after its icon changed outside MacroStudio."
     end
 
     if sameIndex
         and sameIndex.scope == snapshot.scope
         and sameIndex.name == snapshot.name
-        and sameIndex.icon == snapshot.icon then
+        and MacroStudio.Helpers:IconsEqual(iconForIdentity(sameIndex), iconForIdentity(snapshot)) then
         return nil, "The selected index now matches multiple duplicate macros, so MacroStudio will not guess."
     end
 
-    if exactMatches > 1 or likelyMatches > 1 then
+    if exactMatches > 1 then
         return nil, "The selected macro is ambiguous because duplicate macros match it."
     end
     return nil, "The selected macro no longer exists or changed identity."
 end
 
+local function sameSavedIdentity(first, second)
+    return type(first) == "table"
+        and type(second) == "table"
+        and first.scope == second.scope
+        and first.name == second.name
+        and MacroStudio.Helpers:IconsEqual(iconForIdentity(first), iconForIdentity(second))
+        and first.body == second.body
+end
+
+function MacroRepository:ResolveExternalConflict(snapshot, previousMacros, refreshFirst)
+    if type(snapshot) ~= "table" or type(previousMacros) ~= "table" then
+        return nil, "ambiguous", "This macro changed outside MacroStudio and could not be reconciled safely."
+    end
+
+    if refreshFirst ~= false then
+        self:Refresh()
+    end
+
+    local baselineFound = false
+    local previousScopeCount = 0
+    local currentScopeCount = 0
+    local previousIdentityCount = 0
+    local currentIdentityCount = 0
+    local currentIdentityMatch
+
+    for _, macro in ipairs(previousMacros) do
+        if macro.scope == snapshot.scope then
+            previousScopeCount = previousScopeCount + 1
+            if self:SnapshotsEqual(macro, snapshot) then
+                baselineFound = true
+            end
+            if sameSavedIdentity(macro, snapshot) then
+                previousIdentityCount = previousIdentityCount + 1
+            end
+        end
+    end
+
+    if not baselineFound then
+        return nil, "ambiguous", "This macro changed outside MacroStudio and could not be reconciled safely."
+    end
+
+    for _, macro in ipairs(self.macros) do
+        if macro.scope == snapshot.scope then
+            currentScopeCount = currentScopeCount + 1
+            if sameSavedIdentity(macro, snapshot) then
+                currentIdentityCount = currentIdentityCount + 1
+                currentIdentityMatch = macro
+            end
+        end
+    end
+
+    -- A unique full saved identity may move when unrelated native indices shift.
+    if previousIdentityCount == 1 and currentIdentityCount == 1 then
+        return currentIdentityMatch, "resolved"
+    end
+
+    -- When only the selected slot changed, every surrounding slot and the
+    -- scope count remain stable. This safely supports external edits that
+    -- replace name, icon, and body together without guessing by name.
+    local sameIndex = self:FindByIndex(snapshot.index)
+    if sameIndex and sameIndex.scope == snapshot.scope and previousScopeCount == currentScopeCount then
+        local stableTopology = true
+        for _, previous in ipairs(previousMacros) do
+            if previous.scope == snapshot.scope and previous.index ~= snapshot.index then
+                if not self:SnapshotsEqual(previous, self:FindByIndex(previous.index)) then
+                    stableTopology = false
+                    break
+                end
+            end
+        end
+        if stableTopology then
+            return sameIndex, "resolved"
+        end
+    end
+
+    if currentScopeCount < previousScopeCount then
+        if not sameIndex then
+            return nil, "deleted", "The selected macro was deleted outside MacroStudio."
+        end
+        for _, previous in ipairs(previousMacros) do
+            if previous.scope == snapshot.scope
+                and previous.index ~= snapshot.index
+                and sameSavedIdentity(previous, sameIndex) then
+                return nil, "deleted", "The selected macro was deleted outside MacroStudio."
+            end
+        end
+    end
+
+    return nil, "ambiguous", "This macro changed outside MacroStudio and could not be reconciled safely."
+end
+
+function MacroRepository:NormalizeMacroName(value)
+    local name = type(value) == "string" and value or ""
+    return (name:gsub('"', ""))
+end
+
+function MacroRepository:ValidateMacroName(value)
+    local name = self:NormalizeMacroName(value)
+    if MacroStudio.Helpers:Trim(name) == "" then
+        return false, "Enter a macro name."
+    end
+    if MacroStudio.Helpers:TextLength(name) > MacroStudio.MAX_NAME_LENGTH then
+        return false, string.format("Macro names are limited to %d characters.", MacroStudio.MAX_NAME_LENGTH)
+    end
+    return true, nil, name
+end
+
+function MacroRepository:ValidateMacroContent(request)
+    request = type(request) == "table" and request or {}
+    local validName, message, name = self:ValidateMacroName(request.name)
+    if not validName then
+        return false, message
+    end
+
+    local body = type(request.body) == "string" and request.body or ""
+    if MacroStudio.Helpers:TextLength(body) > MacroStudio.MAX_BODY_LENGTH then
+        return false, string.format("Macro bodies are limited to %d characters.", MacroStudio.MAX_BODY_LENGTH)
+    end
+
+    local icon = request.icon
+    if type(icon) ~= "number" and (type(icon) ~= "string" or icon == "") then
+        return false, "Choose a valid macro icon."
+    end
+
+    return true, nil, {
+        name = name,
+        icon = icon,
+        body = body,
+    }
+end
+
 function MacroRepository:ValidateCreateRequest(request)
     request = type(request) == "table" and request or {}
-    local name = MacroStudio.Helpers:Trim(request.name)
-    local body = type(request.body) == "string" and request.body or ""
     local scope = request.scope
 
     if isInCombat() then
@@ -253,20 +432,12 @@ function MacroRepository:ValidateCreateRequest(request)
     if type(CreateMacro) ~= "function" then
         return false, "The WoW CreateMacro API is unavailable."
     end
-    if name == "" then
-        return false, "Enter a macro name."
-    end
-    if MacroStudio.Helpers:TextLength(name) > MacroStudio.MAX_NAME_LENGTH then
-        return false, string.format("Macro names are limited to %d characters.", MacroStudio.MAX_NAME_LENGTH)
-    end
-    if MacroStudio.Helpers:TextLength(body) > MacroStudio.MAX_BODY_LENGTH then
-        return false, string.format("Macro bodies are limited to %d characters.", MacroStudio.MAX_BODY_LENGTH)
+    local validContent, contentMessage = self:ValidateMacroContent(request)
+    if not validContent then
+        return false, contentMessage
     end
     if scope ~= "ACCOUNT" and scope ~= "CHARACTER" then
         return false, "Choose Account or Character scope."
-    end
-    if type(request.icon) ~= "number" and (type(request.icon) ~= "string" or request.icon == "") then
-        return false, "Choose a valid macro icon."
     end
 
     local count, capacity = self:GetCapacity(scope)
@@ -280,13 +451,14 @@ local function matchesCreatedResult(macro, request)
     return macro
         and macro.scope == request.scope
         and macro.name == request.name
+        and MacroStudio.Helpers:IconsEqual(iconForIdentity(macro), request.icon)
         and macro.body == request.body
 end
 
 function MacroRepository:Create(request)
     request = type(request) == "table" and request or {}
     request = {
-        name = MacroStudio.Helpers:Trim(request.name),
+        name = MacroStudio.Helpers:Trim(self:NormalizeMacroName(request.name)),
         body = type(request.body) == "string" and request.body or "",
         scope = request.scope,
         icon = request.icon or MacroStudio.DEFAULT_ICON,
@@ -326,51 +498,59 @@ function MacroRepository:Create(request)
     return false, nil, "WoW did not confirm the new macro."
 end
 
-local function matchesSavedResult(macro, original, body)
+local function matchesSavedResult(macro, original, draft)
     return macro
         and macro.scope == original.scope
-        and macro.name == original.name
-        and macro.icon == original.icon
-        and macro.body == body
+        and macro.name == draft.name
+        and MacroStudio.Helpers:IconsEqual(iconForIdentity(macro), draft.icon)
+        and macro.body == draft.body
 end
 
-function MacroRepository:Update(snapshot, newBody)
+function MacroRepository:Update(snapshot, draft)
     MacroStudio:Debug("save attempted", snapshot and snapshot.index or "no index")
 
     if type(snapshot) ~= "table" or type(snapshot.index) ~= "number" then
         return false, nil, "No macro is selected."
     end
-    if type(newBody) ~= "string" then
+    if type(draft) == "string" then
+        draft = {
+            name = snapshot.name,
+            icon = iconForIdentity(snapshot),
+            body = draft,
+        }
+    end
+    if type(draft) ~= "table" then
         return false, nil, "The editor buffer is unavailable."
     end
     if isInCombat() then
         return false, nil, "Combat Lockdown - native macros cannot be modified until combat ends."
     end
 
-    local bodyLength = MacroStudio.Helpers:TextLength(newBody)
-    if bodyLength > MacroStudio.MAX_BODY_LENGTH then
-        return false, nil, string.format(
-            "Macro is too long by %d characters. Nothing was saved.",
-            bodyLength - MacroStudio.MAX_BODY_LENGTH
-        )
+    local valid, validationMessage, normalized = self:ValidateMacroContent(draft)
+    if not valid then
+        return false, nil, validationMessage .. " Nothing was saved."
     end
+    draft = normalized
 
     local current = self:GetByIndex(snapshot.index, snapshot.scope)
     if not current then
         return false, nil, "The selected macro no longer exists at its expected index."
     end
     if not self:SnapshotsEqual(current, snapshot) then
-        return false, nil, "The selected macro changed outside MacroStudio. Refresh or Revert before saving."
+        return false, nil, "This macro changed outside MacroStudio. Revert to load the latest version."
     end
     if type(EditMacro) ~= "function" then
         return false, nil, "The WoW EditMacro API is unavailable."
     end
 
-    local returnedIndex = EditMacro(current.index, nil, nil, newBody)
+    local ok, returnedIndex = pcall(EditMacro, current.index, draft.name, draft.icon, draft.body)
+    if not ok then
+        return false, nil, "WoW rejected the macro update request: " .. tostring(returnedIndex)
+    end
     self:Refresh()
 
     local returnedMacro = tonumber(returnedIndex) and self:FindByIndex(tonumber(returnedIndex)) or nil
-    if matchesSavedResult(returnedMacro, current, newBody) then
+    if matchesSavedResult(returnedMacro, current, draft) then
         if returnedMacro.index ~= current.index then
             MacroStudio:Debug("macro index changed after save", current.index, "->", returnedMacro.index)
         end
@@ -379,7 +559,7 @@ function MacroRepository:Update(snapshot, newBody)
     end
 
     local originalIndexMacro = self:FindByIndex(current.index)
-    if matchesSavedResult(originalIndexMacro, current, newBody) then
+    if matchesSavedResult(originalIndexMacro, current, draft) then
         MacroStudio:Debug("save succeeded", originalIndexMacro.index)
         return true, originalIndexMacro
     end
@@ -387,7 +567,7 @@ function MacroRepository:Update(snapshot, newBody)
     local uniqueMatch
     local matchCount = 0
     for _, macro in ipairs(self.macros) do
-        if matchesSavedResult(macro, current, newBody) then
+        if matchesSavedResult(macro, current, draft) then
             uniqueMatch = macro
             matchCount = matchCount + 1
         end
@@ -418,7 +598,7 @@ function MacroRepository:Delete(snapshot)
     self:Refresh()
     local current = self:GetByIndex(snapshot.index, snapshot.scope)
     if not current or not self:SnapshotsEqual(current, snapshot) then
-        return false, "The selected macro changed outside MacroStudio. Refresh before deleting it."
+        return false, "This macro changed outside MacroStudio. Revert before deleting it."
     end
 
     local previousCount = current.scope == "ACCOUNT" and self.accountCount or self.characterCount

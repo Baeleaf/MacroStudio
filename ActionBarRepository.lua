@@ -161,7 +161,7 @@ local function candidateMatches(macro, actionText, actionTexture, actionID, acti
     if not resolutionMatch then
         return false
     end
-    if isDynamicMacroIcon(macro.icon) then
+    if isDynamicMacroIcon(macro.selectedIcon or macro.icon) then
         return hasResolutionEvidence
     end
     return actionTexture ~= nil and iconsEqual(macro.icon, actionTexture)

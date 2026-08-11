@@ -74,9 +74,16 @@ MacroStudio 1.0.0 is the initial public-release candidate. The roadmap records s
 
 Editing assistance must never silently rewrite a working macro or claim semantic equivalence without sufficient certainty.
 
+## Completed development (Unreleased): native macro identity editing
+
+- [x] Edit an existing native macro's name and icon after creation through one safely revalidated `EditMacro` operation.
+- [x] Treat name, saved icon, and body as one draft with unified Save and Revert behavior.
+- [x] Preserve duplicate-name and action-bar identity safety through native identity edits.
+- [x] Recover external conflicts conservatively and clear selection after external deletion rather than target a neighbor.
+- [x] Present offline snapshot names and icons as display-only while keeping body text selectable and copyable.
+
 ## Native macro management
 
-- [ ] Edit an existing native macro's name and icon after creation, reusing safe `EditMacro` target revalidation and duplicate-name protections.
 - [ ] Change an existing macro's scope.
 - [ ] Duplicate a native macro.
 - [ ] Warn when destructive changes affect macros currently placed on action slots.

@@ -2,7 +2,7 @@
 
 ## Scope of version 1.0.0
 
-Version 1.0.0 is the initial public release. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, existing-macro rename/icon/scope changes, duplication, import/export, and launchers remain unimplemented.
+Version 1.0.0 is the initial public release. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, scope changes, duplication, import/export, and launchers remain unimplemented.
 
 Version 1.1.0 hands native macros to WoW's normal cursor system so players can drag saved macros onto action bars.
 
@@ -10,7 +10,19 @@ The Unreleased action-bar usage feature observes native Retail action slots and 
 
 The completed but Unreleased cross-character library keeps the current character native and live while exposing account-wide, read-only snapshots for previously seen offline characters. It can copy snapshot data into a new native Character macro; it does not provide offline native access.
 
+The completed but Unreleased Milestone 7 editor treats a live native macro's name, saved icon, and body as one draft. Offline snapshot fields remain read-only.
+
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
+
+## Milestone 7 Retail macro identity research
+
+Research used installed Retail `12.0.7.68974` and the matching extracted Blizzard UI source at commit `c878310d8432a65bac029c7bacc24eeb2e662bbe`. Blizzard's Macro UI calls `EditMacro(actualIndex, name, iconTexture)` for name/icon changes and `EditMacro(actualIndex, nil, nil, body)` for body changes. The name/icon path uses the returned global macro index to restore selection, so MacroStudio must treat that return as reconciliation evidence rather than assume an edit preserves enumeration position.
+
+The native selector limits names to 16 letters, strips quotation marks before submission, and enables confirmation only for a nonempty result. It performs no duplicate-name rejection. Account and Character macros share the global native index space; Blizzard subtracts the active scope's base only for its tab-local selection, and `EditMacro` has no scope-changing argument.
+
+For icon editing, Blizzard reads the saved choice with `C_Macro.GetSelectedMacroIcon(actualIndex)`. This is distinct from a potentially resolved `GetMacroInfo` texture for a dynamic `#showtooltip` macro. The icon provider reserves its first entry for `Interface\\Icons\\INV_MISC_QUESTIONMARK`, then exposes the normal macro icon collections. MacroStudio therefore carries the saved selected icon through drafts and exact-target validation while allowing the rendered native icon to resolve normally.
+
+Generated API documentation marks `UPDATE_MACROS` as synchronous. Name, icon, and body saves must therefore use the existing native-mutation gate and one deferred reconciliation after the single `EditMacro` call. The operation remains a protected native write: MacroStudio permits drafting in combat but retains its `InCombatLockdown()` Save guard and never retries automatically after combat.
 
 ## Module responsibilities
 
@@ -35,10 +47,10 @@ Core.lua
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, `DeleteMacro`, or `PickupMacro`.
 - `CharacterMacroLibrary.lua` resolves conservative character identity, replaces the current character snapshot from saved live repository data, builds cross-character views, and forgets offline snapshots.
 - `ActionBarRepository.lua` owns native action-slot inspection and builds a conservative, read-only exact macro snapshot to raw-slot lookup.
-- `MetadataRepository.lua` owns virtual organization records and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
+- `MetadataRepository.lua` owns virtual organization records, preserves them through trusted native identity edits, and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
 - `Search.lua` performs read-only matching against native macro fields and attached metadata.
-- `UI/Editor.lua` derives Save/Delete state and owns the editor's complete four-edge focus treatment.
+- `UI/Editor.lua` owns the unified name/icon/body draft, derives Save/Delete state, reuses the icon picker, and owns the editor's complete four-edge focus treatment.
 - `UI/MacroDialog.lua` derives Create state and owns the movable dialog and modal lifecycle.
 - `UI/IconPicker.lua` uses Blizzard's icon provider when available and compatible API fallbacks otherwise.
 - `UI/MacroList.lua` decides which scope headers are meaningful for the active filter and starts native left-button row drags.
@@ -57,6 +69,8 @@ scope, lastKnownIndex, name, icon, body
 ```
 
 The last-known index is evidence, not a durable key. Categories, Favorites, and tags have no effect on native execution.
+
+Native repository records retain both the rendered `GetMacroInfo` texture and the saved `C_Macro.GetSelectedMacroIcon` value. Exact edit and metadata identity uses the saved choice so a dynamic question-mark icon can resolve visually without changing the target snapshot.
 
 ## Cross-character macro library
 
@@ -121,9 +135,11 @@ The cross-character invariants are:
 
 ## Exact native mutation rules
 
-Every Save and Delete starts from a copied snapshot. Immediately before the mutation, the repository re-reads the enumerated index and requires index, scope, name, icon, and body to match. This prevents a shifted neighbor or same-name duplicate from becoming the target.
+Every Save and Delete starts from a copied snapshot. Immediately before the mutation, the repository re-reads the enumerated index and requires index, scope, name, saved icon choice, and body to match. This prevents a shifted neighbor or same-name duplicate from becoming the target.
 
-Save passes the enumerated index to `EditMacro`, refreshes, and resolves the returned/original/unique full-field result. Create refreshes capacity, validates all fields, calls `CreateMacro`, refreshes, and selects the returned or uniquely matching record. Delete refreshes, revalidates the exact snapshot, calls `DeleteMacro(index)`, and requires the relevant scope count to decrease by one.
+Save validates the complete draft, passes the enumerated index plus name, saved icon, and body to one `EditMacro` call, refreshes, and resolves the returned/original/unique full-field result. A returned index is evidence, not durable identity. Duplicate names remain legal, and no save path finds a target by name. Create refreshes capacity, validates all fields, calls `CreateMacro`, refreshes, and selects the returned or uniquely matching record. Delete refreshes, revalidates the exact snapshot, calls `DeleteMacro(index)`, and requires the relevant scope count to decrease by one.
+
+Name validation follows Retail's 16-letter limit, removes unsupported quotation marks, and rejects only empty results; duplicate names are not rejected. For a dirty external conflict, Revert compares the pre-event repository baseline with the settled native list. It accepts a unique unchanged identity or a stable edited slot whose surrounding scope topology proves it did not shift; deletion or ambiguity clears selection instead of targeting a neighbor.
 
 `UPDATE_MACROS` can fire synchronously during a native mutation or before action-bar identity has settled. `UI/MainFrame.lua` coalesces those notifications and defers one repository, snapshot, metadata, and action-bar reconciliation until after the mutation completes. For Delete, the trusted metadata record is still removed first so a shifted neighbor cannot inherit it.
 
@@ -219,19 +235,23 @@ Selection is intentionally independent from visibility. Search can hide the sele
 `Editor:UpdateEditorState()` derives:
 
 ```text
-body, dirty, length, overBy, targetSafe,
+name, icon, body,
+nameDirty, iconDirty, bodyDirty, dirty,
+validContent, length, overBy, targetSafe,
 canSave, saveReason, canRevert, canDelete, deleteReason
 ```
 
-Save requires a selected dirty target, at most 255 characters, no combat, no external conflict, and an exact current snapshot. Delete additionally requires a clean buffer. Create is disabled while combat-locked, at capacity, or while automatic selection would discard a dirty draft. Repository methods repeat the important validation defensively.
+Save requires a selected dirty live target, a valid nonempty name and saved icon, at most 255 body characters, no combat, no external conflict, and an exact current snapshot. Delete additionally requires the complete form to be clean. Create is disabled while combat-locked, at capacity, or while automatic selection would discard a dirty draft. Repository methods repeat the important validation defensively.
 
 The main editor and creation dialog use Blizzard's `ScrollingEditBoxTemplate` with a registered `MinimalScrollBar`. The template owns caret rendering, mouse drag selection, multiline keyboard navigation, and cursor scrolling; MacroStudio hooks its scripts without replacing that native behavior.
 
 The one-pixel Backdrop border sits below child frames, so the main editor also uses four exact edge textures on a non-interactive frame above its scrolling controls. Focus and blur recolor all four edges together; the overlay shares the editor border's anchors and therefore remains aligned during resize and scroll.
 
-Programmatic loads suppress text-change handling, then recompute once. External refresh never overwrites a dirty draft.
+Programmatic loads suppress name/body change handling, load the saved icon draft, then recompute once. Revert restores all three saved fields. External refresh never overwrites a dirty name, icon, or body draft.
 
 ## Input and Favorite UI
+
+The live name field enforces the native maximum and provides inline validation. Clicking the live icon opens the shared picker in modal state; choosing an icon changes only the draft, and closing without a choice leaves it unchanged. Offline snapshots replace those controls with plain name text and a display-only icon while the body remains selectable for copying.
 
 Category and tag text input uses one custom dialog. Enter invokes the same validated submit path as the visible button, Escape cancels, and invalid input stays in the dialog with an inline error.
 

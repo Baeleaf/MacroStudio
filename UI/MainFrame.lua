@@ -329,6 +329,7 @@ function MacroStudio:SelectMacro(macro)
     if not macro then
         return
     end
+    self.externalConflictResolution = nil
     self.selectedMacro = self.Helpers:CopyMacro(macro)
     self.Editor:SetMacro(self.selectedMacro)
     self:RefreshOrganizationUI()
@@ -467,6 +468,10 @@ function MacroStudio:RefreshMacros(reason)
         return
     end
 
+    local previousMacros = {}
+    for index, macro in ipairs(self.MacroRepository:GetAll()) do
+        previousMacros[index] = self.Helpers:CopyMacro(macro)
+    end
     local macros = self.MacroRepository:Refresh()
     if self.CharacterMacroLibrary and reason ~= "open" then
         self.CharacterMacroLibrary:RefreshCurrentSnapshot(macros)
@@ -479,6 +484,7 @@ function MacroStudio:RefreshMacros(reason)
     local exactSelection
     local offlineSelection = self:IsOfflineMacro(self.selectedMacro)
     if offlineSelection and not self.CharacterMacroLibrary:FindSnapshot(self.selectedMacro) then
+        self.externalConflictResolution = nil
         self.selectedMacro = nil
         self.Editor:Clear()
         self.Editor:SetNotice("The stored character snapshot no longer exists.", true)
@@ -495,21 +501,34 @@ function MacroStudio:RefreshMacros(reason)
 
     if offlineSelection then
         -- Offline selection is preserved without consulting native indices.
+        self.externalConflictResolution = nil
     elseif exactSelection then
         self.selectedMacro.duplicateName = exactSelection.duplicateName
         self.selectedMacro.duplicateCount = exactSelection.duplicateCount
         self.Editor.macro = self.selectedMacro
         self.Editor:SetExternalConflict(false)
+        self.externalConflictResolution = nil
     elseif self.selectedMacro and editorWasDirty then
         self:Debug("external macro change detected", self.selectedMacro.index)
+        local resolution = self.externalConflictResolution
+        if not resolution
+            or not self.MacroRepository:SnapshotsEqual(resolution.snapshot, self.selectedMacro) then
+            resolution = {
+                snapshot = self.Helpers:CopyMacro(self.selectedMacro),
+                baseline = previousMacros,
+            }
+            self.externalConflictResolution = resolution
+        end
         self.Editor:SetExternalConflict(true)
     elseif self.selectedMacro then
         local latest = self.MacroRepository:ResolveLatest(self.selectedMacro, false)
         if latest then
+            self.externalConflictResolution = nil
             self.selectedMacro = self.Helpers:CopyMacro(latest)
             self.Editor:SetMacro(self.selectedMacro)
             self:Debug("selected macro reconciled", self.selectedMacro.index)
         else
+            self.externalConflictResolution = nil
             self.selectedMacro = nil
             self.Editor:Clear()
             self.Editor:SetNotice("The previously selected macro no longer exists.", true)
@@ -551,9 +570,9 @@ function MacroStudio:SaveSelectedMacro()
 
     local previousMacro = self.Helpers:CopyMacro(self.selectedMacro)
     local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(previousMacro)
-    local body = self.Editor:GetBody()
+    local draft = self.Editor:GetDraft()
     self.nativeMutationInProgress = true
-    local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, body)
+    local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, draft)
     self:FinishNativeMacroMutation("save")
 
     if not saved then
@@ -574,7 +593,7 @@ function MacroStudio:SaveSelectedMacro()
     self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
     self.selectedMacro = self.Helpers:CopyMacro(updatedMacro)
     self.Editor:SetMacro(self.selectedMacro)
-    self.Editor:SetNotice("Macro saved.", false)
+    self.Editor:SetNotice("Macro name, icon, and body saved.", false)
     self:RefreshOrganizationUI()
 end
 
@@ -584,22 +603,45 @@ function MacroStudio:RevertSelectedMacro()
         return
     end
     if self:IsOfflineMacro(self.selectedMacro) then
-        self.Editor:SetNotice("Offline snapshots are already showing their saved read-only body.", true)
+        self.Editor:SetNotice("Offline snapshots already show their saved read-only name, icon, and body.", true)
         return
     end
 
-    local latest, message = self.MacroRepository:ResolveLatest(self.selectedMacro)
+    local baseline = {}
+    local resolution = self.externalConflictResolution
+    if resolution and self.MacroRepository:SnapshotsEqual(resolution.snapshot, self.selectedMacro) then
+        baseline = resolution.baseline
+    else
+        for index, macro in ipairs(self.MacroRepository:GetAll()) do
+            baseline[index] = self.Helpers:CopyMacro(macro)
+        end
+    end
+
+    local latest, status, message = self.MacroRepository:ResolveExternalConflict(
+        self.selectedMacro,
+        baseline
+    )
     self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
     if not latest then
+        self.externalConflictResolution = nil
+        self.selectedMacro = nil
+        self.Editor:Clear()
         self:RefreshOrganizationUI()
-        self.Editor:SetExternalConflict(true)
-        self.Editor:SetNotice(message or "The macro could not be resolved safely.", true)
+        if status == "deleted" then
+            self.Editor:SetNotice(message or "The selected macro was deleted outside MacroStudio.", true)
+        else
+            self.Editor:SetNotice(
+                message or "This macro could not be reconciled safely; selection was cleared.",
+                true
+            )
+        end
         return
     end
 
+    self.externalConflictResolution = nil
     self.selectedMacro = self.Helpers:CopyMacro(latest)
     self.Editor:SetMacro(self.selectedMacro)
-    self.Editor:SetNotice("Editor restored from Blizzard's current macro body.", false)
+    self.Editor:SetNotice("Editor restored from Blizzard's current macro name, icon, and body.", false)
     self:RefreshOrganizationUI()
 end
 
