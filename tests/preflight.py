@@ -948,9 +948,9 @@ assert 'settingsButton:HookScript("OnMouseUp"' in main_frame_source
 assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
-assert "## Interface: 120007" in toc_source
-assert "## Version: 1.2.0-r3" in toc_source
-assert 'MacroStudio.VERSION = "1.2.0-r3"' in core_source
+assert "## Interface: 120100" in toc_source
+assert "## Version: 1.2.0" in toc_source
+assert 'MacroStudio.VERSION = "1.2.0"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source

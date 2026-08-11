@@ -1,7 +1,7 @@
 local addonName, MacroStudio = ...
 
 MacroStudio.ADDON_NAME = addonName
-MacroStudio.VERSION = "1.2.0-r3"
+MacroStudio.VERSION = "1.2.0"
 MacroStudio.MAX_BODY_LENGTH = 255
 MacroStudio.MAX_NAME_LENGTH = tonumber(MAX_MACRO_NAME_LENGTH) or 16
 MacroStudio.BODY_WARNING_LENGTH = 230

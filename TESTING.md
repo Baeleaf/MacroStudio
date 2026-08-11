@@ -61,24 +61,24 @@ The headless harness verifies the installed title mouse-down hook, deferred shar
 
 ## Live Rapid Smoke Test
 
-Use this short checklist to validate v1.2.x after a new WoW live patch or hotfix. It supplements rather than replaces full milestone testing.
+This intentionally short checklist is used after WoW patches or hotfixes to decide quickly whether a MacroStudio hotfix is required. It does not replace full milestone testing.
 
-### Phase 1 - Load and access
+### Phase 1 - Load and Access
 
 - [ ] Confirm there are no startup Lua errors.
 - [ ] Open MacroStudio with `/ms`, `/m`, `/macro`, `/ms settings`, `/ms blizzard`, the minimap launcher, and AddOn Compartment.
 
-### Phase 2 - Core editing
+### Phase 2 - Core Editing
 
 - [ ] Edit a macro's name, icon, and body; Save, then make another draft and Revert.
 - [ ] Create and Delete a disposable macro, then sanity-check two same-name macros target the correct native records.
 
-### Phase 3 - Action bars
+### Phase 3 - Action Bars
 
 - [ ] Drag a macro to an action bar and confirm **On Bar** appears and updates for multiple placements.
 - [ ] Edit that macro's name and icon and confirm its action-bar identity remains correct.
 
-### Phase 4 - Cross-character
+### Phase 4 - Cross-Character
 
 - [ ] Browse and search an offline snapshot; confirm its read-only presentation and **Copy to Current Character**.
 
@@ -321,9 +321,9 @@ This feature is included in MacroStudio 1.1.0. Test the current development buil
 
 ## 12.1 PTR Compatibility
 
-PTR smoke testing passed on Interface `120100`. The development TOC intentionally remains unchanged; the next public release should update `## Interface` to `120100` only after the live client confirms it.
+PTR smoke testing passed on Interface `120100`, and the maintainer later confirmed the same Interface on live 12.1. The v1.2.0 TOC therefore declares `## Interface: 120100`.
 
-Record the PTR client build, verified Interface number, and MacroStudio commit before testing. Do not change `MacroStudio.toc` or add compatibility code until the PTR client exposes a real problem. This is a focused regression pass; use the historical checks below only when a phase fails.
+Record the client build, verified Interface number, and MacroStudio commit before testing. Future Interface changes still require client evidence; do not add speculative compatibility code. This is a focused regression pass; use the historical checks below only when a phase fails.
 
 ### Branch workflow
 
