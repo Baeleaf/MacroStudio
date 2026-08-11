@@ -20,6 +20,7 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 
 - [ ] Log into Character A and confirm its Character macros appear normally with a Current indicator.
 - [ ] `/reload`; confirm there is no duplication, data loss, or Lua error.
+- [ ] At minimum window size, confirm Characters helper and empty-state text remains fully readable.
 
 ### Phase 2 - Second character
 
@@ -43,6 +44,7 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 - [ ] Copy one of A's snapshots to B; verify a real Character macro is created with the same name, body, and icon.
 - [ ] Confirm the new live macro is selected and A's stored snapshot is unchanged.
 - [ ] Repeat with a duplicate name, at Character capacity, and with a question-mark icon.
+- [ ] At minimum window size, confirm Copy to Current Character remains fully visible and usable.
 
 ### Phase 6 - Search
 

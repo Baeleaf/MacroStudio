@@ -155,6 +155,7 @@ end
 function MacroList:AcquireEmptyLabel()
     local label = acquireFontString(self.emptyPool, self.scrollChild, "GameFontDisableSmall")
     label:SetJustifyH("LEFT")
+    label:SetWordWrap(true)
     return label
 end
 
@@ -263,9 +264,12 @@ function MacroList:AddEmptyMessage(message, yOffset)
     local empty = self:AcquireEmptyLabel()
     empty:ClearAllPoints()
     empty:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 12, -yOffset)
+    empty:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -12, -yOffset)
+    empty:SetWordWrap(true)
     empty:SetText(message)
     self.visibleEmptyLabels[#self.visibleEmptyLabels + 1] = empty
-    return yOffset + EMPTY_HEIGHT
+    local messageHeight = math.ceil(empty:GetStringHeight() or 0) + 8
+    return yOffset + math.max(EMPTY_HEIGHT, messageHeight)
 end
 
 function MacroList:UpdateRowUsageTooltip(row)

@@ -77,6 +77,7 @@ def run_ui_smoke(root):
             self.text = tostring(value or "")
             RunHandlers(self, "OnTextChanged", false)
         end
+        function Frame:SetWordWrap(enabled) self.wordWrap = enabled and true or false end
         function Frame:GetText() return rawget(self, "text") or "" end
         function Frame:GetNumLetters() return #(rawget(self, "text") or "") end
         function Frame:SetScript(event, handler) self.scripts[event] = handler end
@@ -324,6 +325,7 @@ def run_ui_smoke(root):
         assert(ms.frame and not ms.frame:IsShown(), "main window should remain hidden on login")
         assert(ms.selectedMacro and ms.selectedMacro.name == "Account", "initial refresh should select a macro")
         ms.frame:Show()
+        ms.frame:SetSize(ms.MIN_WIDTH, ms.MIN_HEIGHT)
         local syncsBeforeWorldEntry = ms.CharacterMacroLibrary:GetSyncCount()
         local enumerationsBeforeWorldEntry = enumerationCalls
         ms.eventFrame:TriggerScript("OnEvent", "PLAYER_ENTERING_WORLD")
@@ -363,6 +365,10 @@ def run_ui_smoke(root):
         assert(ms.Editor.state.offline and ms.Editor.copyButton:IsShown()
                 and not ms.Editor.saveButton:IsShown() and not ms.Editor.deleteButton:IsShown(),
             "offline selection should replace native mutation actions with Copy")
+        assert(ms.Editor.copyButton:GetText() == "Copy to Current Character",
+            "Copy action should remain complete at minimum window size")
+        assert(ms.Editor.scopeText.wordWrap,
+            "offline character identity and read-only state should use responsive wrapping")
         assert(ms.Editor.editBox:IsEnabled() and ms.Editor.scopeText:GetText():find("Read%-only snapshot")
                 and not ms.Editor.favoriteButton:IsShown() and not ms.Editor.categoryButton:IsShown(),
             "offline bodies should stay selectable while organization controls remain unavailable")
@@ -425,6 +431,10 @@ def run_ui_smoke(root):
                 and createdCharacterMacro and ms.MacroRepository:FindByIndex(5),
             "Forget should remove only MacroStudio snapshot data, never native macros")
 
+        local helperText = ms.MacroList.visibleEmptyLabels[#ms.MacroList.visibleEmptyLabels]
+        assert(helperText and helperText.wordWrap
+                and helperText:GetText() == "Log into another character with MacroStudio enabled to add it to your library.",
+            "Characters helper text should remain complete and wrapped at minimum window size")
         ms:SetSearchQuery("")
         ms:SetFilter("all")
         ms:SelectMacro(ms.MacroRepository:GetAll()[1])

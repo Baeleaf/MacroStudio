@@ -674,6 +674,12 @@ assert "CreateNativeScrollingEditBox(editBorder, 5)" in editor_source
 assert "CreateNativeScrollingEditBox(bodyBorder, 5)" in macro_dialog_source
 assert '"OnCursorChanged"' not in helpers_source
 assert "CreateOverlayBorder(editBorder, scrollBar, 2)" in editor_source
+assert 'copyButton:SetPoint("TOPRIGHT", -14, -9)' in editor_source
+assert 'copyButton:SetPoint("BOTTOMRIGHT"' not in editor_source
+assert 'self.stateText:SetPoint("BOTTOMRIGHT", self.panel, "BOTTOMRIGHT", -14, 19)' in editor_source
+assert 'empty:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -12, -yOffset)' in macro_list_source
+assert "empty:SetWordWrap(true)" in macro_list_source and "empty:GetStringHeight()" in macro_list_source
+assert 'self.emptyText:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -5, -yOffset - 4)' in sidebar_source
 assert "#ms.Editor.editorFocusBorderEdges == 4" in (ROOT / "tests" / "ui_smoke.py").read_text(encoding="utf-8")
 assert "modalOverlay:EnableMouse(true)" in main_frame_source
 assert "modalOverlay:EnableMouseWheel(true)" in main_frame_source

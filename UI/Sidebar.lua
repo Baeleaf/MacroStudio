@@ -257,11 +257,14 @@ function Sidebar:Rebuild(activeFilter)
     if #categories == 0 then
         if not self.emptyText then
             self.emptyText = MacroStudio.Helpers:CreateLabel(self.scrollChild, "GameFontDisableSmall", "No categories yet")
+            self.emptyText:SetJustifyH("LEFT")
+            self.emptyText:SetWordWrap(true)
         end
         self.emptyText:ClearAllPoints()
         self.emptyText:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 5, -yOffset - 4)
+        self.emptyText:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -5, -yOffset - 4)
         self.emptyText:Show()
-        yOffset = yOffset + 24
+        yOffset = yOffset + math.max(24, math.ceil(self.emptyText:GetStringHeight() or 0) + 8)
     elseif self.emptyText then
         self.emptyText:Hide()
     end

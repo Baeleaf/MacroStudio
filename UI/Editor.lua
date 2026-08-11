@@ -288,7 +288,7 @@ function Editor:Create(parent)
     self.revertButton = revertButton
     local copyButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     copyButton:SetSize(190, 24)
-    copyButton:SetPoint("BOTTOMRIGHT", -14, 16)
+    copyButton:SetPoint("TOPRIGHT", -14, -9)
     copyButton:SetText("Copy to Current Character")
     copyButton:SetScript("OnClick", function()
         MacroStudio:CopySelectedSnapshotToCurrentCharacter()
@@ -330,6 +330,25 @@ function Editor:SetMacro(macro)
     self.notice = nil
 
     local offline = MacroStudio:IsOfflineMacro(macro)
+    self.nameText:ClearAllPoints()
+    self.nameText:SetPoint("TOPLEFT", 72, -44)
+    if offline then
+        self.nameText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -44)
+    else
+        self.nameText:SetPoint("TOPRIGHT", self.favoriteButton, "TOPLEFT", -10, -1)
+    end
+
+    self.scopeText:ClearAllPoints()
+    if offline then
+        self.scopeText:SetPoint("TOPLEFT", self.panel, "TOPLEFT", 72, -66)
+        self.scopeText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -66)
+        self.scopeText:SetWordWrap(true)
+    else
+        self.scopeText:SetPoint("TOPLEFT", self.nameText, "BOTTOMLEFT", 0, -5)
+        self.scopeText:SetPoint("RIGHT", self.deleteButton, "LEFT", -8, 0)
+        self.scopeText:SetWordWrap(false)
+    end
+
     self.nameText:SetText(macro and macro.name or "No macro selected")
     if offline then
         self.scopeText:SetText(
@@ -463,8 +482,7 @@ function Editor:UpdateEditorState(reason)
 
     self.editBox:SetEnabled(hasMacro)
     if offline then
-        self.dirtyText:SetText("Read-only snapshot")
-        self.dirtyText:SetTextColor(0.45, 0.72, 1)
+        self.dirtyText:SetText("")
     else
         self.dirtyText:SetText(dirty and "Unsaved changes" or "")
         self.dirtyText:SetTextColor(unpack(WARNING_COLOR))
@@ -488,7 +506,7 @@ function Editor:UpdateEditorState(reason)
             statusMessage = self.notice.message
             statusColor = self.notice.color
         else
-            statusMessage = "Read-only snapshot - select and copy text, or copy it to the current character."
+            statusMessage = "Read-only snapshot. Select text or use Copy above."
         end
     elseif self.externalConflict or not targetSafe then
         statusMessage = "The native macro changed outside MacroStudio. Revert or refresh before modifying it."
@@ -512,6 +530,13 @@ function Editor:UpdateEditorState(reason)
         statusMessage = "Saved body is up to date."
     end
 
+    self.stateText:ClearAllPoints()
+    self.stateText:SetPoint("BOTTOMLEFT", 14, 19)
+    if offline then
+        self.stateText:SetPoint("BOTTOMRIGHT", self.panel, "BOTTOMRIGHT", -14, 19)
+    else
+        self.stateText:SetPoint("BOTTOMRIGHT", self.panel, "BOTTOMRIGHT", -190, 19)
+    end
     self.stateText:SetText(statusMessage)
     self.stateText:SetTextColor(unpack(statusColor))
     self.saveButton:SetShown(not offline)
