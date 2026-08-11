@@ -25,7 +25,7 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 ### Sidebar scalability
 
 - [ ] With 20+ known characters and many Categories, confirm Categories and its controls remain accessible without traversing the character list.
-- [ ] Collapse and expand Characters; confirm the plus/minus icon, Show/Hide tooltip, and individual entries update correctly.
+- [ ] Collapse and expand Characters; confirm the plus/minus icon and individual entries update correctly without a hover tooltip.
 - [ ] While Characters is collapsed, confirm All Characters remains visible and usable.
 - [ ] Confirm the collapse state persists through close/reopen and `/reload`.
 - [ ] At minimum window size, confirm Categories, Library, and the Characters toggle remain usable.

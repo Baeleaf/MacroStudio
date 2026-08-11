@@ -297,10 +297,6 @@ function Sidebar:Rebuild(activeFilter)
     )
     self.characterToggleButton.selected = false
     self.characterToggleButton:SetBackdropColor(0.065, 0.08, 0.105, 1)
-    MacroStudio.Helpers:SetButtonTooltip(
-        self.characterToggleButton,
-        self.charactersExpanded and "Hide characters" or "Show characters"
-    )
     yOffset = yOffset + BUTTON_HEIGHT + 3
 
     if self.charactersExpanded then

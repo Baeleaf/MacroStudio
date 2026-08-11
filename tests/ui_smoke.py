@@ -500,11 +500,12 @@ def run_ui_smoke(root):
                 and #ms.Sidebar.visibleCharacterButtons == 0
                 and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters"
                 and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-PlusButton-UP"
-                and ms.Sidebar.characterToggleButton.macroStudioTooltipTitle == "Show characters",
+                and rawget(ms.Sidebar.characterToggleButton, "macroStudioTooltipTitle") == nil,
             "large libraries should default to an obvious collapsed Characters control")
+        GameTooltip.tooltipTitle = nil
         ms.Sidebar.characterToggleButton:TriggerScript("OnEnter")
-        assert(GameTooltip.tooltipTitle == "Show characters",
-            "collapsed Characters hover should explain the disclosure action")
+        assert(rawget(GameTooltip, "tooltipTitle") == nil,
+            "Characters disclosure hover should not show a tooltip")
         ms.Sidebar.characterToggleButton:TriggerScript("OnLeave")
         assert(ms.Sidebar.allCharactersButton:IsShown(),
             "All Characters should remain visible while individual characters are collapsed")
@@ -518,18 +519,14 @@ def run_ui_smoke(root):
                 and #ms.Sidebar.visibleCharacterButtons == 21
                 and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters"
                 and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-MinusButton-UP"
-                and ms.Sidebar.characterToggleButton.macroStudioTooltipTitle == "Hide characters",
+                and rawget(ms.Sidebar.characterToggleButton, "macroStudioTooltipTitle") == nil,
             "Characters should use an obvious expanded control and show every character")
-        ms.Sidebar.characterToggleButton:TriggerScript("OnEnter")
-        assert(GameTooltip.tooltipTitle == "Hide characters",
-            "expanded Characters hover should explain the disclosure action")
-        ms.Sidebar.characterToggleButton:TriggerScript("OnLeave")
         ms.Sidebar:ToggleCharacterList()
         assert(MacroStudioDB.settings.characterLibraryExpanded == false
                 and not ms.Sidebar.charactersExpanded
                 and #ms.Sidebar.visibleCharacterButtons == 0
                 and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-PlusButton-UP"
-                and ms.Sidebar.characterToggleButton.macroStudioTooltipTitle == "Show characters",
+                and rawget(ms.Sidebar.characterToggleButton, "macroStudioTooltipTitle") == nil,
             "Characters should collapse without changing the active filter")
 
         ms:Toggle()
