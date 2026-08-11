@@ -291,6 +291,97 @@ function MacroRepository:ResolveLatest(snapshot, refreshFirst)
     return nil, "The selected macro no longer exists or changed identity."
 end
 
+local function sameSavedIdentity(first, second)
+    return type(first) == "table"
+        and type(second) == "table"
+        and first.scope == second.scope
+        and first.name == second.name
+        and MacroStudio.Helpers:IconsEqual(iconForIdentity(first), iconForIdentity(second))
+        and first.body == second.body
+end
+
+function MacroRepository:ResolveExternalConflict(snapshot, previousMacros, refreshFirst)
+    if type(snapshot) ~= "table" or type(previousMacros) ~= "table" then
+        return nil, "ambiguous", "This macro changed outside MacroStudio and could not be reconciled safely."
+    end
+
+    if refreshFirst ~= false then
+        self:Refresh()
+    end
+
+    local baselineFound = false
+    local previousScopeCount = 0
+    local currentScopeCount = 0
+    local previousIdentityCount = 0
+    local currentIdentityCount = 0
+    local currentIdentityMatch
+
+    for _, macro in ipairs(previousMacros) do
+        if macro.scope == snapshot.scope then
+            previousScopeCount = previousScopeCount + 1
+            if self:SnapshotsEqual(macro, snapshot) then
+                baselineFound = true
+            end
+            if sameSavedIdentity(macro, snapshot) then
+                previousIdentityCount = previousIdentityCount + 1
+            end
+        end
+    end
+
+    if not baselineFound then
+        return nil, "ambiguous", "This macro changed outside MacroStudio and could not be reconciled safely."
+    end
+
+    for _, macro in ipairs(self.macros) do
+        if macro.scope == snapshot.scope then
+            currentScopeCount = currentScopeCount + 1
+            if sameSavedIdentity(macro, snapshot) then
+                currentIdentityCount = currentIdentityCount + 1
+                currentIdentityMatch = macro
+            end
+        end
+    end
+
+    -- A unique full saved identity may move when unrelated native indices shift.
+    if previousIdentityCount == 1 and currentIdentityCount == 1 then
+        return currentIdentityMatch, "resolved"
+    end
+
+    -- When only the selected slot changed, every surrounding slot and the
+    -- scope count remain stable. This safely supports external edits that
+    -- replace name, icon, and body together without guessing by name.
+    local sameIndex = self:FindByIndex(snapshot.index)
+    if sameIndex and sameIndex.scope == snapshot.scope and previousScopeCount == currentScopeCount then
+        local stableTopology = true
+        for _, previous in ipairs(previousMacros) do
+            if previous.scope == snapshot.scope and previous.index ~= snapshot.index then
+                if not self:SnapshotsEqual(previous, self:FindByIndex(previous.index)) then
+                    stableTopology = false
+                    break
+                end
+            end
+        end
+        if stableTopology then
+            return sameIndex, "resolved"
+        end
+    end
+
+    if currentScopeCount < previousScopeCount then
+        if not sameIndex then
+            return nil, "deleted", "The selected macro was deleted outside MacroStudio."
+        end
+        for _, previous in ipairs(previousMacros) do
+            if previous.scope == snapshot.scope
+                and previous.index ~= snapshot.index
+                and sameSavedIdentity(previous, sameIndex) then
+                return nil, "deleted", "The selected macro was deleted outside MacroStudio."
+            end
+        end
+    end
+
+    return nil, "ambiguous", "This macro changed outside MacroStudio and could not be reconciled safely."
+end
+
 function MacroRepository:NormalizeMacroName(value)
     local name = type(value) == "string" and value or ""
     return (name:gsub('"', ""))
@@ -446,7 +537,7 @@ function MacroRepository:Update(snapshot, draft)
         return false, nil, "The selected macro no longer exists at its expected index."
     end
     if not self:SnapshotsEqual(current, snapshot) then
-        return false, nil, "The selected macro changed outside MacroStudio. Refresh or Revert before saving."
+        return false, nil, "This macro changed outside MacroStudio. Revert to load the latest version."
     end
     if type(EditMacro) ~= "function" then
         return false, nil, "The WoW EditMacro API is unavailable."
@@ -507,7 +598,7 @@ function MacroRepository:Delete(snapshot)
     self:Refresh()
     local current = self:GetByIndex(snapshot.index, snapshot.scope)
     if not current or not self:SnapshotsEqual(current, snapshot) then
-        return false, "The selected macro changed outside MacroStudio. Refresh before deleting it."
+        return false, "This macro changed outside MacroStudio. Revert before deleting it."
     end
 
     local previousCount = current.scope == "ACCOUNT" and self.accountCount or self.characterCount

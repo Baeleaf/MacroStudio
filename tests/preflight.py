@@ -557,7 +557,11 @@ tests = load(
     secondTwin = ms.Helpers:CopyMacro(macros[2])
 
     local staleUpdate = ms.Helpers:CopyMacro(firstTwin)
-    accountMacros[1].body = "/say external"
+    local conflictBaseline = {}
+    for index, macro in ipairs(repo:GetAll()) do
+        conflictBaseline[index] = ms.Helpers:CopyMacro(macro)
+    end
+    accountMacros[1] = { name = "External", icon = 106, selectedIcon = 106, body = "/say external" }
     editsBeforeUpdate = editCalls
     updated, movedMacro, updateReason = repo:Update(staleUpdate, {
         name = "Unsafe",
@@ -565,12 +569,38 @@ tests = load(
         body = "/say overwrite",
     })
     assert(not updated and not movedMacro and updateReason:find("changed outside")
+            and not updateReason:lower():find("refresh")
             and editCalls == editsBeforeUpdate,
         "external native changes must stop before EditMacro and preserve the draft")
-    local externallyChanged = repo:ResolveLatest(staleUpdate)
-    assert(externallyChanged and externallyChanged.body == "/say external",
-        "Revert resolution should recover a unique one-field external change")
-    accountMacros[1].body = "/say first"
+    local externallyChanged, conflictStatus = repo:ResolveExternalConflict(
+        staleUpdate,
+        conflictBaseline
+    )
+    assert(externallyChanged and conflictStatus == "resolved"
+            and externallyChanged.name == "External"
+            and externallyChanged.selectedIcon == 106
+            and externallyChanged.body == "/say external",
+        "Revert resolution should recover a stable slot after every editable field changes")
+
+    local deletionBaseline = {}
+    for index, macro in ipairs(repo:GetAll()) do
+        deletionBaseline[index] = ms.Helpers:CopyMacro(macro)
+    end
+    local deletedSnapshot = ms.Helpers:CopyMacro(repo:FindByIndex(1))
+    table.remove(accountMacros, 1)
+    repo:Refresh()
+    local deletedResolution, deletedStatus, deletedMessage = repo:ResolveExternalConflict(
+        deletedSnapshot,
+        deletionBaseline,
+        false
+    )
+    assert(not deletedResolution and deletedStatus == "deleted" and deletedMessage:find("deleted"),
+        "external deletion must never reconcile the dirty selection to the shifted neighbor")
+
+    accountMacros = {
+        { name = "Twin", icon = 101, selectedIcon = 101, body = "/say first" },
+        { name = "Twin", icon = 102, selectedIcon = 102, body = "/cast SecondSpell", spellID = 2002 },
+    }
     repo:Refresh()
 
     combat = true
@@ -854,6 +884,13 @@ assert "GetFileIDFromPath" in helpers_source and 'basename == "inv_misc_question
 assert "C_Macro.GetSelectedMacroIcon" in repository_source
 assert "pcall(EditMacro, current.index, draft.name, draft.icon, draft.body)" in repository_source
 assert "function Editor:GetDraft()" in editor_source and "function Editor:ChooseIcon()" in editor_source
+assert "function MacroRepository:ResolveExternalConflict" in repository_source
+assert "stableTopology" in repository_source
+assert "Revert or refresh" not in editor_source and "Refresh or Revert" not in repository_source
+assert "refresh before" not in editor_source.lower() and "refresh before" not in repository_source.lower()
+assert "offlineNameText" in editor_source and "offlineIcon" in editor_source
+assert "self.nameBox:SetShown(not offline)" in editor_source
+assert "self.iconButton:SetShown(not offline)" in editor_source
 assert "macro.name" in search_source and "macro.body" in search_source
 assert "presentation.categoryName" in search_source and "presentation.tags" in search_source
 assert "MacroRepository" not in search_source and "SavedVariables" not in search_source

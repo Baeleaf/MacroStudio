@@ -40,7 +40,8 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 
 ### Phase 6 - Conflict and stale safety
 
-- [ ] Keep a dirty name/icon/body draft, change the native macro externally, and confirm Save/Delete block while Revert loads the new native state.
+- [ ] Keep a dirty name/icon/body draft, change the native macro externally, and confirm Revert loads the latest native name/icon/body, clears the conflict, and restores normal Save/Delete eligibility.
+- [ ] With a dirty draft, delete the selected native macro externally; Revert must clear or safely reconcile selection without targeting a neighbor.
 - [ ] Shift nearby indices and confirm no neighboring or same-name macro is modified.
 
 ### Phase 7 - Combat
@@ -51,7 +52,7 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 ### Phase 8 - Regression
 
 - [ ] Check Create/Delete, drag-to-action-bar, On Bar, categories/tags/Favorites, the New Macro modal, and minimum-size layout.
-- [ ] Check the cross-character library and Copy to Current Character; offline name, icon, and body must remain read-only.
+- [ ] At minimum size, confirm offline snapshots show a plain read-only name and display-only icon, keep the body selectable/copyable, and retain Copy to Current Character.
 
 ## Milestone 6: Cross-Character Macro Library (Completed)
 

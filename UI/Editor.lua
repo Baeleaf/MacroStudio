@@ -142,6 +142,14 @@ function Editor:Create(parent)
     self.iconButton = iconButton
     self.icon = icon
 
+    local offlineIcon = panel:CreateTexture(nil, "ARTWORK")
+    offlineIcon:SetSize(46, 46)
+    offlineIcon:SetPoint("TOPLEFT", 14, -43)
+    offlineIcon:SetTexture(MacroStudio.DEFAULT_ICON)
+    offlineIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    offlineIcon:Hide()
+    self.offlineIcon = offlineIcon
+
     local favoriteButton = self:CreateFavoriteButton(panel)
     self.favoriteButton = favoriteButton
 
@@ -169,7 +177,14 @@ function Editor:Create(parent)
         box:ClearFocus()
     end)
     self.nameBox = nameBox
-    self.nameText = nameBox
+
+    local offlineNameText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "")
+    offlineNameText:SetPoint("TOPLEFT", 72, -43)
+    offlineNameText:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -14, -43)
+    offlineNameText:SetJustifyH("LEFT")
+    offlineNameText:SetWordWrap(false)
+    offlineNameText:Hide()
+    self.offlineNameText = offlineNameText
 
     local scopeText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "Select a macro from the list.")
     scopeText:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", 0, -3)
@@ -392,6 +407,7 @@ end
 function Editor:SetDraftIcon(icon)
     self.draftIcon = icon or MacroStudio.DEFAULT_ICON
     self.icon:SetTexture(self.draftIcon)
+    self.offlineIcon:SetTexture(self.draftIcon)
     if not self.suppressDraftChanged then
         self.notice = nil
         self:UpdateEditorState("icon")
@@ -408,13 +424,10 @@ function Editor:SetMacro(macro)
     self.suppressDraftChanged = true
 
     local offline = MacroStudio:IsOfflineMacro(macro)
-    self.nameText:ClearAllPoints()
-    self.nameText:SetPoint("TOPLEFT", 72, -40)
-    if offline then
-        self.nameText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -40)
-    else
-        self.nameText:SetPoint("TOPRIGHT", self.favoriteButton, "TOPLEFT", -10, 0)
-    end
+    self.nameBox:SetShown(not offline)
+    self.offlineNameText:SetShown(offline)
+    self.iconButton:SetShown(not offline)
+    self.offlineIcon:SetShown(offline)
 
     self.scopeText:ClearAllPoints()
     if offline then
@@ -422,12 +435,13 @@ function Editor:SetMacro(macro)
         self.scopeText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -66)
         self.scopeText:SetWordWrap(true)
     else
-        self.scopeText:SetPoint("TOPLEFT", self.nameText, "BOTTOMLEFT", 0, -3)
+        self.scopeText:SetPoint("TOPLEFT", self.nameBox, "BOTTOMLEFT", 0, -3)
         self.scopeText:SetPoint("RIGHT", self.deleteButton, "LEFT", -8, 0)
         self.scopeText:SetWordWrap(false)
     end
 
     self:SetEditorName(macro and macro.name or "No macro selected")
+    self.offlineNameText:SetText(macro and macro.name or "")
     if offline then
         self.scopeText:SetText(
             "Viewing " .. (macro.characterDisplayName or "offline character")
@@ -611,7 +625,7 @@ function Editor:UpdateEditorState(reason)
     elseif MacroStudio.inCombat then
         saveReason = "Saving is unavailable during Combat Lockdown."
     elseif self.externalConflict or not targetSafe then
-        saveReason = "The native macro changed; Revert or refresh before saving."
+        saveReason = "This macro changed outside MacroStudio. Revert to load the latest version."
     elseif length > MacroStudio.MAX_BODY_LENGTH then
         saveReason = string.format("Shorten the body by %d characters.", overBy)
     end
@@ -626,7 +640,7 @@ function Editor:UpdateEditorState(reason)
     elseif MacroStudio.inCombat then
         deleteReason = "Deleting is unavailable during Combat Lockdown."
     elseif self.externalConflict or not targetSafe then
-        deleteReason = "The native macro changed; refresh before deleting it."
+        deleteReason = "This macro changed outside MacroStudio. Revert before deleting it."
     end
 
     if self.state and self.state.dirty ~= dirty then
@@ -659,11 +673,15 @@ function Editor:UpdateEditorState(reason)
     self.nameBox:SetEnabled(hasMacro and not offline)
     MacroStudio.Helpers:SetButtonEnabled(self.iconButton, hasMacro and not offline)
     self.editBox:SetEnabled(hasMacro)
-    MacroStudio.Helpers:SetButtonTooltip(
-        self.iconButton,
-        offline and "Saved Macro Icon" or "Change Macro Icon",
-        offline and "Offline snapshot icons are read-only." or "Choose a saved icon for this native macro."
-    )
+    if offline then
+        MacroStudio.Helpers:SetButtonTooltip(self.iconButton)
+    else
+        MacroStudio.Helpers:SetButtonTooltip(
+            self.iconButton,
+            "Change Macro Icon",
+            "Choose a saved icon for this native macro."
+        )
+    end
     if offline then
         self.dirtyText:SetText("")
     else
@@ -684,7 +702,12 @@ function Editor:UpdateEditorState(reason)
     local statusColor = NORMAL_COLOR
     self:RefreshDuplicateNotice(name, offline)
     if not hasMacro then
-        statusMessage = "No macro selected."
+        if self.notice then
+            statusMessage = self.notice.message
+            statusColor = self.notice.color
+        else
+            statusMessage = "No macro selected."
+        end
     elseif offline then
         if self.notice then
             statusMessage = self.notice.message
@@ -693,7 +716,7 @@ function Editor:UpdateEditorState(reason)
             statusMessage = "Read-only snapshot. Select text or use Copy above."
         end
     elseif self.externalConflict or not targetSafe then
-        statusMessage = "The native macro changed outside MacroStudio. Revert or refresh before modifying it."
+        statusMessage = "This macro changed outside MacroStudio. Revert to load the latest version."
         statusColor = ERROR_COLOR
     elseif not validContent then
         statusMessage = validationMessage

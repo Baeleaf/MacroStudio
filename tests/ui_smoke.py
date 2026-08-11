@@ -452,8 +452,15 @@ def run_ui_smoke(root):
         assert(ms.Editor.editBox:IsEnabled() and ms.Editor.scopeText:GetText():find("Read%-only snapshot")
                 and not ms.Editor.favoriteButton:IsShown() and not ms.Editor.categoryButton:IsShown(),
             "offline bodies should stay selectable while organization controls remain unavailable")
-        assert(not ms.Editor.nameBox:IsEnabled() and not ms.Editor.iconButton:IsEnabled(),
-            "offline snapshot names and icons should be visibly read-only")
+        assert(not ms.Editor.nameBox:IsShown()
+                and ms.Editor.offlineNameText:IsShown()
+                and ms.Editor.offlineNameText:GetText() == offlineSnapshot.name,
+            "offline snapshot names should render as plain header text instead of an EditBox")
+        assert(not ms.Editor.iconButton:IsShown()
+                and ms.Editor.offlineIcon:IsShown()
+                and ms.Editor.offlineIcon.texture == offlineSnapshot.icon
+                and rawget(ms.Editor.iconButton, "macroStudioTooltipTitle") == nil,
+            "offline snapshot icons should be display-only without hover or picker affordances")
         local offlineName, offlineIcon = ms.Editor:GetName(), ms.Editor:GetIcon()
         ms.Editor.nameBox:SetUserText("Blocked Rename")
         ms.Editor:ChooseIcon()
@@ -600,7 +607,9 @@ def run_ui_smoke(root):
         ms:SetFilter("all")
         ms:SelectMacro(ms.MacroRepository:GetAll()[1])
 
-        assert(ms.Editor.nameBox:IsEnabled() and ms.Editor.iconButton:IsEnabled()
+        assert(ms.Editor.nameBox:IsShown() and ms.Editor.nameBox:IsEnabled()
+                and ms.Editor.iconButton:IsShown() and ms.Editor.iconButton:IsEnabled()
+                and not ms.Editor.offlineNameText:IsShown() and not ms.Editor.offlineIcon:IsShown()
                 and ms.Editor:GetName() == "Account" and ms.Editor:GetIcon() == 101,
             "live native macros should expose editable name and icon controls")
         ms.Editor.nameBox:SetUserText('Bad"Name')
@@ -754,28 +763,69 @@ def run_ui_smoke(root):
             "leaving combat must not retry an identity save")
         ms:RevertSelectedMacro()
 
-        ms.Editor.nameBox:SetUserText("Conflict Draft")
-        baseAccountMacro.body = "/say external native change"
+        ms:SelectMacro(ms.MacroRepository:FindByIndex(4))
+        ms.Editor.nameBox:SetUserText("Draft Character")
+        ms.Editor:SetDraftIcon(135000)
+        ms.Editor.editBox:SetUserText("/say dirty body")
+        baseCharacterMacro.name = "External Char"
+        baseCharacterMacro.icon = 134400
+        baseCharacterMacro.selectedIcon = 134400
+        baseCharacterMacro.body = "/say external native change"
         ms:RefreshMacros("external identity test")
-        assert(ms.Editor.externalConflict and ms.Editor:GetName() == "Conflict Draft",
-            "external UPDATE_MACROS should preserve the draft and mark an exact-target conflict")
+        assert(ms.Editor.externalConflict
+                and ms.Editor:GetName() == "Draft Character"
+                and ms.Editor:GetIcon() == 135000
+                and ms.Editor:GetBody() == "/say dirty body"
+                and ms.Editor.stateText:GetText()
+                    == "This macro changed outside MacroStudio. Revert to load the latest version.",
+            "external UPDATE_MACROS should preserve the full draft and show an actionable conflict")
         editsBeforeBlockedSave = editCalls
         ms:SaveSelectedMacro()
         assert(editCalls == editsBeforeBlockedSave,
             "external conflicts must stop before EditMacro")
         ms:RevertSelectedMacro()
-        assert(ms.Editor:GetName() == "Account"
+        assert(ms.selectedMacro and ms.selectedMacro.index == 4
+                and ms.Editor:GetName() == "External Char"
+                and ms.Editor:GetIcon() == 134400
                 and ms.Editor:GetBody() == "/say external native change"
-                and not ms.Editor:IsDirty(),
-            "Revert should safely resolve and load a unique one-field external change")
-        ms.Editor.editBox:SetUserText("/cast [@mouseover] Heal")
+                and not ms.Editor:IsDirty() and not ms.Editor.externalConflict
+                and ms.Editor.state.canDelete and not ms.Editor.state.canSave,
+            "Revert should load the latest name, icon, and body and restore normal eligibility")
+        ms.Editor.nameBox:SetUserText("Character")
+        ms.Editor:SetDraftIcon(102)
+        ms.Editor.editBox:SetUserText("/say character")
         ms:SaveSelectedMacro()
-        assert(baseAccountMacro.body == "/cast [@mouseover] Heal" and not ms.Editor:IsDirty(),
-            "external-conflict test cleanup should restore the native body")
+        assert(baseCharacterMacro.name == "Character"
+                and baseCharacterMacro.selectedIcon == 102
+                and baseCharacterMacro.body == "/say character"
+                and not ms.Editor:IsDirty(),
+            "external-conflict test cleanup should restore the Character macro")
+
+        createdAccountMacro = {
+            name = "Delete Target", icon = 105, selectedIcon = 105, body = "/say delete me",
+        }
+        ms:RefreshMacros("external deletion fixture")
+        ms:SelectMacro(ms.MacroRepository:FindByIndex(2))
+        ms.Editor.nameBox:SetUserText("Delete Draft")
+        ms.Editor:SetDraftIcon(135000)
+        ms.Editor.editBox:SetUserText("/say preserve until revert")
+        createdAccountMacro = nil
+        ms:RefreshMacros("external deletion test")
+        assert(ms.Editor.externalConflict and ms.selectedMacro.index == 2,
+            "external deletion should preserve the dirty draft until the user chooses Revert")
+        local editsBeforeDeletedRevert = editCalls
+        ms:RevertSelectedMacro()
+        assert(not ms.selectedMacro and not ms.Editor.macro
+                and not ms.Editor:IsDirty()
+                and ms.Editor.stateText:GetText():find("deleted outside MacroStudio")
+                and editCalls == editsBeforeDeletedRevert,
+            "Revert after external deletion should clear selection without targeting a neighbor")
+
+        ms:SelectMacro(ms.MacroRepository:FindByIndex(1))
         identityPresentation = ms.MetadataRepository:GetPresentation(ms.selectedMacro)
         assert(identityPresentation.categoryId == identityCategory.id
                 and identityPresentation.tags[1] == "IdentityTag",
-            "metadata should remain stable through external-conflict recovery")
+            "unrelated metadata should remain stable through conflict recovery")
 
         local accountRow = ms.MacroList.visibleRows[1]
         assert(accountRow and accountRow.dragButton == "LeftButton",
