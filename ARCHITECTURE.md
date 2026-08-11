@@ -10,7 +10,7 @@ The Unreleased action-bar usage feature observes native Retail action slots and 
 
 The completed but Unreleased cross-character library keeps the current character native and live while exposing account-wide, read-only snapshots for previously seen offline characters. It can copy snapshot data into a new native Character macro; it does not provide offline native access.
 
-The Unreleased Milestone 7 editor treats a live native macro's name, saved icon, and body as one draft. Offline snapshot fields remain read-only.
+The completed but Unreleased Milestone 7 editor treats a live native macro's name, saved icon, and body as one draft. Offline snapshot fields remain read-only.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
@@ -139,7 +139,7 @@ Every Save and Delete starts from a copied snapshot. Immediately before the muta
 
 Save validates the complete draft, passes the enumerated index plus name, saved icon, and body to one `EditMacro` call, refreshes, and resolves the returned/original/unique full-field result. A returned index is evidence, not durable identity. Duplicate names remain legal, and no save path finds a target by name. Create refreshes capacity, validates all fields, calls `CreateMacro`, refreshes, and selects the returned or uniquely matching record. Delete refreshes, revalidates the exact snapshot, calls `DeleteMacro(index)`, and requires the relevant scope count to decrease by one.
 
-Name validation follows Retail's 16-letter limit, removes unsupported quotation marks, and rejects only empty results; duplicate names are not rejected. A unique one-field external change can be resolved for Revert, while ambiguous candidates preserve the conflict instead of guessing.
+Name validation follows Retail's 16-letter limit, removes unsupported quotation marks, and rejects only empty results; duplicate names are not rejected. For a dirty external conflict, Revert compares the pre-event repository baseline with the settled native list. It accepts a unique unchanged identity or a stable edited slot whose surrounding scope topology proves it did not shift; deletion or ambiguity clears selection instead of targeting a neighbor.
 
 `UPDATE_MACROS` can fire synchronously during a native mutation or before action-bar identity has settled. `UI/MainFrame.lua` coalesces those notifications and defers one repository, snapshot, metadata, and action-bar reconciliation until after the mutation completes. For Delete, the trusted metadata record is still removed first so a shifted neighbor cannot inherit it.
 
@@ -251,7 +251,7 @@ Programmatic loads suppress name/body change handling, load the saved icon draft
 
 ## Input and Favorite UI
 
-The live name field enforces the native maximum and provides inline validation. Clicking the live icon opens the shared picker in modal state; choosing an icon changes only the draft, and closing without a choice leaves it unchanged. Offline snapshot name and icon controls are disabled while the body remains selectable for copying.
+The live name field enforces the native maximum and provides inline validation. Clicking the live icon opens the shared picker in modal state; choosing an icon changes only the draft, and closing without a choice leaves it unchanged. Offline snapshots replace those controls with plain name text and a display-only icon while the body remains selectable for copying.
 
 Category and tag text input uses one custom dialog. Enter invokes the same validated submit path as the visible button, Escape cancels, and invalid input stays in the dialog with an inline error.
 

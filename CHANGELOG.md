@@ -14,6 +14,8 @@ Notable user-facing changes to MacroStudio are documented here.
 
 - Keep action-bar usage accurate after native macro creation, updates, deletion, and index changes.
 - Prevent resolved spell or item IDs from being mistaken for native macro indices when detecting action-bar usage.
+- Recover external macro conflicts through Revert without targeting a shifted or deleted neighbor.
+- Present offline character snapshots with an explicitly read-only name and icon.
 
 ## 1.1.0
 
