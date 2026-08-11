@@ -14,6 +14,20 @@ def run_ui_smoke(root):
         MAX_MACRO_NAME_LENGTH = 16
         CANCEL = "Cancel"
         SlashCmdList = {}
+        hash_SlashCmdList = {}
+        SLASH_COMMAND = { MACRO = "MACRO" }
+        SLASH_MACRO1 = "/macro"
+        SLASH_MACRO2 = "/m"
+        nativeMacroOpenCalls = 0
+        blizzardMacroOpenCalls = 0
+        function ShowMacroFrame() blizzardMacroOpenCalls = blizzardMacroOpenCalls + 1 end
+        function NativeMacroHandler()
+            nativeMacroOpenCalls = nativeMacroOpenCalls + 1
+            ShowMacroFrame()
+        end
+        SlashCmdList.MACRO = NativeMacroHandler
+        function issecurevariable() return true end
+        C_AddOns = { LoadAddOn = function() return true end }
         UISpecialFrames = {}
         StaticPopupDialogs = {}
         MacroStudioDB = nil
@@ -64,12 +78,14 @@ def run_ui_smoke(root):
         function Frame:EnableMouse(enabled) self.mouseEnabled = enabled and true or false end
         function Frame:EnableMouseWheel(enabled) self.mouseWheelEnabled = enabled and true or false end
         function Frame:RegisterForDrag(button) self.dragButton = button end
+        function Frame:RegisterForClicks(...) self.clickButtons = { ... } end
         function Frame:RegisterEvent(event)
             local registeredEvents = rawget(self, "registeredEvents") or {}
             registeredEvents[event] = true
             self.registeredEvents = registeredEvents
         end
         function Frame:StartMoving() self.moving = true end
+        function Frame:ClearAllPoints() self.clearedPoints = true end
         function Frame:StopMovingOrSizing() self.moving = false end
         function Frame:GetWidth() return rawget(self, "width") or 500 end
         function Frame:GetHeight() return rawget(self, "height") or 300 end
@@ -81,6 +97,8 @@ def run_ui_smoke(root):
         function Frame:GetPoint() return "CENTER", UIParent, "CENTER", 0, 0 end
         function Frame:GetName() return rawget(self, "name") end
         function Frame:GetFrameLevel() return rawget(self, "frameLevel") or 1 end
+        function Frame:GetEffectiveScale() return 1 end
+        function Frame:GetCenter() return rawget(self, "centerX") or 960, rawget(self, "centerY") or 540 end
         function Frame:SetMaxLetters(maximum) self.maxLetters = maximum end
         function Frame:SetText(value)
             local text = tostring(value or "")
@@ -141,6 +159,8 @@ def run_ui_smoke(root):
         end
         function Frame:HasFocus() return self.focused == true end
         function Frame:SetEnabled(enabled) self.enabled = enabled and true or false end
+        function Frame:SetChecked(checked) self.checked = checked and true or false end
+        function Frame:GetChecked() return rawget(self, "checked") == true end
         function Frame:IsEnabled() return rawget(self, "enabled") ~= false end
         function Frame:SetVerticalScroll(value) self.verticalScroll = value end
         function Frame:GetVerticalScroll() return rawget(self, "verticalScroll") or 0 end
@@ -213,6 +233,10 @@ def run_ui_smoke(root):
 
         UIParent = CreateFrame("Frame", "UIParent")
         UIParent:SetSize(1920, 1080)
+        Minimap = CreateFrame("Frame", "Minimap", UIParent)
+        Minimap:SetSize(140, 140)
+        Minimap.centerX, Minimap.centerY = 960, 540
+        function GetCursorPosition() return 1000, 580 end
         GameTooltip = CreateFrame("Frame", "GameTooltip")
         function GameTooltip:SetOwner(owner, anchor)
             self.tooltipOwner = owner
@@ -361,6 +385,8 @@ def run_ui_smoke(root):
         "Core.lua",
         "Utils/Helpers.lua",
         "Database.lua",
+        "Access.lua",
+        "MinimapButton.lua",
         "MacroRepository.lua",
         "CharacterMacroLibrary.lua",
         "ActionBarRepository.lua",
@@ -372,6 +398,7 @@ def run_ui_smoke(root):
         "UI/Editor.lua",
         "UI/MacroList.lua",
         "UI/Sidebar.lua",
+        "UI/Settings.lua",
         "UI/MainFrame.lua",
     ]
     for relative_path in toc_order:
@@ -400,10 +427,169 @@ def run_ui_smoke(root):
             },
         }
         libraryStore.order[1] = "guid:Player-1-OFFLINE"
+        local originalNativeMacroHandler = SlashCmdList.MACRO
         ms:OnPlayerLogin()
         assert(ms.initialized, "full UI should initialize")
         assert(ms.frame and not ms.frame:IsShown(), "main window should remain hidden on login")
         assert(ms.selectedMacro and ms.selectedMacro.name == "Account", "initial refresh should select a macro")
+        assert(MacroStudioDB.schemaVersion == 4
+                and MacroStudioDB.settings.useMacroStudioSlashCommands
+                and MacroStudioDB.settings.showMinimapButton
+                and MacroStudioDB.settings.minimapAngle == 225,
+            "schema 4 access settings should default on without replacing other settings")
+        assert(SLASH_MACROSTUDIO1 == "/macrostudio" and SLASH_MACROSTUDIO2 == "/ms"
+                and SlashCmdList.MACROSTUDIO and SlashCmdList.MACRO == ms.Access.takeoverHandler,
+            "/ms aliases should remain dedicated while the default native macro aliases are claimed")
+        SlashCmdList.MACROSTUDIO("")
+        assert(ms.frame:IsShown(), "/ms should open MacroStudio")
+        SlashCmdList.MACROSTUDIO("")
+        assert(not ms.frame:IsShown(), "/macrostudio should use the same dedicated toggle handler")
+        SlashCmdList.MACRO("")
+        assert(ms.frame:IsShown(), "/m should open MacroStudio by default")
+        SlashCmdList.MACRO("")
+        assert(not ms.frame:IsShown(), "/macro should use the same toggle handler")
+        assert(ms.Access:SetTakeoverEnabled(false)
+                and SlashCmdList.MACRO == originalNativeMacroHandler,
+            "disabling takeover should immediately restore the exact native handler")
+        SlashCmdList.MACRO("")
+        assert(nativeMacroOpenCalls == 1, "restored /m should invoke Blizzard's captured handler")
+        assert(ms.Access:SetTakeoverEnabled(true)
+                and SlashCmdList.MACRO == ms.Access.takeoverHandler,
+            "re-enabling takeover should safely reclaim the native aliases")
+        local nativeOpensBeforeFallback = nativeMacroOpenCalls
+        SlashCmdList.MACROSTUDIO("blizzard")
+        assert(nativeMacroOpenCalls == nativeOpensBeforeFallback + 1 and blizzardMacroOpenCalls == 2 and not ms.frame:IsShown(),
+            "/ms blizzard should use the native Macro UI without changing MacroStudio visibility")
+        local sharedSettingsOpen = ms.Access.OpenSettings
+        local sharedSettingsToggle = ms.Access.ToggleSettings
+        local sharedSettingsOpenCalls = 0
+        local sharedSettingsToggleCalls = 0
+        local lastSettingsToggleSource
+        ms.Access.OpenSettings = function(access, ...)
+            sharedSettingsOpenCalls = sharedSettingsOpenCalls + 1
+            return sharedSettingsOpen(access, ...)
+        end
+        ms.Access.ToggleSettings = function(access, source, ...)
+            sharedSettingsToggleCalls = sharedSettingsToggleCalls + 1
+            lastSettingsToggleSource = source
+            return sharedSettingsToggle(access, source, ...)
+        end
+
+        ms.frame:Show()
+        assert(ms.Settings.frame == nil, "title Settings should not require prior slash initialization")
+        assert(ms.settingsButton.clickButtons[1] == "LeftButtonUp"
+                and ms.settingsButton:GetFrameLevel() > ms.modalOverlay:GetFrameLevel(),
+            "the title Settings control should remain clickable above its modal overlay")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        local sharedSettingsFrame = ms.Settings.frame
+        assert(sharedSettingsToggleCalls == 1 and lastSettingsToggleSource == "title"
+                and sharedSettingsOpenCalls == 1 and sharedSettingsFrame:IsShown()
+                and ms.frame:IsShown() and ms:IsMainWindowModalBlocked(),
+            "title mouse-down should defer through the shared controller and open Settings")
+        assert(ms.Settings.takeoverCheckbox:IsEnabled() and ms.Settings.minimapCheckbox:IsEnabled()
+                and ms.Settings.statusText:GetWidth() == 420,
+            "Settings controls should remain interactive in the minimum-size-safe layout")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        assert(sharedSettingsToggleCalls == 2 and not sharedSettingsFrame:IsShown()
+                and ms.frame:IsShown() and not ms:IsMainWindowModalBlocked(),
+            "a second title click should close Settings while keeping MacroStudio open")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        assert(sharedSettingsToggleCalls == 3 and sharedSettingsOpenCalls == 2
+                and ms.Settings.frame == sharedSettingsFrame and sharedSettingsFrame:IsShown(),
+            "repeated title toggles should reuse the one Settings frame")
+        sharedSettingsFrame:Hide()
+        assert(not ms.Access:IsSettingsShown() and not ms:IsMainWindowModalBlocked(),
+            "manual Settings close should derive clean state from the actual frame")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        assert(sharedSettingsToggleCalls == 4 and sharedSettingsOpenCalls == 3
+                and sharedSettingsFrame:IsShown(),
+            "title Settings should reopen after a manual close")
+        sharedSettingsFrame:Hide()
+        SlashCmdList.MACROSTUDIO("settings")
+        SlashCmdList.MACROSTUDIO("settings")
+        assert(sharedSettingsOpenCalls == 5 and sharedSettingsToggleCalls == 4
+                and ms.Settings.frame == sharedSettingsFrame and sharedSettingsFrame:IsShown(),
+            "/ms settings should open or raise the existing frame without toggling it closed")
+        sharedSettingsFrame:Hide()
+        local enumerationsBeforeSlashRefresh = enumerationCalls
+        SlashCmdList.MACROSTUDIO("refresh")
+        assert(enumerationCalls > enumerationsBeforeSlashRefresh and ms.frame:IsShown(),
+            "the existing /ms refresh fallback should remain available")
+        SlashCmdList.MACROSTUDIO("debug on")
+        assert(ms.debug, "the existing debug-on command should remain available")
+        SlashCmdList.MACROSTUDIO("debug off")
+        assert(not ms.debug, "the existing debug-off command should remain available")
+        assert(ms.MinimapButton.button and ms.MinimapButton.button:IsShown(),
+            "the optional minimap launcher should be visible by default")
+        ms.MinimapButton:SetShown(false)
+        assert(not ms.MinimapButton.button:IsShown()
+                and not MacroStudioDB.settings.showMinimapButton,
+            "the minimap setting should hide the launcher immediately")
+        MacroStudio_AddonCompartmentOnClick("MacroStudio", "LeftButton")
+        assert(not ms.frame:IsShown(),
+            "the AddOn Compartment launcher should remain available while the minimap button is hidden")
+        ms.MinimapButton:SetShown(true)
+        ms.MinimapButton.button:TriggerScript("OnClick", "LeftButton")
+        assert(ms.frame:IsShown(), "left-clicking the minimap launcher should toggle MacroStudio")
+        ms.MinimapButton.button:TriggerScript("OnClick", "LeftButton")
+        assert(not ms.frame:IsShown(), "a second minimap left-click should close MacroStudio")
+        ms.MinimapButton.button:TriggerScript("OnDragStart")
+        ms.MinimapButton.button:TriggerScript("OnUpdate")
+        ms.MinimapButton.button:TriggerScript("OnDragStop")
+        assert(MacroStudioDB.settings.minimapAngle ~= 225
+                and ms.MinimapButton.button:GetScript("OnUpdate") == nil,
+            "minimap dragging should persist angle without leaving a per-frame update running")
+        ms.MinimapButton.button:TriggerScript("OnClick", "LeftButton")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(lastSettingsToggleSource == "minimap" and ms.frame:IsShown()
+                and ms.Settings.frame == sharedSettingsFrame and sharedSettingsFrame:IsShown(),
+            "first minimap right-click should open MacroStudio and the shared Settings frame")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not ms.frame:IsShown() and not sharedSettingsFrame:IsShown(),
+            "second minimap right-click should close Settings and MacroStudio")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(ms.frame:IsShown() and sharedSettingsFrame:IsShown()
+                and ms.Settings.frame == sharedSettingsFrame,
+            "third minimap right-click should reopen both without duplicating Settings")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not ms.frame:IsShown() and not sharedSettingsFrame:IsShown(),
+            "repeated minimap right-click toggles should remain stable")
+
+        sharedSettingsFrame:Show()
+        assert(sharedSettingsFrame:IsShown() and not ms.frame:IsShown(),
+            "orphan normalization fixture should start with only Settings shown")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not sharedSettingsFrame:IsShown() and not ms.frame:IsShown(),
+            "minimap right-click should close an orphaned Settings frame safely")
+
+        ms.frame:Show()
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(ms.frame:IsShown() and sharedSettingsFrame:IsShown(),
+            "with MacroStudio already open, minimap right-click should open Settings")
+        sharedSettingsFrame:Hide()
+        assert(ms.frame:IsShown() and not ms.Access:IsSettingsShown(),
+            "manual Settings close should not leave stale controller state")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(ms.frame:IsShown() and sharedSettingsFrame:IsShown()
+                and ms.Settings.frame == sharedSettingsFrame,
+            "minimap right-click should reopen Settings after manual close")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not ms.frame:IsShown() and not sharedSettingsFrame:IsShown(),
+            "closing the reopened minimap workflow should dismiss both frames")
+        local editsBeforeCombatAccess, deletesBeforeCombatAccess = editCalls, deleteCalls
+        combat = true
+        SlashCmdList.MACROSTUDIO("")
+        SlashCmdList.MACROSTUDIO("")
+        SlashCmdList.MACRO("")
+        SlashCmdList.MACRO("")
+        ms.MinimapButton.button:TriggerScript("OnClick", "LeftButton")
+        ms.MinimapButton.button:TriggerScript("OnClick", "LeftButton")
+        MacroStudio_AddonCompartmentOnClick("MacroStudio", "LeftButton")
+        MacroStudio_AddonCompartmentOnClick("MacroStudio", "LeftButton")
+        combat = false
+        assert(SlashCmdList.MACRO == ms.Access.takeoverHandler
+                and editCalls == editsBeforeCombatAccess and deleteCalls == deletesBeforeCombatAccess,
+            "all MacroStudio access launchers should remain safe in combat without native writes")
         ms.frame:Show()
         ms.frame:SetSize(ms.MIN_WIDTH, ms.MIN_HEIGHT)
         local syncsBeforeWorldEntry = ms.CharacterMacroLibrary:GetSyncCount()
@@ -1182,6 +1368,18 @@ def run_ui_smoke(root):
         ms.Dialogs.inputEditBox:SetText("")
         ms.Dialogs:SubmitInput()
         assert(ms.Dialogs.inputError:GetText() == "Visible validation", "input errors should stay visible")
+
+        ms.Access:SetTakeoverEnabled(false)
+        SLASH_COLLISION1 = "/m"
+        SlashCmdList.COLLISION = function() end
+        ms.Access.unavailableReason = nil
+        local collisionEnabled, collisionReason = ms.Access:SetTakeoverEnabled(true)
+        assert(not collisionEnabled and collisionReason:find("Another addon")
+                and SlashCmdList.MACRO == originalNativeMacroHandler,
+            "a competing /m owner should be detected without overwriting either handler")
+        SlashCmdList.MACROSTUDIO("")
+        assert(SlashCmdList.MACROSTUDIO ~= nil,
+            "a takeover collision must leave the dedicated /ms command operational")
         """,
         "@ui-smoke",
     )

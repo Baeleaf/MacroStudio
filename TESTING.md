@@ -16,6 +16,128 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 
 The Milestone 7 harness additionally covers unified name/icon/body drafts, one-call exact-index saves, duplicate-name edits, saved question-mark icon identity, action-bar reconciliation, all-field external conflict recovery, external deletion safety, and distinct live versus offline editor presentation.
 
+The Milestone 8 harness additionally covers default slash takeover, exact native-handler restoration, native fallback, preserved refresh/debug commands, settings migration, minimap visibility and radial persistence, launcher clicks, AddOn Compartment metadata, combat-safe opening, and conservative collision failure. Headless checks cannot prove real client slash load order, native frame visibility, minimap interaction, taint, or third-party ownership; test those phases live.
+
+## MS8 Settings Fix - 1.2.0-r3
+
+The headless harness verifies the installed title mouse-down hook, deferred shared-controller call, actual frame state, singleton reuse, overlay level, and minimap toggle transitions. It cannot prove how the live WoW client routes mouse-up through the draggable title-bar region, so complete these focused live checks.
+
+### Test A - Confirm build
+
+- [ ] Verify WoW reports or displays `1.2.0-r3`.
+
+### Test B - Title-bar button
+
+1. Open MacroStudio.
+2. Click **Settings** and confirm Settings opens.
+3. Click **Settings** again and confirm Settings closes while MacroStudio remains open.
+4. Repeat several times, including at minimum window size and after resizing.
+
+### Test C - Minimap right-click
+
+1. Close MacroStudio.
+2. Right-click the minimap `/M`; confirm MacroStudio and Settings open.
+3. Right-click `/M` again; confirm both close.
+4. Right-click again; confirm both reopen.
+
+### Test D - Mixed state
+
+1. Open MacroStudio with `/ms` while Settings is closed.
+2. Right-click the minimap `/M`; confirm Settings opens and MacroStudio stays open.
+3. Right-click again; confirm Settings and MacroStudio both close.
+
+### Test E - Other entry points
+
+- [ ] Confirm `/ms settings` opens or raises Settings without toggling it closed.
+- [ ] Confirm minimap left-click still toggles only MacroStudio.
+- [ ] Manually close Settings, then confirm the title button, `/ms settings`, and minimap right-click can reopen it.
+- [ ] Toggle the takeover and minimap-button settings and confirm both controls remain interactive.
+
+### Test F - Reload
+
+1. Run `/reload`.
+2. Confirm the title-bar Settings toggle once.
+3. Confirm the minimap right-click open/close sequence once.
+
+## Live Rapid Smoke Test
+
+Use this short checklist to validate v1.2.x after a new WoW live patch or hotfix. It supplements rather than replaces full milestone testing.
+
+### Phase 1 - Load and access
+
+- [ ] Confirm there are no startup Lua errors.
+- [ ] Open MacroStudio with `/ms`, `/m`, `/macro`, `/ms settings`, `/ms blizzard`, the minimap launcher, and AddOn Compartment.
+
+### Phase 2 - Core editing
+
+- [ ] Edit a macro's name, icon, and body; Save, then make another draft and Revert.
+- [ ] Create and Delete a disposable macro, then sanity-check two same-name macros target the correct native records.
+
+### Phase 3 - Action bars
+
+- [ ] Drag a macro to an action bar and confirm **On Bar** appears and updates for multiple placements.
+- [ ] Edit that macro's name and icon and confirm its action-bar identity remains correct.
+
+### Phase 4 - Cross-character
+
+- [ ] Browse and search an offline snapshot; confirm its read-only presentation and **Copy to Current Character**.
+
+### Phase 5 - Combat
+
+- [ ] Open MacroStudio in combat; confirm protected writes remain blocked with no taint or blocked-action errors.
+
+### Phase 6 - Persistence
+
+- [ ] Run `/reload`; confirm Settings, window geometry, minimap position, native macro state, and library data persist.
+
+## Milestone 8: Default Macro Window and Access Settings (Completed)
+
+### Phase 1 - Slash takeover
+
+- [x] With takeover enabled, confirm `/ms`, `/macrostudio`, `/m`, and `/macro` all toggle MacroStudio.
+- [x] Confirm unknown `/ms` arguments print concise help guidance and are not sent to chat.
+
+### Phase 2 - Blizzard fallback
+
+- [x] Run `/ms blizzard`; confirm Blizzard's native Macro UI opens and any MacroStudio draft remains intact.
+- [x] Close/reopen both windows and confirm neither window changes the other's visibility or draft by itself.
+
+### Phase 3 - Takeover setting
+
+- [x] Disable takeover; confirm `/m` and `/macro` immediately return to Blizzard while `/ms` and `/macrostudio` stay with MacroStudio.
+- [x] Re-enable takeover; confirm `/m` and `/macro` immediately return to MacroStudio without `/reload`.
+
+### Phase 4 - Settings persistence
+
+- [x] Open General settings from the title-bar button and `/ms settings`; confirm both controls remain usable at minimum window size.
+- [x] Toggle each setting, then close/reopen, `/reload`, and logout/login; confirm the selected states persist.
+
+### Phase 5 - Minimap
+
+- [x] Confirm the `/M` button is readable; left-click toggles MacroStudio and right-click toggles MacroStudio together with Settings.
+- [x] Drag it around the standard minimap, `/reload`, and confirm the radial position persists.
+- [x] Hide and show it in Settings; confirm visibility changes immediately and the remembered position returns.
+
+### Phase 6 - AddOn Compartment
+
+- [x] Confirm MacroStudio appears with its `/M` icon and clicking it toggles MacroStudio.
+- [x] Hide the traditional minimap button and confirm AddOn Compartment access remains available.
+
+### Phase 7 - Blizzard coexistence
+
+- [x] Make a dirty name/icon/body draft, run `/ms blizzard`, and edit the same native macro externally.
+- [x] Confirm the existing conflict notice and Revert/deletion safety still recover without saving, discarding, or targeting a neighbor.
+
+### Phase 8 - Combat
+
+- [x] During combat, open/toggle through `/m`, `/macro`, `/ms`, the minimap button, and AddOn Compartment; confirm no Lua, taint, blocked-action, or protected-action errors.
+- [x] Confirm Save, Create, Delete, Copy to Current Character, and action-bar drag retain their existing combat protections and never retry automatically.
+
+### Phase 9 - Regression
+
+- [x] Spot-check Create, name/icon/body editing, Save/Revert, Delete, search, categories, tags, Favorites, action-bar drag, and On Bar usage.
+- [x] Spot-check current/offline character views, Copy to Current Character, Forget Character, and read-only snapshots.
+
 ## Milestone 7: Edit Macro Name and Icon (Completed)
 
 ### Phase 1 - Name editing

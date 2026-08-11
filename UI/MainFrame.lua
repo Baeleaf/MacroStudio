@@ -120,6 +120,34 @@ function MacroStudio:CreateMainFrame()
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -3, -3)
 
+    local settingsButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    settingsButton:SetSize(78, 24)
+    settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -3, 0)
+    settingsButton:SetText("Settings")
+    settingsButton:RegisterForClicks("LeftButtonUp")
+    settingsButton:HookScript("OnMouseDown", function(_, button)
+        self:Debug("title settings mouse down", button or "unknown")
+        if button ~= "LeftButton" then
+            return
+        end
+        local function toggleSettings()
+            self.Access:ToggleSettings("title", false)
+        end
+        if C_Timer and type(C_Timer.After) == "function" then
+            C_Timer.After(0, toggleSettings)
+        else
+            toggleSettings()
+        end
+    end)
+    settingsButton:HookScript("OnMouseUp", function(_, button)
+        self:Debug("title settings mouse up", button or "unknown")
+    end)
+    settingsButton:SetScript("OnClick", function(_, button)
+        self:Debug("title settings OnClick", button or "unknown")
+    end)
+    self.Helpers:SetButtonTooltip(settingsButton, "Settings", "Configure MacroStudio access and launcher options.")
+    self.settingsButton = settingsButton
+
     local sidebarPanel = self.Sidebar:Create(frame)
     sidebarPanel:SetPoint("TOPLEFT", 14, -48)
     sidebarPanel:SetPoint("BOTTOMLEFT", 14, 14)
@@ -162,6 +190,7 @@ function MacroStudio:CreateMainFrame()
     modalOverlay:SetScript("OnMouseUp", function() end)
     modalOverlay:SetScript("OnMouseWheel", function() end)
     modalOverlay:Hide()
+    settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)
     self.modalOverlay = modalOverlay
     self.mainWindowModalBlocked = false
 
@@ -182,6 +211,9 @@ function MacroStudio:CreateMainFrame()
         end
         if self.IconPicker.frame then
             self.IconPicker.frame:Hide()
+        end
+        if self.Settings and self.Settings.frame then
+            self.Settings.frame:Hide()
         end
     end)
 
@@ -917,31 +949,14 @@ function MacroStudio:Toggle()
     end
 end
 
-local function handleSlashCommand(message)
-    local command = MacroStudio.Helpers:Trim(message):lower()
-    if command == "debug" then
-        MacroStudio:SetDebug(not MacroStudio.debug)
-    elseif command == "debug on" then
-        MacroStudio:SetDebug(true)
-    elseif command == "debug off" then
-        MacroStudio:SetDebug(false)
-    elseif command == "refresh" then
-        if not MacroStudio.initialized then
-            MacroStudio:Initialize()
-        end
-        MacroStudio:RefreshMacros("manual")
-        MacroStudio.frame:Show()
-    elseif command == "help" then
-        MacroStudio:Print("/macrostudio or /ms - toggle the window")
-        MacroStudio:Print("/ms refresh - force a fallback macro refresh")
-        MacroStudio:Print("/ms debug [on|off] - control debug logging")
-    elseif command == "" then
-        MacroStudio:Toggle()
+function MacroStudio:Show()
+    if not self.initialized then
+        self:Initialize()
+    end
+    if not self.frame:IsShown() then
+        self:RefreshMacros("open")
+        self.frame:Show()
     else
-        MacroStudio:Print("Unknown command. Use /ms help.")
+        self.frame:Raise()
     end
 end
-
-SLASH_MACROSTUDIO1 = "/macrostudio"
-SLASH_MACROSTUDIO2 = "/ms"
-SlashCmdList.MACROSTUDIO = handleSlashCommand

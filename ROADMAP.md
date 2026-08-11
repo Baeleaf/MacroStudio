@@ -1,6 +1,6 @@
 # MacroStudio Roadmap
 
-MacroStudio 1.0.0 is the initial public-release candidate. The roadmap records shipped capabilities and likely future directions; unchecked items are not commitments or release dates.
+The roadmap records shipped capabilities and likely future directions; unchecked items are not commitments or release dates.
 
 ## Shipped in 1.0.0
 
@@ -48,7 +48,7 @@ MacroStudio 1.0.0 is the initial public-release candidate. The roadmap records s
 - [x] Inspect native action slots and show exact saved-macro usage counts and raw slot locations.
 - [ ] Report associated keybinds only when the result is reliable.
 
-## Completed development (Unreleased): cross-character macro library
+## Shipped in 1.2.0: cross-character macro library
 
 - [x] Store complete account-wide, GUID-keyed snapshots of Character macros for characters seen by MacroStudio.
 - [x] Browse all known characters or one character with live current-character data and read-only offline snapshots.
@@ -74,7 +74,7 @@ MacroStudio 1.0.0 is the initial public-release candidate. The roadmap records s
 
 Editing assistance must never silently rewrite a working macro or claim semantic equivalence without sufficient certainty.
 
-## Completed development (Unreleased): native macro identity editing
+## Shipped in 1.2.0: native macro identity editing
 
 - [x] Edit an existing native macro's name and icon after creation through one safely revalidated `EditMacro` operation.
 - [x] Treat name, saved icon, and body as one draft with unified Save and Revert behavior.
@@ -88,7 +88,13 @@ Editing assistance must never silently rewrite a working macro or claim semantic
 - [ ] Duplicate a native macro.
 - [ ] Warn when destructive changes affect macros currently placed on action slots.
 
-## Discoverability
+## Shipped in 1.2.0: default macro window and access settings
 
-- [ ] Add a minimap or addon-compartment launcher.
-- [ ] Consider optional `/m` behavior only if it can safely coexist with Blizzard's `/macro` command.
+- [x] Route `/m` and `/macro` to MacroStudio by default while preserving `/ms` and `/macrostudio`.
+- [x] Restore the exact captured Blizzard handler immediately when takeover is disabled.
+- [x] Keep Blizzard's native Macro UI available through `/ms blizzard`.
+- [x] Provide a compact settings panel with persistent access and launcher preferences.
+- [x] Route the title-bar button, `/ms settings`, and minimap right-click through one frame-state-aware Settings controller.
+- [x] Add an optional draggable minimap launcher with remembered radial position.
+- [x] Register through the supported AddOn Compartment TOC metadata without manipulating Blizzard frames.
+- [x] Detect pre-existing slash ownership conservatively and retain `/ms` instead of entering a command conflict.
