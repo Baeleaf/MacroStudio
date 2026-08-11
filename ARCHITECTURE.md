@@ -1,18 +1,14 @@
 # MacroStudio Architecture
 
-## Scope of version 1.0.0
+## Release scope
 
 Version 1.0.0 is the initial public release. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, scope changes, duplication, import/export, and launchers remain unimplemented.
 
 Version 1.1.0 hands native macros to WoW's normal cursor system so players can drag saved macros onto action bars.
 
-The Unreleased action-bar usage feature observes native Retail action slots and reports where exact saved macros are present. It does not manage bars or inspect action-bar addon frames.
+Version 1.2.0 observes native Retail action slots and reports where exact saved macros are present. It adds an account-wide cross-character library while keeping the current character native and live; offline snapshots remain read-only and can be copied into a new native Character macro. The editor treats a live native macro's name, saved icon, and body as one draft.
 
-The completed but Unreleased cross-character library keeps the current character native and live while exposing account-wide, read-only snapshots for previously seen offline characters. It can copy snapshot data into a new native Character macro; it does not provide offline native access.
-
-The completed but Unreleased Milestone 7 editor treats a live native macro's name, saved icon, and body as one draft. Offline snapshot fields remain read-only.
-
-The completed but Unreleased Milestone 8 makes MacroStudio the default `/m` and `/macro` destination, with immediate opt-out, a native-window fallback, compact settings, and optional launcher surfaces. It does not replace or modify Blizzard's Macro UI internals.
+Version 1.2.0 also makes MacroStudio the default `/m` and `/macro` destination, with immediate opt-out, a native-window fallback, compact persistent settings, and optional minimap and AddOn Compartment launchers. It does not replace or modify Blizzard's Macro UI internals, manage action bars, inspect action-bar addon frames, or provide offline native macro access.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
@@ -31,6 +27,8 @@ The current AddOn Compartment implementation enumerates enabled addons at `PLAYE
 ### Access and settings model
 
 `Access.lua` owns every slash entry and the AddOn Compartment callbacks. `/ms` and `/macrostudio` always remain registered to MacroStudio. The persisted takeover flag selects either the stable MacroStudio callback or the exact captured Blizzard callback for the native logical command key. `/ms blizzard`, `/ms settings`, `/ms refresh`, debug controls, help, and the empty toggle command are dispatched without passing unknown text into chat.
+
+The same `Access.lua` controller owns Settings visibility. `/ms settings` opens or raises the singleton Settings frame, the title-bar control toggles that frame while leaving the main window open, and minimap right-click toggles Settings together with the main window. Every decision derives from the frames' actual shown state rather than a parallel visibility flag.
 
 `MinimapButton.lua` creates one native, draggable button using `Media/MacroStudioIcon.tga`. Drag updates exist only between `OnDragStart` and `OnDragStop`; the saved angle is converted to a fixed radial point on the standard Blizzard minimap. No library, permanent `OnUpdate`, protected write, or custom-minimap compatibility claim is involved. `UI/Settings.lua` provides the two General checkboxes and applies both settings immediately.
 
@@ -69,7 +67,7 @@ Core.lua
     `-- UI/Editor.lua
 ```
 
-- `Access.lua` owns dedicated slash commands, conservative native-handler capture/restore, native fallback access, and supported AddOn Compartment callbacks.
+- `Access.lua` owns dedicated slash commands, conservative native-handler capture/restore, native fallback access, the shared Settings controller, and supported AddOn Compartment callbacks.
 - `MinimapButton.lua` owns the optional native minimap launcher and persisted radial placement.
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, `DeleteMacro`, or `PickupMacro`.
 - `CharacterMacroLibrary.lua` resolves conservative character identity, replaces the current character snapshot from saved live repository data, builds cross-character views, and forgets offline snapshots.
