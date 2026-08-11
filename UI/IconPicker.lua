@@ -18,26 +18,7 @@ local WINDOW_WIDTH = GRID_WIDTH + 58
 local WINDOW_HEIGHT = GRID_HEIGHT + 92
 
 local function getIconIdentity(icon)
-    if type(icon) == "number" then
-        return "file:" .. tostring(icon)
-    end
-    if type(icon) ~= "string" or icon == "" then
-        return nil
-    end
-
-    if type(GetFileIDFromPath) == "function" then
-        local ok, fileId = pcall(GetFileIDFromPath, icon)
-        if ok and type(fileId) == "number" and fileId > 0 then
-            return "file:" .. tostring(fileId)
-        end
-    end
-
-    local normalized = icon:lower():gsub("/", "\\"):gsub("%.blp$", "")
-    local basename = normalized:match("([^\\]+)$") or normalized
-    if basename == "inv_misc_questionmark" then
-        return "file:" .. tostring(MacroStudio.DEFAULT_ICON)
-    end
-    return "path:" .. normalized
+    return MacroStudio.Helpers:GetIconIdentity(icon)
 end
 
 local function appendUnique(result, seen, icon)
@@ -105,7 +86,9 @@ function IconPicker:RefreshGrid()
         local icon = icons[first + index]
         button.iconValue = icon
         button.Icon:SetTexture(icon or MacroStudio.DEFAULT_ICON)
-        button.Selected:SetShown(icon ~= nil and icon == self.selectedIcon)
+        button.Selected:SetShown(
+            icon ~= nil and getIconIdentity(icon) == getIconIdentity(self.selectedIcon)
+        )
         button:SetShown(icon ~= nil)
     end
 end
@@ -144,7 +127,7 @@ function IconPicker:CreateIconButton(parent, index)
     highlight:SetColorTexture(1, 1, 1, 0.25)
 
     button:SetScript("OnEnter", function(row)
-        MacroStudio.Helpers:ShowTooltip(row, "Choose Icon", "Use this icon for the new native macro.")
+        MacroStudio.Helpers:ShowTooltip(row, "Choose Icon", self.selectionHelp or "Use this icon for the macro.")
     end)
     button:SetScript("OnLeave", function()
         MacroStudio.Helpers:HideTooltip()
@@ -176,6 +159,15 @@ function IconPicker:Create()
     frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true)
+    frame:SetScript("OnHide", function()
+        local onClose = self.onClose
+        self.onClose = nil
+        self.onSelect = nil
+        self.selectionHelp = nil
+        if onClose then
+            onClose()
+        end
+    end)
     frame:Hide()
     self.frame = frame
 
@@ -233,16 +225,19 @@ function IconPicker:Create()
     return frame
 end
 
-function IconPicker:Open(currentIcon, callback)
+function IconPicker:Open(currentIcon, callback, options)
     local frame = self:Create()
     local icons = self:BuildIconList()
+    options = type(options) == "table" and options or {}
     self.selectedIcon = currentIcon or MacroStudio.DEFAULT_ICON
     self.onSelect = callback
+    self.onClose = options.onClose
+    self.selectionHelp = options.selectionHelp
     self.countText:SetText(string.format("%d available icons", #icons))
 
     local selectedIndex = 1
     for index, icon in ipairs(icons) do
-        if icon == self.selectedIcon then
+        if getIconIdentity(icon) == getIconIdentity(self.selectedIcon) then
             selectedIndex = index
             break
         end

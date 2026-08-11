@@ -10,9 +10,48 @@ With Python 3 and `lupa` installed, run from the addon root:
 py .\tests\preflight.py
 ```
 
-The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, resolved spell/item/plain action identities, accidental ID/index collisions, duplicate ambiguity, exact Account and Character pickup, multiple placements, removal/replacement, stale identity omission and reconciliation, dirty-draft independence, filtered cached indicators, event-driven refresh, search scan independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify API call and cache behavior; they cannot prove real-client cursor, action-slot, paging, combat, or taint behavior.
+The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, resolved spell/item/plain action identities, accidental ID/index collisions, duplicate ambiguity, exact Account and Character pickup, multiple placements, removal/replacement, stale identity omission and reconciliation, unified name/icon/body drafts, exact one-call `EditMacro` saves, returned-index changes, combat and external-conflict guards, metadata preservation, filtered cached indicators, event-driven refresh, search scan independence, icon identity deduplication, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify API call and cache behavior; they cannot prove real-client cursor, action-slot visuals, paging, combat, or taint behavior.
 
 The Milestone 6 harness additionally covers schema migration, GUID isolation, uncertain identity, same-name characters, complete snapshot replacement, zero-macro snapshots, live-current precedence, read-only mutation guards, duplicate/capacity/combat copy validation, in-memory cross-character search, and snapshot-only forgetting. Headless checks do not prove real cross-character persistence; the completed live-client phases below provide that coverage.
+
+## Milestone 7: Edit Macro Name and Icon
+
+### Phase 1 - Name editing
+
+- [ ] Rename one Account and one Character macro; Save and Revert each.
+- [ ] Rename to an existing name and confirm only the selected duplicate changes.
+
+### Phase 2 - Icon editing
+
+- [ ] Save and Revert a normal icon change.
+- [ ] Repeat with the question-mark icon and a `#showtooltip` body.
+
+### Phase 3 - Combined edit
+
+- [ ] Change name, icon, and body together; Save and confirm all three persist after `/reload`.
+
+### Phase 4 - Action bars
+
+- [ ] Edit an On Bar macro name-only, icon-only, then to a duplicate name; confirm the correct usage indicator remains without Refresh.
+
+### Phase 5 - Search
+
+- [ ] Rename and change a body with search plus a Favorite/category filter active; confirm results update and the filter remains.
+
+### Phase 6 - Conflict and stale safety
+
+- [ ] Keep a dirty name/icon/body draft, change the native macro externally, and confirm Save/Delete block while Revert loads the new native state.
+- [ ] Shift nearby indices and confirm no neighboring or same-name macro is modified.
+
+### Phase 7 - Combat
+
+- [ ] Draft name, icon, and body in combat; confirm Save is blocked and leaving combat does not save automatically.
+- [ ] Click Save manually after combat and confirm the draft persists correctly.
+
+### Phase 8 - Regression
+
+- [ ] Check Create/Delete, drag-to-action-bar, On Bar, categories/tags/Favorites, the New Macro modal, and minimum-size layout.
+- [ ] Check the cross-character library and Copy to Current Character; offline name, icon, and body must remain read-only.
 
 ## Milestone 6: Cross-Character Macro Library (Completed)
 

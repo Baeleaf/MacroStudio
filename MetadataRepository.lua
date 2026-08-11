@@ -30,12 +30,16 @@ local function copyTags(tags)
     return result
 end
 
+local function identityIcon(macro)
+    return macro and (macro.selectedIcon or macro.icon)
+end
+
 local function copySnapshot(macro)
     return {
         scope = macro.scope,
         lastKnownIndex = macro.index,
         name = macro.name,
-        icon = macro.icon,
+        icon = identityIcon(macro),
         body = macro.body,
     }
 end
@@ -247,7 +251,7 @@ function MetadataRepository:FindReconciliationCandidate(record, macros, availabl
     local exact = getCandidates(macros, available, function(macro)
         return macro.scope == snapshot.scope
             and macro.name == snapshot.name
-            and macro.icon == snapshot.icon
+            and MacroStudio.Helpers:IconsEqual(identityIcon(macro), snapshot.icon)
             and macro.body == snapshot.body
     end)
     if #exact == 1 then
@@ -259,7 +263,7 @@ function MetadataRepository:FindReconciliationCandidate(record, macros, availabl
     local nameAndIcon = getCandidates(macros, available, function(macro)
         return macro.scope == snapshot.scope
             and macro.name == snapshot.name
-            and macro.icon == snapshot.icon
+            and MacroStudio.Helpers:IconsEqual(identityIcon(macro), snapshot.icon)
     end)
     if #nameAndIcon == 1 then
         return nameAndIcon[1], "unique scope/name/icon"

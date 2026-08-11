@@ -29,6 +29,37 @@ function Helpers:TextLength(value)
     return #text
 end
 
+function Helpers:GetIconIdentity(icon)
+    if type(icon) == "number" then
+        return "file:" .. tostring(icon)
+    end
+    if type(icon) ~= "string" or icon == "" then
+        return nil
+    end
+
+    if type(GetFileIDFromPath) == "function" then
+        local ok, fileId = pcall(GetFileIDFromPath, icon)
+        if ok and type(fileId) == "number" and fileId > 0 then
+            return "file:" .. tostring(fileId)
+        end
+    end
+
+    local normalized = icon:lower():gsub("/", "\\"):gsub("%.blp$", ""):gsub("%.tga$", "")
+    local basename = normalized:match("([^\\]+)$") or normalized
+    if basename == "inv_misc_questionmark" then
+        return "file:" .. tostring(MacroStudio.DEFAULT_ICON)
+    end
+    return "path:" .. normalized
+end
+
+function Helpers:IconsEqual(first, second)
+    if first == second then
+        return true
+    end
+    local firstIdentity = self:GetIconIdentity(first)
+    return firstIdentity ~= nil and firstIdentity == self:GetIconIdentity(second)
+end
+
 function Helpers:ConfigureEditBox(editBox, options)
     if not editBox then
         return
@@ -146,6 +177,7 @@ function Helpers:CopyMacro(macro)
         index = macro.index,
         name = macro.name,
         icon = macro.icon,
+        selectedIcon = macro.selectedIcon,
         body = macro.body,
         scope = macro.scope,
         duplicateName = macro.duplicateName,

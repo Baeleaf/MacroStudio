@@ -53,13 +53,14 @@ lua.execute(
     function strlenutf8(value) return #value end
 
     accountMacros = {
-        { name = "Twin", icon = 101, body = "/say first" },
-        { name = "Twin", icon = 102, body = "/cast SecondSpell", spellID = 2002 },
+        { name = "Twin", icon = 101, selectedIcon = 101, body = "/say first" },
+        { name = "Twin", icon = 102, selectedIcon = 102, body = "/cast SecondSpell", spellID = 2002 },
     }
     characterMacros = {
-        { name = "Solo", icon = 103, body = "/use Test Item", itemID = 3004 },
+        { name = "Solo", icon = 103, selectedIcon = 103, body = "/use Test Item", itemID = 3004 },
     }
     debugMessages = {}
+    editCalls, lastEditCall, editMoveToEnd = 0, nil, false
 
     function GetNumMacros()
         return #accountMacros, #characterMacros
@@ -73,8 +74,20 @@ lua.execute(
             macro = characterMacros[index - MAX_ACCOUNT_MACROS]
         end
         if not macro then return nil end
-        return macro.name, macro.icon, macro.body
+        return macro.name, macro.displayIcon or macro.icon, macro.body
     end
+
+    C_Macro = {
+        GetSelectedMacroIcon = function(index)
+            local macro
+            if index <= MAX_ACCOUNT_MACROS then
+                macro = accountMacros[index]
+            else
+                macro = characterMacros[index - MAX_ACCOUNT_MACROS]
+            end
+            return macro and (macro.selectedIcon or macro.icon) or nil
+        end,
+    }
 
     local function GetNativeMacro(index)
         if index <= MAX_ACCOUNT_MACROS then
@@ -104,11 +117,13 @@ lua.execute(
         local target = perCharacter and characterMacros or accountMacros
         local capacity = perCharacter and MAX_CHARACTER_MACROS or MAX_ACCOUNT_MACROS
         if #target >= capacity then return nil end
-        target[#target + 1] = { name = name, icon = icon, body = body }
+        target[#target + 1] = { name = name, icon = icon, selectedIcon = icon, body = body }
         return perCharacter and (MAX_ACCOUNT_MACROS + #target) or #target
     end
 
     function EditMacro(index, name, icon, body)
+        editCalls = editCalls + 1
+        lastEditCall = { index = index, name = name, icon = icon, body = body }
         local target, offset
         if index <= MAX_ACCOUNT_MACROS then
             target, offset = accountMacros, 0
@@ -118,8 +133,14 @@ lua.execute(
         local macro = target[index - offset]
         if not macro then return nil end
         macro.name = name or macro.name
+        macro.selectedIcon = icon or macro.selectedIcon or macro.icon
         macro.icon = icon or macro.icon
         macro.body = body or macro.body
+        if editMoveToEnd then
+            table.remove(target, index - offset)
+            target[#target + 1] = macro
+            return offset + #target
+        end
         return index
     end
 
@@ -502,6 +523,110 @@ tests = load(
     spellCount = actionBars:GetUsage(secondTwin)
     assert(spellCount == 2, "usage should return after exact native identity reconciliation")
 
+    local validContent, contentReason, normalizedContent = repo:ValidateMacroContent({
+        name = 'Quoted" Name', body = "/say valid", icon = 105,
+    })
+    assert(validContent and normalizedContent.name == "Quoted Name",
+        contentReason or "native name normalization should remove quotation marks")
+
+    local updateSnapshot = ms.Helpers:CopyMacro(repo:FindByIndex(1))
+    local editsBeforeUpdate = editCalls
+    editMoveToEnd = true
+    local updated, movedMacro, updateReason = repo:Update(updateSnapshot, {
+        name = "Moved",
+        icon = 105,
+        body = "/say moved",
+    })
+    assert(updated and movedMacro and movedMacro.index == 2,
+        updateReason or "EditMacro returned-index reconciliation should follow an index shift")
+    assert(editCalls == editsBeforeUpdate + 1
+            and lastEditCall.index == 1
+            and lastEditCall.name == "Moved"
+            and lastEditCall.icon == 105
+            and lastEditCall.body == "/say moved",
+        "name, icon, and body should be submitted in one exact-index EditMacro call")
+
+    accountMacros = {
+        { name = "Twin", icon = 101, selectedIcon = 101, body = "/say first" },
+        { name = "Twin", icon = 102, selectedIcon = 102, body = "/cast SecondSpell", spellID = 2002 },
+    }
+    editMoveToEnd = false
+    macros = repo:Refresh()
+    actionBars:Refresh()
+    firstTwin = ms.Helpers:CopyMacro(macros[1])
+    secondTwin = ms.Helpers:CopyMacro(macros[2])
+
+    local staleUpdate = ms.Helpers:CopyMacro(firstTwin)
+    accountMacros[1].body = "/say external"
+    editsBeforeUpdate = editCalls
+    updated, movedMacro, updateReason = repo:Update(staleUpdate, {
+        name = "Unsafe",
+        icon = 106,
+        body = "/say overwrite",
+    })
+    assert(not updated and not movedMacro and updateReason:find("changed outside")
+            and editCalls == editsBeforeUpdate,
+        "external native changes must stop before EditMacro and preserve the draft")
+    local externallyChanged = repo:ResolveLatest(staleUpdate)
+    assert(externallyChanged and externallyChanged.body == "/say external",
+        "Revert resolution should recover a unique one-field external change")
+    accountMacros[1].body = "/say first"
+    repo:Refresh()
+
+    combat = true
+    editsBeforeUpdate = editCalls
+    updated, movedMacro, updateReason = repo:Update(ms.Helpers:CopyMacro(repo:FindByIndex(1)), {
+        name = "Combat Draft", icon = 101, body = "/say combat",
+    })
+    assert(not updated and not movedMacro and updateReason:find("Combat")
+            and editCalls == editsBeforeUpdate,
+        "combat should block identity saves without calling EditMacro")
+    combat = false
+
+    local sameNameCreated, sameNameMacro = repo:Create({
+        name = "Twin", body = "/say distinguishable", icon = 106, scope = "ACCOUNT",
+    })
+    assert(sameNameCreated and sameNameMacro and sameNameMacro.index == 3,
+        "duplicate native names should remain legal and re-select the exact created macro")
+    actionBars:Refresh()
+    local originalTwinCount = actionBars:GetUsage(repo:FindByIndex(1))
+    assert(originalTwinCount == 1,
+        "creating a same-name neighbor must not clear existing exact action-bar usage")
+    assert(repo:Delete(sameNameMacro), "same-name regression macro cleanup")
+    repo:Refresh()
+
+    local uniqueCreated, uniqueMacro = repo:Create({
+        name = "Unique", body = "/say rename me", icon = 106, scope = "ACCOUNT",
+    })
+    assert(uniqueCreated and uniqueMacro and uniqueMacro.index == 3,
+        "duplicate-rename fixture should create at the exact free Account index")
+    updated, sameNameMacro, updateReason = repo:Update(ms.Helpers:CopyMacro(uniqueMacro), {
+        name = "Twin", body = "/say rename me", icon = 106,
+    })
+    assert(updated and sameNameMacro and sameNameMacro.index == 3
+            and repo:FindByIndex(1).body == "/say first"
+            and repo:FindByIndex(2).body == "/cast SecondSpell",
+        updateReason or "renaming to a duplicate should update only the exact target")
+    assert(repo:Delete(sameNameMacro), "duplicate-name rename fixture cleanup")
+    repo:Refresh()
+
+    local characterSnapshot = ms.Helpers:CopyMacro(repo:FindByIndex(4))
+    updated, movedMacro, updateReason = repo:Update(characterSnapshot, {
+        name = "Solo Renamed", body = "/say character edit", icon = 107,
+    })
+    assert(updated and movedMacro and movedMacro.index == 4
+            and movedMacro.scope == "CHARACTER"
+            and characterMacros[1].name == "Solo Renamed"
+            and characterMacros[1].selectedIcon == 107,
+        updateReason or "Character identity edits should retain the offset native index")
+    updated, movedMacro, updateReason = repo:Update(ms.Helpers:CopyMacro(movedMacro), {
+        name = "Solo", body = "/use Test Item", icon = 103,
+    })
+    characterMacros[1].itemID = 3004
+    assert(updated and movedMacro and movedMacro.index == 4,
+        updateReason or "Character identity edit cleanup should reconcile exactly")
+    repo:Refresh()
+
     local valid, reason = repo:ValidateCreateRequest({
         name = "", body = "", icon = 134400, scope = "ACCOUNT",
     })
@@ -724,8 +849,11 @@ assert "modalOverlay:EnableMouseWheel(true)" in main_frame_source
 assert "SetMainWindowModalBlocked(true)" in macro_dialog_source
 assert "SetMainWindowModalBlocked(false)" in macro_dialog_source
 assert 'titleBar:RegisterForDrag("LeftButton")' in macro_dialog_source
-assert "getIconIdentity" in icon_picker_source and "GetFileIDFromPath" in icon_picker_source
-assert 'basename == "inv_misc_questionmark"' in icon_picker_source
+assert "getIconIdentity" in icon_picker_source and "GetIconIdentity" in helpers_source
+assert "GetFileIDFromPath" in helpers_source and 'basename == "inv_misc_questionmark"' in helpers_source
+assert "C_Macro.GetSelectedMacroIcon" in repository_source
+assert "pcall(EditMacro, current.index, draft.name, draft.icon, draft.body)" in repository_source
+assert "function Editor:GetDraft()" in editor_source and "function Editor:ChooseIcon()" in editor_source
 assert "macro.name" in search_source and "macro.body" in search_source
 assert "presentation.categoryName" in search_source and "presentation.tags" in search_source
 assert "MacroRepository" not in search_source and "SavedVariables" not in search_source

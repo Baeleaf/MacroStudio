@@ -551,9 +551,9 @@ function MacroStudio:SaveSelectedMacro()
 
     local previousMacro = self.Helpers:CopyMacro(self.selectedMacro)
     local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(previousMacro)
-    local body = self.Editor:GetBody()
+    local draft = self.Editor:GetDraft()
     self.nativeMutationInProgress = true
-    local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, body)
+    local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, draft)
     self:FinishNativeMacroMutation("save")
 
     if not saved then
@@ -574,7 +574,7 @@ function MacroStudio:SaveSelectedMacro()
     self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
     self.selectedMacro = self.Helpers:CopyMacro(updatedMacro)
     self.Editor:SetMacro(self.selectedMacro)
-    self.Editor:SetNotice("Macro saved.", false)
+    self.Editor:SetNotice("Macro name, icon, and body saved.", false)
     self:RefreshOrganizationUI()
 end
 
@@ -584,7 +584,7 @@ function MacroStudio:RevertSelectedMacro()
         return
     end
     if self:IsOfflineMacro(self.selectedMacro) then
-        self.Editor:SetNotice("Offline snapshots are already showing their saved read-only body.", true)
+        self.Editor:SetNotice("Offline snapshots already show their saved read-only name, icon, and body.", true)
         return
     end
 
@@ -599,7 +599,7 @@ function MacroStudio:RevertSelectedMacro()
 
     self.selectedMacro = self.Helpers:CopyMacro(latest)
     self.Editor:SetMacro(self.selectedMacro)
-    self.Editor:SetNotice("Editor restored from Blizzard's current macro body.", false)
+    self.Editor:SetNotice("Editor restored from Blizzard's current macro name, icon, and body.", false)
     self:RefreshOrganizationUI()
 end
 

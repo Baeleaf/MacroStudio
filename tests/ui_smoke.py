@@ -29,6 +29,9 @@ def run_ui_smoke(root):
         nativeMacroEventCallback = nil
         createdAccountMacro = nil
         createdCharacterMacro = nil
+        baseAccountMacro = { name = "Account", icon = 101, selectedIcon = 101, body = "/cast [@mouseover] Heal" }
+        baseCharacterMacro = { name = "Character", icon = 102, selectedIcon = 102, body = "/say character" }
+        lastEditCall = nil
         actionSlots = {
             [3] = { "macro", 1001, "spell", "Account", 101 },
             [15] = { "macro", 1001, "spell", "Account", 101 },
@@ -78,9 +81,22 @@ def run_ui_smoke(root):
         function Frame:GetPoint() return "CENTER", UIParent, "CENTER", 0, 0 end
         function Frame:GetName() return rawget(self, "name") end
         function Frame:GetFrameLevel() return rawget(self, "frameLevel") or 1 end
+        function Frame:SetMaxLetters(maximum) self.maxLetters = maximum end
         function Frame:SetText(value)
-            self.text = tostring(value or "")
+            local text = tostring(value or "")
+            if rawget(self, "maxLetters") and self.maxLetters > 0 then
+                text = text:sub(1, self.maxLetters)
+            end
+            self.text = text
             RunHandlers(self, "OnTextChanged", false)
+        end
+        function Frame:SetUserText(value)
+            local text = tostring(value or "")
+            if rawget(self, "maxLetters") and self.maxLetters > 0 then
+                text = text:sub(1, self.maxLetters)
+            end
+            self.text = text
+            RunHandlers(self, "OnTextChanged", true)
         end
         function Frame:SetWordWrap(enabled) self.wordWrap = enabled and true or false end
         function Frame:GetText() return rawget(self, "text") or "" end
@@ -244,20 +260,37 @@ def run_ui_smoke(root):
             return createdAccountMacro and 2 or 1, createdCharacterMacro and 2 or 1
         end
         function GetMacroInfo(index)
-            if index == 1 then return "Account", 101, "/cast [@mouseover] Heal" end
-            if index == 2 and createdAccountMacro then
-                return createdAccountMacro.name, createdAccountMacro.icon, createdAccountMacro.body
+            if index == 1 then
+                return baseAccountMacro.name, baseAccountMacro.displayIcon or baseAccountMacro.icon, baseAccountMacro.body
             end
-            if index == 4 then return "Character", 102, "/say character" end
-            if index == 5 and createdCharacterMacro then return createdCharacterMacro.name, createdCharacterMacro.icon, createdCharacterMacro.body end
+            if index == 2 and createdAccountMacro then
+                return createdAccountMacro.name, createdAccountMacro.displayIcon or createdAccountMacro.icon, createdAccountMacro.body
+            end
+            if index == 4 then
+                return baseCharacterMacro.name, baseCharacterMacro.displayIcon or baseCharacterMacro.icon, baseCharacterMacro.body
+            end
+            if index == 5 and createdCharacterMacro then
+                return createdCharacterMacro.name, createdCharacterMacro.displayIcon or createdCharacterMacro.icon, createdCharacterMacro.body
+            end
             return nil
         end
+        C_Macro = {
+            GetSelectedMacroIcon = function(index)
+                local macro = index == 1 and baseAccountMacro
+                    or index == 2 and createdAccountMacro
+                    or index == 4 and baseCharacterMacro
+                    or index == 5 and createdCharacterMacro
+                    or nil
+                return macro and (macro.selectedIcon or macro.icon) or nil
+            end,
+        }
         function GetMacroSpell(index)
             return index == 1 and 1001 or nil
         end
         function GetMacroItem() return nil end
         function GetMacroIcons(list)
             list[#list + 1] = 134400
+            list[#list + 1] = 101
             list[#list + 1] = "Interface\\Icons\\INV_Misc_QuestionMark"
             list[#list + 1] = "INV_Misc_QuestionMark"
             list[#list + 1] = 135000
@@ -269,20 +302,32 @@ def run_ui_smoke(root):
             end
             return nil
         end
-        function EditMacro(index, _, _, body)
+        function EditMacro(index, name, icon, body)
             editCalls = editCalls + 1
+            lastEditCall = { index = index, name = name, icon = icon, body = body }
+            local macro = index == 1 and baseAccountMacro
+                or index == 2 and createdAccountMacro
+                or index == 4 and baseCharacterMacro
+                or index == 5 and createdCharacterMacro
+                or nil
+            if not macro then return nil end
+            macro.name = name or macro.name
+            macro.selectedIcon = icon or macro.selectedIcon or macro.icon
+            macro.icon = icon or macro.icon
+            macro.body = body or macro.body
+            if nativeMacroEventCallback then nativeMacroEventCallback() end
             return index
         end
         function IsShiftKeyDown() return shiftDown end
         function CreateMacro(name, icon, body, perCharacter)
             if perCharacter then
                 if createdCharacterMacro then return nil end
-                createdCharacterMacro = { name = name, icon = icon, body = body }
+                createdCharacterMacro = { name = name, icon = icon, selectedIcon = icon, body = body }
                 if nativeMacroEventCallback then nativeMacroEventCallback() end
                 return 5
             end
             if createdAccountMacro then return nil end
-            createdAccountMacro = { name = name, icon = icon, body = body }
+            createdAccountMacro = { name = name, icon = icon, selectedIcon = icon, body = body }
             if nativeMacroEventCallback then nativeMacroEventCallback() end
             return 2
         end
@@ -407,6 +452,15 @@ def run_ui_smoke(root):
         assert(ms.Editor.editBox:IsEnabled() and ms.Editor.scopeText:GetText():find("Read%-only snapshot")
                 and not ms.Editor.favoriteButton:IsShown() and not ms.Editor.categoryButton:IsShown(),
             "offline bodies should stay selectable while organization controls remain unavailable")
+        assert(not ms.Editor.nameBox:IsEnabled() and not ms.Editor.iconButton:IsEnabled(),
+            "offline snapshot names and icons should be visibly read-only")
+        local offlineName, offlineIcon = ms.Editor:GetName(), ms.Editor:GetIcon()
+        ms.Editor.nameBox:SetUserText("Blocked Rename")
+        ms.Editor:ChooseIcon()
+        assert(ms.Editor:GetName() == offlineName and ms.Editor:GetIcon() == offlineIcon
+                and not ms.Editor:IsDirty()
+                and not (ms.IconPicker.frame and ms.IconPicker.frame:IsShown()),
+            "offline name/icon mutation attempts must not open a picker or create a draft")
         ms.Editor.editBox:SetText("/say mutation attempt")
         assert(ms.Editor:GetBody() == offlineSnapshot.body and not ms.Editor:IsDirty(),
             "offline text mutation attempts should restore the stored body without becoming dirty")
@@ -546,6 +600,182 @@ def run_ui_smoke(root):
         ms:SetFilter("all")
         ms:SelectMacro(ms.MacroRepository:GetAll()[1])
 
+        assert(ms.Editor.nameBox:IsEnabled() and ms.Editor.iconButton:IsEnabled()
+                and ms.Editor:GetName() == "Account" and ms.Editor:GetIcon() == 101,
+            "live native macros should expose editable name and icon controls")
+        ms.Editor.nameBox:SetUserText('Bad"Name')
+        assert(ms.Editor:GetName() == "BadName"
+                and ms.Editor.notice.message:find("Quotation")
+                and ms.Editor.state.nameDirty,
+            "name drafting should strip unsupported quotation marks with inline feedback")
+        ms.Editor.nameBox:SetUserText("12345678901234567")
+        assert(ms.Editor:GetName() == "1234567890123456"
+                and ms.Editor.state.validContent,
+            "the live name field should enforce Blizzard's 16-letter limit")
+        ms:RevertSelectedMacro()
+
+        ms.Editor.nameBox:SetUserText("Account Draft")
+        assert(ms.Editor.state.nameDirty and not ms.Editor.state.iconDirty
+                and not ms.Editor.state.bodyDirty and ms.Editor.saveButton:IsEnabled(),
+            "name-only changes should participate in unified dirty state")
+        ms:RevertSelectedMacro()
+        assert(ms.Editor:GetName() == "Account" and not ms.Editor:IsDirty(),
+            "Revert should restore a name-only draft")
+
+        local function chooseEditorIcon(icon)
+            for _, button in ipairs(ms.IconPicker.buttons) do
+                if button.iconValue == icon then
+                    button:GetScript("OnClick")(button)
+                    return
+                end
+            end
+            error("expected picker icon " .. tostring(icon))
+        end
+
+        ms.Editor.iconButton:GetScript("OnClick")(ms.Editor.iconButton)
+        assert(ms.IconPicker.frame:IsShown() and ms:IsMainWindowModalBlocked(),
+            "clicking the live icon should open the existing picker modally")
+        chooseEditorIcon(135000)
+        assert(ms.Editor:GetIcon() == 135000 and ms.Editor.state.iconDirty
+                and not ms.Editor.state.nameDirty and not ms.Editor.state.bodyDirty
+                and not ms.IconPicker.frame:IsShown() and not ms:IsMainWindowModalBlocked(),
+            "icon-only selection should update the draft and safely close modal state")
+        ms:RevertSelectedMacro()
+        assert(ms.Editor:GetIcon() == 101 and not ms.Editor:IsDirty(),
+            "Revert should restore an icon-only draft")
+
+        ms.Editor.iconButton:GetScript("OnClick")(ms.Editor.iconButton)
+        ms.IconPicker.frame:Hide()
+        assert(ms.Editor:GetIcon() == 101 and not ms.Editor:IsDirty()
+                and not ms:IsMainWindowModalBlocked(),
+            "canceling the editor icon picker should leave the form unchanged")
+
+        ms.Editor.iconButton:GetScript("OnClick")(ms.Editor.iconButton)
+        chooseEditorIcon(ms.DEFAULT_ICON)
+        assert(ms.Editor:GetIcon() == ms.DEFAULT_ICON and ms.Editor.state.iconDirty,
+            "the canonical question-mark icon should be available as an editable draft")
+        ms:RevertSelectedMacro()
+        assert(ms.Editor:GetIcon() == 101 and not ms.Editor:IsDirty(),
+            "Revert should restore the saved icon after a question-mark draft")
+
+        ms.Editor.editBox:SetUserText("/say body only")
+        assert(ms.Editor.state.bodyDirty and not ms.Editor.state.nameDirty
+                and not ms.Editor.state.iconDirty,
+            "body-only changes should remain part of the same dirty form")
+        ms:RevertSelectedMacro()
+
+        local identityCategory = ms.MetadataRepository:CreateCategory("Identity Safety")
+        assert(identityCategory and ms.MetadataRepository:SetCategory(ms.selectedMacro, identityCategory.id),
+            "identity-save metadata fixture category")
+        assert(ms.MetadataRepository:AddTag(ms.selectedMacro, "IdentityTag"),
+            "identity-save metadata fixture tag")
+        ms.MetadataRepository:ToggleFavorite(ms.selectedMacro)
+
+        ms.Editor.nameBox:SetUserText("Renamed Account")
+        ms.Editor.iconButton:GetScript("OnClick")(ms.Editor.iconButton)
+        chooseEditorIcon(135000)
+        ms.Editor.editBox:SetUserText("/say renamed searchable body")
+        assert(ms.Editor.state.nameDirty and ms.Editor.state.iconDirty
+                and ms.Editor.state.bodyDirty and ms.Editor.state.canSave,
+            "name, icon, and body should form one valid combined draft")
+
+        ms:SetFilter("favorites")
+        ms:SetSearchQuery("renamed")
+        actionSlots[3] = { "macro", 1001, "spell", "Renamed Account", 135000 }
+        actionSlots[15] = { "macro", 1001, "spell", "Renamed Account", 135000 }
+        deferTimers = true
+        nativeMacroEventCallback = function()
+            ms:OnMacrosChanged("UPDATE_MACROS")
+        end
+        local editsBeforeIdentitySave = editCalls
+        ms:SaveSelectedMacro()
+        assert(editCalls == editsBeforeIdentitySave + 1
+                and lastEditCall.index == 1
+                and lastEditCall.name == "Renamed Account"
+                and lastEditCall.icon == 135000
+                and lastEditCall.body == "/say renamed searchable body",
+            "Save should issue one exact-index EditMacro call with all three fields")
+        assert(#timerCallbacks == 1,
+            "synchronous UPDATE_MACROS and Save should debounce to one settled refresh")
+        RunDeferredTimers()
+        assert(baseAccountMacro.name == "Renamed Account"
+                and baseAccountMacro.selectedIcon == 135000
+                and baseAccountMacro.body == "/say renamed searchable body"
+                and ms.selectedMacro.name == "Renamed Account"
+                and not ms.Editor:IsDirty(),
+            "successful Save should reconcile the native result and clean the complete form")
+        local identityPresentation = ms.MetadataRepository:GetPresentation(ms.selectedMacro)
+        assert(identityPresentation.favorite
+                and identityPresentation.categoryId == identityCategory.id
+                and identityPresentation.tags[1] == "IdentityTag",
+            "Favorites, categories, and tags should remain attached through name/icon changes")
+        assert(ms.activeFilter.kind == "favorites" and ms:GetSearchQuery() == "renamed"
+                and #ms.MacroList.visibleRows == 1
+                and ms.MacroList.visibleRows[1].macro.name == "Renamed Account",
+            "saved name/body search updates should preserve the active filter and query")
+        local renamedUsage, renamedSlots = ms.ActionBarRepository:GetUsage(ms.selectedMacro)
+        assert(renamedUsage == 2 and renamedSlots[1] == 3 and renamedSlots[2] == 15,
+            "action-bar usage should reconcile after a name/icon/body save")
+
+        ms:SetSearchQuery("")
+        ms:SetFilter("all")
+        ms.Editor.nameBox:SetUserText("Account")
+        ms.Editor.iconButton:GetScript("OnClick")(ms.Editor.iconButton)
+        chooseEditorIcon(101)
+        ms.Editor.editBox:SetUserText("/cast [@mouseover] Heal")
+        actionSlots[3] = { "macro", 1001, "spell", "Account", 101 }
+        actionSlots[15] = { "macro", 1001, "spell", "Account", 101 }
+        ms:SaveSelectedMacro()
+        assert(#timerCallbacks == 1, "restore Save should retain the debounced refresh path")
+        RunDeferredTimers()
+        assert(baseAccountMacro.name == "Account" and baseAccountMacro.selectedIcon == 101
+                and baseAccountMacro.body == "/cast [@mouseover] Heal",
+            "combined identity test cleanup should restore the live native macro")
+        identityPresentation = ms.MetadataRepository:GetPresentation(ms.selectedMacro)
+        assert(identityPresentation.favorite
+                and identityPresentation.categoryId == identityCategory.id
+                and identityPresentation.tags[1] == "IdentityTag",
+            "metadata should also survive a second identity edit")
+        ms.MetadataRepository:ToggleFavorite(ms.selectedMacro)
+        nativeMacroEventCallback = nil
+        deferTimers = false
+
+        ms.Editor.nameBox:SetUserText("Combat Draft")
+        local editsBeforeBlockedSave = editCalls
+        combat = true
+        ms:UpdateCombatState()
+        ms:SaveSelectedMacro()
+        assert(editCalls == editsBeforeBlockedSave
+                and ms.Editor:GetName() == "Combat Draft" and ms.Editor:IsDirty(),
+            "combat should block Save without discarding the name/icon/body draft")
+        combat = false
+        ms:UpdateCombatState()
+        assert(editCalls == editsBeforeBlockedSave and ms.Editor:GetName() == "Combat Draft",
+            "leaving combat must not retry an identity save")
+        ms:RevertSelectedMacro()
+
+        ms.Editor.nameBox:SetUserText("Conflict Draft")
+        baseAccountMacro.body = "/say external native change"
+        ms:RefreshMacros("external identity test")
+        assert(ms.Editor.externalConflict and ms.Editor:GetName() == "Conflict Draft",
+            "external UPDATE_MACROS should preserve the draft and mark an exact-target conflict")
+        editsBeforeBlockedSave = editCalls
+        ms:SaveSelectedMacro()
+        assert(editCalls == editsBeforeBlockedSave,
+            "external conflicts must stop before EditMacro")
+        ms:RevertSelectedMacro()
+        assert(ms.Editor:GetName() == "Account"
+                and ms.Editor:GetBody() == "/say external native change"
+                and not ms.Editor:IsDirty(),
+            "Revert should safely resolve and load a unique one-field external change")
+        ms.Editor.editBox:SetUserText("/cast [@mouseover] Heal")
+        ms:SaveSelectedMacro()
+        assert(baseAccountMacro.body == "/cast [@mouseover] Heal" and not ms.Editor:IsDirty(),
+            "external-conflict test cleanup should restore the native body")
+        identityPresentation = ms.MetadataRepository:GetPresentation(ms.selectedMacro)
+        assert(identityPresentation.categoryId == identityCategory.id
+                and identityPresentation.tags[1] == "IdentityTag",
+            "metadata should remain stable through external-conflict recovery")
 
         local accountRow = ms.MacroList.visibleRows[1]
         assert(accountRow and accountRow.dragButton == "LeftButton",
@@ -860,8 +1090,9 @@ def run_ui_smoke(root):
         ms.Editor:SetEditorText(ms.Editor.savedBody)
         assert(ms.MacroDialog.createButton:IsEnabled(), "clean editor should restore valid dialog Create")
         local pickerIcons = ms.IconPicker:BuildIconList()
-        assert(#pickerIcons == 2 and pickerIcons[1] == ms.DEFAULT_ICON,
-            "icon picker should canonicalize numeric/path question-mark references to one option")
+        assert(#pickerIcons == 3 and pickerIcons[1] == ms.DEFAULT_ICON
+                and pickerIcons[2] == 101 and pickerIcons[3] == 135000,
+            "icon picker should retain native icons while canonicalizing question-mark aliases")
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
         assert(ms.IconPicker.frame:IsShown(), "icon picker should construct and open")
         ms.MacroDialog:Close()

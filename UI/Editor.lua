@@ -124,11 +124,22 @@ function Editor:Create(parent)
     end)
     self.usageButton = usageButton
 
-    local icon = panel:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(46, 46)
-    icon:SetPoint("TOPLEFT", 14, -43)
+    local iconButton = CreateFrame("Button", nil, panel)
+    iconButton:SetSize(46, 46)
+    iconButton:SetPoint("TOPLEFT", 14, -43)
+    local icon = iconButton:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints(iconButton)
     icon:SetTexture(MacroStudio.DEFAULT_ICON)
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    local iconHighlight = iconButton:CreateTexture(nil, "HIGHLIGHT")
+    iconHighlight:SetAllPoints(iconButton)
+    iconHighlight:SetColorTexture(1, 1, 1, 0.2)
+    iconButton.Icon = icon
+    iconButton:SetScript("OnClick", function()
+        self:ChooseIcon()
+    end)
+    MacroStudio.Helpers:SetButtonTooltip(iconButton, "Change Macro Icon", "Choose a saved icon for this native macro.")
+    self.iconButton = iconButton
     self.icon = icon
 
     local favoriteButton = self:CreateFavoriteButton(panel)
@@ -143,15 +154,25 @@ function Editor:Create(parent)
     end)
     self.deleteButton = deleteButton
 
-    local nameText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "No macro selected")
-    nameText:SetPoint("TOPLEFT", 72, -44)
-    nameText:SetPoint("TOPRIGHT", favoriteButton, "TOPLEFT", -10, -1)
-    nameText:SetJustifyH("LEFT")
-    nameText:SetWordWrap(false)
-    self.nameText = nameText
+    local nameBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    nameBox:SetHeight(24)
+    nameBox:SetPoint("TOPLEFT", 72, -40)
+    nameBox:SetPoint("TOPRIGHT", favoriteButton, "TOPLEFT", -10, 0)
+    nameBox:SetAutoFocus(false)
+    nameBox:SetFontObject(GameFontNormalLarge)
+    nameBox:SetMaxLetters(MacroStudio.MAX_NAME_LENGTH)
+    nameBox:SetText("No macro selected")
+    nameBox:SetScript("OnEscapePressed", function(box)
+        box:ClearFocus()
+    end)
+    nameBox:SetScript("OnEnterPressed", function(box)
+        box:ClearFocus()
+    end)
+    self.nameBox = nameBox
+    self.nameText = nameBox
 
     local scopeText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "Select a macro from the list.")
-    scopeText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -5)
+    scopeText:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", 0, -3)
     scopeText:SetPoint("RIGHT", deleteButton, "LEFT", -8, 0)
     scopeText:SetTextColor(0.6, 0.68, 0.78)
     scopeText:SetWordWrap(false)
@@ -241,7 +262,7 @@ function Editor:Create(parent)
         self:SetEditorFocusBorder(false)
     end)
     editBox:HookScript("OnTextChanged", function(_, userInput)
-        if not self.suppressTextChanged then
+        if not self.suppressTextChanged and not self.suppressDraftChanged then
             if MacroStudio:IsOfflineMacro(self.macro) and self:GetBody() ~= self.savedBody then
                 self.suppressTextChanged = true
                 editBox:SetText(self.savedBody)
@@ -256,6 +277,36 @@ function Editor:Create(parent)
             self.notice = nil
             self:UpdateEditorState(userInput and "user" or "unsuppressed")
         end
+    end)
+
+    nameBox:HookScript("OnTextChanged", function(_, userInput)
+        if self.suppressNameChanged or self.suppressDraftChanged then
+            return
+        end
+        if MacroStudio:IsOfflineMacro(self.macro) and self:GetName() ~= self.savedName then
+            self:SetEditorName(self.savedName)
+            self.notice = {
+                message = "Offline snapshots are read-only; the saved name was restored.",
+                color = ERROR_COLOR,
+            }
+            self:UpdateEditorState("read-only")
+            return
+        end
+        if userInput then
+            local name = self:GetName()
+            local withoutQuotes = name:gsub('"', "")
+            if withoutQuotes ~= name then
+                self:SetEditorName(withoutQuotes)
+                self.notice = {
+                    message = "Quotation marks are not supported in native macro names.",
+                    color = WARNING_COLOR,
+                }
+                self:UpdateEditorState("name-sanitized")
+                return
+            end
+        end
+        self.notice = nil
+        self:UpdateEditorState(userInput and "name-user" or "name-unsuppressed")
     end)
 
     local countText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormal", "0 / 255")
@@ -308,6 +359,8 @@ function Editor:Create(parent)
     tagMenu:SetPoint("TOPRIGHT", removeTagButton, "BOTTOMRIGHT", 0, -2)
     self.tagMenu = tagMenu
 
+    self.savedName = ""
+    self.savedIcon = MacroStudio.DEFAULT_ICON
     self.savedBody = ""
     self.externalConflict = false
     self:Clear()
@@ -320,22 +373,47 @@ function Editor:SetEditorText(text)
     self.editBox:SetCursorPosition(0)
     MacroStudio.Helpers:ResetNativeScrollingEditBox(self.scrollBox)
     self.suppressTextChanged = false
-    self:UpdateEditorState("programmatic")
+    if not self.suppressDraftChanged then
+        self:UpdateEditorState("programmatic")
+    end
+end
+
+function Editor:SetEditorName(text)
+    self.suppressNameChanged = true
+    text = type(text) == "string" and text or ""
+    self.nameBox:SetText(text)
+    self.nameBox:SetCursorPosition(MacroStudio.Helpers:TextLength(text))
+    self.suppressNameChanged = false
+    if not self.suppressDraftChanged then
+        self:UpdateEditorState("name-programmatic")
+    end
+end
+
+function Editor:SetDraftIcon(icon)
+    self.draftIcon = icon or MacroStudio.DEFAULT_ICON
+    self.icon:SetTexture(self.draftIcon)
+    if not self.suppressDraftChanged then
+        self.notice = nil
+        self:UpdateEditorState("icon")
+    end
 end
 
 function Editor:SetMacro(macro)
     self.macro = macro
+    self.savedName = macro and macro.name or ""
+    self.savedIcon = macro and (macro.selectedIcon or macro.icon) or MacroStudio.DEFAULT_ICON
     self.savedBody = macro and macro.body or ""
     self.externalConflict = false
     self.notice = nil
+    self.suppressDraftChanged = true
 
     local offline = MacroStudio:IsOfflineMacro(macro)
     self.nameText:ClearAllPoints()
-    self.nameText:SetPoint("TOPLEFT", 72, -44)
+    self.nameText:SetPoint("TOPLEFT", 72, -40)
     if offline then
-        self.nameText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -44)
+        self.nameText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -40)
     else
-        self.nameText:SetPoint("TOPRIGHT", self.favoriteButton, "TOPLEFT", -10, -1)
+        self.nameText:SetPoint("TOPRIGHT", self.favoriteButton, "TOPLEFT", -10, 0)
     end
 
     self.scopeText:ClearAllPoints()
@@ -344,12 +422,12 @@ function Editor:SetMacro(macro)
         self.scopeText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -66)
         self.scopeText:SetWordWrap(true)
     else
-        self.scopeText:SetPoint("TOPLEFT", self.nameText, "BOTTOMLEFT", 0, -5)
+        self.scopeText:SetPoint("TOPLEFT", self.nameText, "BOTTOMLEFT", 0, -3)
         self.scopeText:SetPoint("RIGHT", self.deleteButton, "LEFT", -8, 0)
         self.scopeText:SetWordWrap(false)
     end
 
-    self.nameText:SetText(macro and macro.name or "No macro selected")
+    self:SetEditorName(macro and macro.name or "No macro selected")
     if offline then
         self.scopeText:SetText(
             "Viewing " .. (macro.characterDisplayName or "offline character")
@@ -362,18 +440,55 @@ function Editor:SetMacro(macro)
                 or "Select a macro from the list."
         )
     end
-    self.icon:SetTexture(macro and macro.icon or MacroStudio.DEFAULT_ICON)
+    self:SetDraftIcon(self.savedIcon)
     self:HideMetadataMenus()
     self:SetEditorText(self.savedBody)
+    self.suppressDraftChanged = false
     self:RefreshMetadata()
+    self:UpdateEditorState("selection")
 end
 
 function Editor:Clear()
     self:SetMacro(nil)
 end
 
+function Editor:GetName()
+    return self.nameBox and self.nameBox:GetText() or ""
+end
+
+function Editor:GetIcon()
+    return self.draftIcon or MacroStudio.DEFAULT_ICON
+end
+
 function Editor:GetBody()
     return self.editBox and self.editBox:GetText() or ""
+end
+
+function Editor:GetDraft()
+    return {
+        name = self:GetName(),
+        icon = self:GetIcon(),
+        body = self:GetBody(),
+    }
+end
+
+function Editor:ChooseIcon()
+    if not self.macro or MacroStudio:IsOfflineMacro(self.macro) or MacroStudio:IsMainWindowModalBlocked() then
+        return
+    end
+
+    local selected = MacroStudio.Helpers:CopyMacro(self.macro)
+    MacroStudio:SetMainWindowModalBlocked(true)
+    MacroStudio.IconPicker:Open(self:GetIcon(), function(icon)
+        if self.macro and MacroStudio.MacroRepository:SnapshotsEqual(self.macro, selected) then
+            self:SetDraftIcon(icon)
+        end
+    end, {
+        selectionHelp = "Use this icon when the native macro is saved.",
+        onClose = function()
+            MacroStudio:SetMainWindowModalBlocked(false)
+        end,
+    })
 end
 
 function Editor:IsDirty()
@@ -393,6 +508,45 @@ function Editor:SetNotice(message, isError)
     self:UpdateEditorState("notice")
 end
 
+function Editor:RefreshDuplicateNotice(name, offline)
+    if not self.macro then
+        self.duplicateText:SetText("")
+        return
+    end
+    if offline then
+        if self.macro.duplicateName then
+            self.duplicateText:SetText(string.format(
+                "Duplicate macro name - %d snapshot macros are named %q.",
+                self.macro.duplicateCount or 2,
+                self.macro.name
+            ))
+        else
+            self.duplicateText:SetText("")
+        end
+        return
+    end
+
+    local normalized = MacroStudio.MacroRepository:NormalizeMacroName(name)
+    local matches = 1
+    for _, macro in ipairs(MacroStudio.MacroRepository:GetAll()) do
+        if macro.scope == self.macro.scope
+            and macro.index ~= self.macro.index
+            and macro.name:lower() == normalized:lower() then
+            matches = matches + 1
+        end
+    end
+    if normalized ~= "" and matches > 1 then
+        self.duplicateText:SetText(string.format(
+            "Duplicate name allowed - %d %s macros will share %q.",
+            matches,
+            self.macro.scope == "ACCOUNT" and "account" or "character",
+            normalized
+        ))
+    else
+        self.duplicateText:SetText("")
+    end
+end
+
 function Editor:UpdateEditorState(reason)
     if not self.editBox then
         return
@@ -400,10 +554,22 @@ function Editor:UpdateEditorState(reason)
 
     local hasMacro = self.macro ~= nil
     local offline = MacroStudio:IsOfflineMacro(self.macro)
+    local name = self:GetName()
+    local icon = self:GetIcon()
     local body = self:GetBody()
-    local dirty = hasMacro and not offline and body ~= self.savedBody or false
+    local nameDirty = hasMacro and not offline and name ~= self.savedName or false
+    local iconDirty = hasMacro
+        and not offline
+        and not MacroStudio.Helpers:IconsEqual(icon, self.savedIcon) or false
+    local bodyDirty = hasMacro and not offline and body ~= self.savedBody or false
+    local dirty = nameDirty or iconDirty or bodyDirty
     local length = MacroStudio.Helpers:TextLength(body)
     local overBy = length - MacroStudio.MAX_BODY_LENGTH
+    local validContent, validationMessage = MacroStudio.MacroRepository:ValidateMacroContent({
+        name = name,
+        icon = icon,
+        body = body,
+    })
     local targetSafe = hasMacro
         and not offline
         and MacroStudio.MacroRepository:IsSnapshotCurrent(self.macro) or false
@@ -413,6 +579,7 @@ function Editor:UpdateEditorState(reason)
         and not MacroStudio.inCombat
         and not self.externalConflict
         and targetSafe
+        and validContent
         and length <= MacroStudio.MAX_BODY_LENGTH
     local canRevert = hasMacro and not offline and dirty
     local canDelete = hasMacro
@@ -427,7 +594,7 @@ function Editor:UpdateEditorState(reason)
         canCopy, copyReason = MacroStudio.MacroRepository:ValidateCreateRequest({
             name = self.macro.name,
             body = self.macro.body,
-            icon = self.macro.icon,
+            icon = self.macro.selectedIcon or self.macro.icon,
             scope = "CHARACTER",
         })
     end
@@ -439,6 +606,8 @@ function Editor:UpdateEditorState(reason)
         saveReason = "Select a macro before saving."
     elseif not dirty then
         saveReason = "There are no unsaved changes."
+    elseif not validContent then
+        saveReason = validationMessage
     elseif MacroStudio.inCombat then
         saveReason = "Saving is unavailable during Combat Lockdown."
     elseif self.externalConflict or not targetSafe then
@@ -465,8 +634,15 @@ function Editor:UpdateEditorState(reason)
     end
 
     self.state = {
+        name = name,
+        icon = icon,
         body = body,
+        nameDirty = nameDirty,
+        iconDirty = iconDirty,
+        bodyDirty = bodyDirty,
         dirty = dirty,
+        validContent = validContent,
+        validationMessage = validationMessage,
         length = length,
         overBy = overBy,
         offline = offline,
@@ -480,7 +656,14 @@ function Editor:UpdateEditorState(reason)
         copyReason = copyReason,
     }
 
+    self.nameBox:SetEnabled(hasMacro and not offline)
+    MacroStudio.Helpers:SetButtonEnabled(self.iconButton, hasMacro and not offline)
     self.editBox:SetEnabled(hasMacro)
+    MacroStudio.Helpers:SetButtonTooltip(
+        self.iconButton,
+        offline and "Saved Macro Icon" or "Change Macro Icon",
+        offline and "Offline snapshot icons are read-only." or "Choose a saved icon for this native macro."
+    )
     if offline then
         self.dirtyText:SetText("")
     else
@@ -499,6 +682,7 @@ function Editor:UpdateEditorState(reason)
 
     local statusMessage
     local statusColor = NORMAL_COLOR
+    self:RefreshDuplicateNotice(name, offline)
     if not hasMacro then
         statusMessage = "No macro selected."
     elseif offline then
@@ -510,6 +694,9 @@ function Editor:UpdateEditorState(reason)
         end
     elseif self.externalConflict or not targetSafe then
         statusMessage = "The native macro changed outside MacroStudio. Revert or refresh before modifying it."
+        statusColor = ERROR_COLOR
+    elseif not validContent then
+        statusMessage = validationMessage
         statusColor = ERROR_COLOR
     elseif MacroStudio.inCombat then
         statusMessage = "Combat Lockdown - native macros cannot be modified until combat ends."
@@ -524,10 +711,10 @@ function Editor:UpdateEditorState(reason)
         statusMessage = string.format("Approaching the native limit: %d characters remain.", MacroStudio.MAX_BODY_LENGTH - length)
         statusColor = WARNING_COLOR
     elseif dirty then
-        statusMessage = "Unsaved editor changes."
+        statusMessage = "Unsaved macro changes."
         statusColor = WARNING_COLOR
     else
-        statusMessage = "Saved body is up to date."
+        statusMessage = "Saved macro is up to date."
     end
 
     self.stateText:ClearAllPoints()
@@ -544,9 +731,17 @@ function Editor:UpdateEditorState(reason)
     self.deleteButton:SetShown(not offline)
     self.copyButton:SetShown(offline)
     MacroStudio.Helpers:SetButtonEnabled(self.saveButton, canSave)
-    MacroStudio.Helpers:SetButtonTooltip(self.saveButton, "Save Macro", canSave and "Save this body to the native macro." or saveReason)
+    MacroStudio.Helpers:SetButtonTooltip(
+        self.saveButton,
+        "Save Macro",
+        canSave and "Save the drafted name, icon, and body to this native macro." or saveReason
+    )
     MacroStudio.Helpers:SetButtonEnabled(self.revertButton, canRevert)
-    MacroStudio.Helpers:SetButtonTooltip(self.revertButton, "Revert Editor", canRevert and "Discard editor changes and reload the native macro." or "There are no editor changes to revert.")
+    MacroStudio.Helpers:SetButtonTooltip(
+        self.revertButton,
+        "Revert Editor",
+        canRevert and "Discard drafted name, icon, and body changes." or "There are no editor changes to revert."
+    )
     MacroStudio.Helpers:SetButtonEnabled(self.deleteButton, canDelete)
     MacroStudio.Helpers:SetButtonTooltip(self.deleteButton, "Delete Native Macro", canDelete and "Permanently delete this exact Blizzard-native macro." or deleteReason)
     MacroStudio.Helpers:SetButtonEnabled(self.copyButton, canCopy)
@@ -638,17 +833,6 @@ function Editor:RefreshMetadata()
     self.favoriteButton:SetBackdropBorderColor(presentation.favorite and 1 or 0.24, presentation.favorite and 0.65 or 0.28, 0.12, 1)
     self.categoryButton:SetText(presentation.categoryName)
     self.tagsText:SetText(#presentation.tags > 0 and table.concat(presentation.tags, ", ") or "None")
-
-    if self.macro and self.macro.duplicateName then
-        self.duplicateText:SetText(string.format(
-            "Duplicate macro name - %d %s macros are named %q.",
-            self.macro.duplicateCount or 2,
-            self.macro.scope == "ACCOUNT" and "account" or "character",
-            self.macro.name
-        ))
-    else
-        self.duplicateText:SetText("")
-    end
 
     MacroStudio.Helpers:SetButtonEnabled(self.favoriteButton, hasMacro and not offline)
     MacroStudio.Helpers:SetButtonEnabled(self.categoryButton, hasMacro and not offline)

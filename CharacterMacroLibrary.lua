@@ -79,6 +79,7 @@ local function copyLiveMacro(record, macro)
         index = macro.index,
         name = macro.name,
         icon = macro.icon,
+        selectedIcon = macro.selectedIcon,
         body = macro.body,
         duplicateName = macro.duplicateName,
         duplicateCount = macro.duplicateCount,
@@ -241,7 +242,7 @@ function CharacterMacroLibrary:RefreshCurrentSnapshot(macros, syncedAt)
                 order = #snapshot + 1,
                 name = type(macro.name) == "string" and macro.name or "",
                 body = type(macro.body) == "string" and macro.body or "",
-                icon = macro.icon or MacroStudio.DEFAULT_ICON,
+                icon = macro.selectedIcon or macro.icon or MacroStudio.DEFAULT_ICON,
             }
         end
     end
