@@ -12,74 +12,74 @@ py .\tests\preflight.py
 
 The harness compiles every Lua source and exercises stubbed Retail APIs for native macro safety, resolved spell/item/plain action identities, accidental ID/index collisions, duplicate ambiguity, exact Account and Character pickup, multiple placements, removal/replacement, stale identity omission and reconciliation, dirty-draft independence, filtered cached indicators, event-driven refresh, search scan independence, unchanged organization metadata, icon identity deduplication, metadata reconciliation, native scrolling EditBoxes, focus borders, and modal safety. Headless tests verify API call and cache behavior; they cannot prove real-client cursor, action-slot, paging, combat, or taint behavior.
 
-The Milestone 6 harness additionally covers schema migration, GUID isolation, uncertain identity, same-name characters, complete snapshot replacement, zero-macro snapshots, live-current precedence, read-only mutation guards, duplicate/capacity/combat copy validation, in-memory cross-character search, and snapshot-only forgetting. These headless checks do not prove real cross-character persistence; complete the live-client phases below.
+The Milestone 6 harness additionally covers schema migration, GUID isolation, uncertain identity, same-name characters, complete snapshot replacement, zero-macro snapshots, live-current precedence, read-only mutation guards, duplicate/capacity/combat copy validation, in-memory cross-character search, and snapshot-only forgetting. Headless checks do not prove real cross-character persistence; the completed live-client phases below provide that coverage.
 
-## Milestone 6: Cross-Character Macro Library
+## Milestone 6: Cross-Character Macro Library (Completed)
 
 ### Phase 1 - Current character snapshot
 
-- [ ] Log into Character A and confirm its Character macros appear normally with a Current indicator.
-- [ ] `/reload`; confirm there is no duplication, data loss, or Lua error.
-- [ ] At minimum window size, confirm Characters helper and empty-state text remains fully readable.
+- [x] Log into Character A and confirm its Character macros appear normally with a Current indicator.
+- [x] `/reload`; confirm there is no duplication, data loss, or Lua error.
+- [x] At minimum window size, confirm Characters helper and empty-state text remains fully readable.
 
 ### Sidebar scalability
 
-- [ ] With 20+ known characters and many Categories, confirm Categories and its controls remain accessible without traversing the character list.
-- [ ] Collapse and expand Characters; confirm the plus/minus icon and individual entries update correctly without a hover tooltip.
-- [ ] While Characters is collapsed, confirm All Characters remains visible and usable.
-- [ ] Confirm the collapse state persists through close/reopen and `/reload`.
-- [ ] At minimum window size, confirm Categories, Library, and the Characters toggle remain usable.
+- [x] With 20+ known characters and many Categories, confirm Categories and its controls remain accessible without traversing the character list.
+- [x] Collapse and expand Characters; confirm the plus/minus icon and individual entries update correctly without a hover tooltip.
+- [x] While Characters is collapsed, confirm All Characters remains visible and usable.
+- [x] Confirm the collapse state persists through close/reopen and `/reload`.
+- [x] At minimum window size, confirm Categories, Library, and the Characters toggle remain usable.
 
 ### Phase 2 - Second character
 
-- [ ] Log into Character B and confirm B becomes Current.
-- [ ] Confirm Character A appears under Characters as an offline snapshot.
-- [ ] Browse A and confirm each stored name, body, and icon matches.
+- [x] Log into Character B and confirm B becomes Current.
+- [x] Confirm Character A appears under Characters as an offline snapshot.
+- [x] Browse A and confirm each stored name, body, and icon matches.
 
 ### Phase 3 - Return synchronization
 
-- [ ] On A, delete one Character macro and create another.
-- [ ] Return to B and confirm A shows the complete newer set, with no deleted or duplicate stale entry.
+- [x] On A, delete one Character macro and create another.
+- [x] Return to B and confirm A shows the complete newer set, with no deleted or duplicate stale entry.
 
 ### Phase 4 - Read-only safety
 
-- [ ] While on B, browse A and confirm its body is selectable, scrollable, and copyable.
-- [ ] Confirm editing is restored to saved text and Save, Revert, Delete, Favorite, category, and tag controls are unavailable.
-- [ ] Confirm drag-to-action-bar is unavailable and no `On Bar` state appears.
+- [x] While on B, browse A and confirm its body is selectable, scrollable, and copyable.
+- [x] Confirm editing is restored to saved text and Save, Revert, Delete, Favorite, category, and tag controls are unavailable.
+- [x] Confirm drag-to-action-bar is unavailable and no `On Bar` state appears.
 
 ### Phase 5 - Copy to Current Character
 
-- [ ] Copy one of A's snapshots to B; verify a real Character macro is created with the same name, body, and icon.
-- [ ] Confirm the new live macro is selected and A's stored snapshot is unchanged.
-- [ ] Repeat with a duplicate name, at Character capacity, and with a question-mark icon.
-- [ ] At minimum window size, confirm Copy to Current Character remains fully visible and usable.
+- [x] Copy one of A's snapshots to B; verify a real Character macro is created with the same name, body, and icon.
+- [x] Confirm the new live macro is selected and A's stored snapshot is unchanged.
+- [x] Repeat with a duplicate name, at Character capacity, and with a question-mark icon.
+- [x] At minimum window size, confirm Copy to Current Character remains fully visible and usable.
 
 ### Phase 6 - Search
 
-- [ ] In All Characters, search by macro name, complete body, character name, and realm.
-- [ ] In a specific-character view, search by macro name and body.
-- [ ] Confirm typing does not visibly rescan native macros or rewrite snapshots.
+- [x] In All Characters, search by macro name, complete body, character name, and realm.
+- [x] In a specific-character view, search by macro name and body.
+- [x] Confirm typing does not visibly rescan native macros or rewrite snapshots.
 
 ### Phase 7 - Character identity
 
-- [ ] If practical, visit same-name characters on different realms and confirm they remain separate.
-- [ ] If a tested character is renamed or transferred while retaining its GUID, confirm its one record updates instead of duplicating.
+- [x] If practical, visit same-name characters on different realms and confirm they remain separate.
+- [x] If a tested character is renamed or transferred while retaining its GUID, confirm its one record updates instead of duplicating.
 
 ### Phase 8 - Forget Character
 
-- [ ] Forget an offline test character and confirm the dialog says only MacroStudio's snapshot is removed.
-- [ ] Confirm no native Character or Account macro changes and unrelated character snapshots remain.
-- [ ] Confirm the current character cannot be forgotten.
+- [x] Forget an offline test character and confirm the dialog says only MacroStudio's snapshot is removed.
+- [x] Confirm no native Character or Account macro changes and unrelated character snapshots remain.
+- [x] Confirm the current character cannot be forgotten.
 
 ### Phase 9 - Combat
 
-- [ ] Browse and copy text from offline snapshots during combat.
-- [ ] Attempt Copy to Current Character and confirm it is blocked without Lua, taint, or protected-action errors.
-- [ ] Leave combat; confirm nothing copies automatically, then click Copy manually and verify normal creation.
+- [x] Browse and copy text from offline snapshots during combat.
+- [x] Attempt Copy to Current Character and confirm it is blocked without Lua, taint, or protected-action errors.
+- [x] Leave combat; confirm nothing copies automatically, then click Copy manually and verify normal creation.
 
 ### Phase 10 - Regression
 
-- [ ] Spot-check Account/current Character macros, search, categories, tags, Favorites, Save/Revert, Create/Delete, drag-to-action-bar, action-bar usage, and the New Macro modal.
+- [x] Spot-check Account/current Character macros, search, categories, tags, Favorites, Save/Revert, Create/Delete, drag-to-action-bar, action-bar usage, and the New Macro modal.
 
 ## Milestone 5: action-bar usage
 
@@ -100,7 +100,7 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 
 - [x] Create same-name macros with different bodies and icons.
 - [x] Place only one on a bar and verify only that exact macro is marked.
-- [ ] With Macro A already on a bar, create same-name Macro B and confirm Macro A's indicator remains correct without another action-bar trigger.
+- [x] With Macro A already on a bar, create same-name Macro B and confirm Macro A's indicator remains correct without another action-bar trigger.
 - [x] Use `/ms debug on` and capture the structural slot identity lines if either macro is unresolved or ambiguous.
 
 ### Phase 4: Live changes

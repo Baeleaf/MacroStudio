@@ -8,7 +8,7 @@ Version 1.1.0 hands native macros to WoW's normal cursor system so players can d
 
 The Unreleased action-bar usage feature observes native Retail action slots and reports where exact saved macros are present. It does not manage bars or inspect action-bar addon frames.
 
-The Unreleased cross-character library keeps the current character native and live while exposing account-wide, read-only snapshots for previously seen offline characters. It can copy snapshot data into a new native Character macro; it does not provide offline native access.
+The completed but Unreleased cross-character library keeps the current character native and live while exposing account-wide, read-only snapshots for previously seen offline characters. It can copy snapshot data into a new native Character macro; it does not provide offline native access.
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
