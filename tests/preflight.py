@@ -40,6 +40,16 @@ lua.execute(
     CANCEL = "Cancel"
     combat = false
     function InCombatLockdown() return combat end
+    playerGUID = "Player-1-ALPHA"
+    playerName = "Alpha"
+    playerRealm = "Moon Guard"
+    serverTime = 1767225600
+    function UnitGUID(unit) return unit == "player" and playerGUID or nil end
+    function UnitFullName(unit) return playerName, playerRealm end
+    function UnitName(unit) return playerName, playerRealm end
+    function GetRealmName() return playerRealm end
+    function GetNormalizedRealmName() return (playerRealm:gsub("%s+", "")) end
+    function GetServerTime() return serverTime end
     function strlenutf8(value) return #value end
 
     accountMacros = {
@@ -171,7 +181,9 @@ namespace.Print = lua.eval("function() end")
 globals_.MacroStudioDB = None
 
 load_addon_file("Utils/Helpers.lua", namespace)
+load_addon_file("Database.lua", namespace)
 load_addon_file("MacroRepository.lua", namespace)
+load_addon_file("CharacterMacroLibrary.lua", namespace)
 load_addon_file("ActionBarRepository.lua", namespace)
 load_addon_file("MetadataRepository.lua", namespace)
 load_addon_file("Search.lua", namespace)
@@ -181,15 +193,194 @@ load_addon_file("UI/MainFrame.lua", namespace)
 setup_namespace = load(
     r"""
     local _, ms = ...
-    ms.db = {
-        metadata = { records = {}, nextId = 1 },
-        categories = { byId = {}, order = {}, nextId = 1 },
-        settings = { window = {} },
+    MacroStudioDB = {
+        schemaVersion = 2,
+        settings = { window = { x = 27 }, migrationSentinel = "settings" },
+        metadata = { records = {}, nextId = 1, migrationSentinel = "metadata" },
+        categories = { byId = {}, order = {}, nextId = 1, migrationSentinel = "categories" },
+        history = { migrationSentinel = "history" },
     }
+    ms.Database:Initialize()
     """,
     "@preflight-setup",
 )
 setup_namespace("MacroStudio", namespace)
+
+library_tests = load(
+    r"""
+    local _, ms = ...
+    local library = ms.CharacterMacroLibrary
+    local repo = ms.MacroRepository
+
+    assert(MacroStudioDB.schemaVersion == 3, "schema 2 should migrate to schema 3")
+    assert(MacroStudioDB.settings.migrationSentinel == "settings"
+            and MacroStudioDB.settings.window.x == 27,
+        "migration should preserve settings")
+    assert(MacroStudioDB.metadata.migrationSentinel == "metadata"
+            and MacroStudioDB.categories.migrationSentinel == "categories"
+            and MacroStudioDB.history.migrationSentinel == "history",
+        "migration should preserve metadata, categories, and history")
+    assert(type(MacroStudioDB.characterLibrary.characters) == "table"
+            and type(MacroStudioDB.characterLibrary.order) == "table",
+        "migration should create the character library store")
+    local migratedLibrary = MacroStudioDB.characterLibrary
+    ms.Database:Initialize()
+    assert(MacroStudioDB.characterLibrary == migratedLibrary
+            and MacroStudioDB.settings.migrationSentinel == "settings",
+        "migration should be idempotent and non-destructive")
+
+    local alpha = library:Initialize()
+    assert(alpha.id == "guid:Player-1-ALPHA" and alpha.identityCertain,
+        "current character identity should use the stable player GUID")
+    local live = repo:Refresh()
+    library:RefreshCurrentSnapshot(live, 100)
+    assert(#alpha.macros == 1 and alpha.macros[1].name == "Solo",
+        "only current Character macros should be snapshotted")
+    assert(alpha.macros[1].index == nil and alpha.macros[1].scope == nil
+            and alpha.macros[1].source == nil,
+        "snapshots must not persist session-local native identity")
+
+    local mutableInput = {
+        { scope = "ACCOUNT", name = "Never Stored", body = "/say account", icon = 1, index = 1 },
+        { scope = "CHARACTER", name = "Saved Draft", body = "/say saved", icon = 2, index = 4 },
+    }
+    library:RefreshCurrentSnapshot(mutableInput, 110)
+    mutableInput[2].body = "/say unsaved editor draft"
+    assert(#alpha.macros == 1 and alpha.macros[1].body == "/say saved",
+        "snapshot refresh should copy saved native data, never retain a dirty draft reference")
+    library:RefreshCurrentSnapshot({
+        { scope = "CHARACTER", name = "Macro 1", body = "/say one", icon = 11 },
+        { scope = "CHARACTER", name = "Macro 2", body = "/say two", icon = 12 },
+    }, 115)
+    library:RefreshCurrentSnapshot({
+        { scope = "CHARACTER", name = "Macro 1", body = "/say one", icon = 11 },
+        { scope = "CHARACTER", name = "Macro 3", body = "/say three", icon = 13 },
+    }, 116)
+    assert(#alpha.macros == 2 and alpha.macros[1].name == "Macro 1"
+            and alpha.macros[2].name == "Macro 3",
+        "snapshot refresh should replace a deleted macro with a newly created macro, never append")
+    library:RefreshCurrentSnapshot({}, 120)
+    assert(#alpha.macros == 0,
+        "a zero-macro refresh should fully replace and clear the current snapshot")
+    library:RefreshCurrentSnapshot(live, 130)
+
+    playerName = "Alpha Renamed"
+    library.currentCharacter = nil
+    local renamed = library:Initialize()
+    assert(renamed == alpha and renamed.name == "Alpha Renamed"
+            and #MacroStudioDB.characterLibrary.order == 1,
+        "renaming the same GUID should update one record instead of duplicating it")
+
+    playerGUID = "Player-1-BETA"
+    playerName = "Beta"
+    playerRealm = "Silvermoon"
+    library.currentCharacter = nil
+    local beta = library:Initialize()
+    library:RefreshCurrentSnapshot({
+        { scope = "CHARACTER", name = "Twin", body = "/cast Frostbolt", icon = 201, index = 4 },
+        { scope = "CHARACTER", name = "Twin", body = "/cast Fireball", icon = 202, index = 5 },
+    }, 200)
+    assert(beta.id ~= alpha.id and #beta.macros == 2,
+        "a second GUID should receive an independent snapshot")
+
+    playerGUID = "Player-1-OTHERREALM"
+    playerName = "Alpha"
+    playerRealm = "Other Realm"
+    library.currentCharacter = nil
+    local otherRealm = library:Initialize()
+    library:RefreshCurrentSnapshot({}, 210)
+    assert(otherRealm.id ~= alpha.id,
+        "same-name characters on different realms must not merge")
+
+    playerGUID = "Player-1-SAME-NAME"
+    playerName = "Alpha Renamed"
+    playerRealm = "Moon Guard"
+    library.currentCharacter = nil
+    local sameName = library:Initialize()
+    assert(sameName.id ~= alpha.id,
+        "even identical Name-Realm values with different GUIDs must not merge")
+
+    playerGUID = nil
+    playerName = "Uncertain"
+    playerRealm = "Fallback Realm"
+    library.currentCharacter = nil
+    local unknownFirst = library:Initialize()
+    library.currentCharacter = nil
+    local unknownSecond = library:Initialize()
+    assert(not unknownFirst.identityCertain and not unknownSecond.identityCertain
+            and unknownFirst.id ~= unknownSecond.id,
+        "uncertain identity must allocate separate records rather than merge by name")
+
+    playerGUID = "Player-1-ALPHA"
+    playerName = "Alpha"
+    playerRealm = "Moon Guard"
+    library.currentCharacter = nil
+    alpha = library:Initialize()
+    library:RefreshCurrentSnapshot(live, 300)
+    alpha.macros[1].body = "/say stale stored body"
+
+    local syncsBeforeSearch = library:GetSyncCount()
+    local groups = library:GetViewGroups({ kind = "characters" }, "silvermoon", live)
+    assert(library:GetSyncCount() == syncsBeforeSearch,
+        "search and filter changes must not trigger snapshot writes")
+    local betaGroup
+    for _, group in ipairs(groups) do
+        if group.character.id == beta.id then betaGroup = group end
+    end
+    assert(betaGroup and #betaGroup.macros == 2,
+        "All Characters search should match character realm metadata")
+    assert(betaGroup.macros[1].source == "SNAPSHOT"
+            and betaGroup.macros[1].characterKey == beta.id
+            and betaGroup.macros[1].duplicateName,
+        "offline results should retain source identity and duplicate-name warnings")
+
+    groups = library:GetViewGroups({ kind = "characters" }, "fireball", live)
+    assert(#groups == 1 and groups[1].character.id == beta.id
+            and #groups[1].macros == 1 and groups[1].macros[1].name == "Twin",
+        "library search should match offline macro bodies case-insensitively")
+    groups = library:GetViewGroups({ kind = "libraryCharacter", characterId = beta.id }, "twin", live)
+    assert(#groups == 1 and #groups[1].macros == 2,
+        "single-character search should preserve duplicate entries")
+
+    groups = library:GetViewGroups({ kind = "libraryCharacter", characterId = alpha.id }, "", live)
+    assert(#groups == 1 and #groups[1].macros == 1
+            and groups[1].macros[1].source == "LIVE"
+            and groups[1].macros[1].body == "/use Test Item",
+        "the current character view must prefer live native data over its stored snapshot")
+
+    local betaSnapshot = library:GetViewGroups(
+        { kind = "libraryCharacter", characterId = beta.id }, "", live
+    )[1].macros[1]
+    assert(library:FindSnapshot(betaSnapshot)
+            and library:RecordsEqual(betaSnapshot, library:FindSnapshot(betaSnapshot)),
+        "offline snapshot identity should re-resolve exactly within its character")
+    local ok, reason = library:ForgetCharacter(alpha.id)
+    assert(not ok and reason:find("current"), "the current character cannot be forgotten")
+    ok = library:ForgetCharacter(beta.id)
+    assert(ok and library:GetCharacter(beta.id) == nil
+            and library:FindSnapshot(betaSnapshot) == nil,
+        "forget should remove only the selected offline snapshot")
+    assert(library:GetCharacter(alpha.id) and library:GetCharacter(otherRealm.id)
+            and library:GetCharacter(sameName.id),
+        "forgetting one character must preserve every unrelated record")
+    local duplicateValid = repo:ValidateCreateRequest({
+        name = "Solo", body = "/say copied duplicate", icon = 103, scope = "CHARACTER",
+    })
+    assert(duplicateValid,
+        "copy validation should preserve Blizzard-legal duplicate macro names")
+    characterMacros[2] = { name = "Capacity", icon = 104, body = "/say full" }
+    repo:Refresh()
+    local capacityValid, capacityReason = repo:ValidateCreateRequest({
+        name = "BlockedCopy", body = "/say blocked", icon = 104, scope = "CHARACTER",
+    })
+    assert(not capacityValid and capacityReason:find("full"),
+        "copy validation should block a full current Character macro scope")
+    table.remove(characterMacros, 2)
+    repo:Refresh()
+    """,
+    "@character-library-tests",
+)
+library_tests("MacroStudio", namespace)
 
 tests = load(
     r"""
@@ -465,6 +656,37 @@ dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
 repository_source = (ROOT / "MacroRepository.lua").read_text(encoding="utf-8")
 action_bar_source = (ROOT / "ActionBarRepository.lua").read_text(encoding="utf-8")
 core_source = (ROOT / "Core.lua").read_text(encoding="utf-8")
+library_source = (ROOT / "CharacterMacroLibrary.lua").read_text(encoding="utf-8")
+database_source = (ROOT / "Database.lua").read_text(encoding="utf-8")
+toc_source = (ROOT / "MacroStudio.toc").read_text(encoding="utf-8")
+package_source = (ROOT / "scripts" / "package.ps1").read_text(encoding="utf-8")
+pkgmeta_source = (ROOT / ".pkgmeta").read_text(encoding="utf-8")
+ui_smoke_source = (ROOT / "tests" / "ui_smoke.py").read_text(encoding="utf-8")
+icon_line = next((line for line in toc_source.splitlines() if line.startswith("## IconTexture:")), None)
+assert icon_line == r"## IconTexture: Interface\AddOns\MacroStudio\Media\MacroStudioIcon.tga"
+icon_prefix = "Interface\\AddOns\\MacroStudio\\"
+icon_relative = icon_line.split(":", 1)[1].strip()
+assert icon_relative.startswith(icon_prefix)
+runtime_icon = ROOT / icon_relative[len(icon_prefix):].replace("\\", "/")
+assert runtime_icon.is_file()
+icon_bytes = runtime_icon.read_bytes()
+assert len(icon_bytes) == 18 + (64 * 64 * 3)
+assert icon_bytes[2] == 2 and icon_bytes[16] == 24 and icon_bytes[17] & 0x20
+assert int.from_bytes(icon_bytes[12:14], "little") == 64
+assert int.from_bytes(icon_bytes[14:16], "little") == 64
+source_logo = ROOT / "assets" / "logo-simple.png"
+source_logo_bytes = source_logo.read_bytes()
+assert source_logo_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+assert source_logo_bytes[12:16] == b"IHDR"
+source_logo_width = int.from_bytes(source_logo_bytes[16:20], "big")
+source_logo_height = int.from_bytes(source_logo_bytes[20:24], "big")
+assert source_logo_width == source_logo_height and source_logo_width >= 64
+assert "  - assets" in pkgmeta_source
+assert "  - Media" not in pkgmeta_source
+snapshot_copy_source = library_source.split("local function copySnapshotMacro", 1)[1].split("local function copyLiveMacro", 1)[0]
+snapshot_refresh_source = library_source.split("function CharacterMacroLibrary:RefreshCurrentSnapshot", 1)[1].split("function CharacterMacroLibrary:GetSyncCount", 1)[0]
+search_update_source = main_frame_source.split("function MacroStudio:SetSearchQuery", 1)[1].split("function MacroStudio:RefreshMacroList", 1)[0]
+character_toggle_rebuild_source = sidebar_source.split("self.characterToggleButton:ClearAllPoints()", 1)[1].split("yOffset = yOffset + BUTTON_HEIGHT + 3", 1)[0]
 
 assert 'SetAtlas("PetJournal-FavoritesIcon")' in macro_list_source
 assert 'atlas = "PetJournal-FavoritesIcon"' in sidebar_source and "SetAtlas(atlas)" in sidebar_source
@@ -477,7 +699,26 @@ assert "CreateNativeScrollingEditBox(editBorder, 5)" in editor_source
 assert "CreateNativeScrollingEditBox(bodyBorder, 5)" in macro_dialog_source
 assert '"OnCursorChanged"' not in helpers_source
 assert "CreateOverlayBorder(editBorder, scrollBar, 2)" in editor_source
-assert "#ms.Editor.editorFocusBorderEdges == 4" in (ROOT / "tests" / "ui_smoke.py").read_text(encoding="utf-8")
+assert 'copyButton:SetPoint("TOPRIGHT", -14, -9)' in editor_source
+assert 'copyButton:SetPoint("BOTTOMRIGHT"' not in editor_source
+assert 'self.stateText:SetPoint("BOTTOMRIGHT", self.panel, "BOTTOMRIGHT", -14, 19)' in editor_source
+assert 'empty:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -12, -yOffset)' in macro_list_source
+assert "empty:SetWordWrap(true)" in macro_list_source and "empty:GetStringHeight()" in macro_list_source
+assert 'self.emptyText:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -5, -yOffset - 4)' in sidebar_source
+category_section_index = sidebar_source.index("self.categoriesHeading:ClearAllPoints()")
+library_section_index = sidebar_source.index("self.libraryHeading:ClearAllPoints()")
+assert '"ORGANIZATION"' not in sidebar_source
+assert 'scrollFrame:SetPoint("TOPLEFT", 10, -164)' in sidebar_source
+assert category_section_index < library_section_index
+assert "characterLibraryExpanded" in sidebar_source
+assert "characterLibraryExpanded" not in library_source
+assert "DEFAULT_EXPANDED_CHARACTER_LIMIT = 5" in sidebar_source
+assert "if self.charactersExpanded then" in sidebar_source
+assert 'COLLAPSED_CHARACTER_ICON = "Interface\\\\Buttons\\\\UI-PlusButton-UP"' in sidebar_source
+assert 'EXPANDED_CHARACTER_ICON = "Interface\\\\Buttons\\\\UI-MinusButton-UP"' in sidebar_source
+assert "SetButtonTooltip" not in character_toggle_rebuild_source
+assert '"Characters  >"' not in sidebar_source and '"Characters  v"' not in sidebar_source
+assert "#ms.Editor.editorFocusBorderEdges == 4" in ui_smoke_source
 assert "modalOverlay:EnableMouse(true)" in main_frame_source
 assert "modalOverlay:EnableMouseWheel(true)" in main_frame_source
 assert "SetMainWindowModalBlocked(true)" in macro_dialog_source
@@ -506,6 +747,13 @@ assert '"resolvedIndex"' in action_bar_source and '"identity"' in action_bar_sou
 assert "GetActionInfo" not in macro_list_source and "GetActionInfo" not in editor_source
 assert "GetMacroSpell" not in macro_list_source and "GetMacroItem" not in editor_source
 assert 'SetScript("OnUpdate"' not in action_bar_source and 'SetScript("OnUpdate"' not in main_frame_source
+assert "function MacroStudio:ScheduleMacroRefresh(reason)" in main_frame_source
+assert "function MacroStudio:FinishNativeMacroMutation(reason)" in main_frame_source
+assert 'self:ScheduleMacroRefresh(reason or "event")' in main_frame_source
+assert 'self:FinishNativeMacroMutation("save")' in main_frame_source
+assert 'self:FinishNativeMacroMutation("create")' in main_frame_source
+assert 'self:FinishNativeMacroMutation("delete")' in main_frame_source
+assert "creating a distinguishable same-name macro" in ui_smoke_source
 assert 'ACTIONBAR_SLOT_CHANGED = true' in core_source
 assert 'PLAYER_ENTERING_WORLD = true' in core_source
 assert 'UPDATE_BONUS_ACTIONBAR = true' in core_source
@@ -513,5 +761,20 @@ assert 'UPDATE_VEHICLE_ACTIONBAR = true' in core_source
 assert 'UPDATE_OVERRIDE_ACTIONBAR = true' in core_source
 assert 'C_Timer.After(0, refresh)' in main_frame_source
 
+assert "CURRENT_SCHEMA_VERSION = 3" in database_source
+assert "## Interface: 120007" in toc_source
+assert "tocIconTexture" in package_source
+assert "runtimePaths.Add($iconRelativePath)" in package_source
+assert toc_source.index("CharacterMacroLibrary.lua") < toc_source.index("ActionBarRepository.lua")
+assert 'source = "SNAPSHOT"' in library_source and 'source = "LIVE"' in library_source
+assert "index" not in snapshot_copy_source and "index" not in snapshot_refresh_source
+assert "GetActionInfo" not in library_source and "GetMacroSpell" not in library_source
+assert "GetMacroItem" not in library_source and "MetadataRepository" not in library_source
+assert 'SetScript("OnUpdate"' not in library_source
+assert "RefreshCurrentSnapshot" not in search_update_source
+assert 'scope = "CHARACTER"' in main_frame_source and "CopySelectedSnapshotToCurrentCharacter" in main_frame_source
+assert "Offline character snapshots cannot be placed on action bars." in main_frame_source
+assert "does not delete any WoW macros" in dialogs_source
+assert "ActionBarRepository:GetUsage" not in snapshot_copy_source
 run_ui_smoke(ROOT)
 print("PASS MacroStudio 1.1.0 preflight")

@@ -22,7 +22,13 @@ def run_ui_smoke(root):
         shiftDown = false
         pickupCalls = {}
         editCalls = 0
+        deleteCalls = 0
         actionInfoCalls = 0
+        deferTimers = false
+        timerCallbacks = {}
+        nativeMacroEventCallback = nil
+        createdAccountMacro = nil
+        createdCharacterMacro = nil
         actionSlots = {
             [3] = { "macro", 1001, "spell", "Account", 101 },
             [15] = { "macro", 1001, "spell", "Account", 101 },
@@ -76,6 +82,7 @@ def run_ui_smoke(root):
             self.text = tostring(value or "")
             RunHandlers(self, "OnTextChanged", false)
         end
+        function Frame:SetWordWrap(enabled) self.wordWrap = enabled and true or false end
         function Frame:GetText() return rawget(self, "text") or "" end
         function Frame:GetNumLetters() return #(rawget(self, "text") or "") end
         function Frame:SetScript(event, handler) self.scripts[event] = handler end
@@ -139,6 +146,7 @@ def run_ui_smoke(root):
         function Frame:SetColorTexture(red, green, blue, alpha)
             self.color = { red, green, blue, alpha }
         end
+        function Frame:SetTexture(texture) self.texture = texture end
         function Frame:TriggerScript(event, ...) RunHandlers(self, event, ...) end
         function Frame:CreateFontString()
             return setmetatable({ scripts = {}, hooks = {}, shown = true, text = "" }, Frame)
@@ -165,8 +173,22 @@ def run_ui_smoke(root):
             return frame
         end
 
+        function RunDeferredTimers()
+            local callbacks = timerCallbacks
+            timerCallbacks = {}
+            for _, callback in ipairs(callbacks) do
+                callback()
+            end
+        end
+
         C_Timer = {
-            After = function(_, callback) callback() end,
+            After = function(_, callback)
+                if deferTimers then
+                    timerCallbacks[#timerCallbacks + 1] = callback
+                else
+                    callback()
+                end
+            end,
         }
 
         ScrollUtil = {
@@ -200,18 +222,34 @@ def run_ui_smoke(root):
             local dialog = CreateFrame("Frame")
             dialog.data = data
             dialog.key, dialog.text1, dialog.text2 = key, text1, text2
+            lastStaticPopup = dialog
             return dialog
         end
 
         function InCombatLockdown() return combat end
         function strlenutf8(value) return #value end
+        playerGUID = "Player-1-CURRENT"
+        playerName = "Current"
+        playerRealm = "Test Realm"
+        serverTime = 1767225600
+        function UnitGUID(unit) return unit == "player" and playerGUID or nil end
+        function UnitFullName() return playerName, playerRealm end
+        function UnitName() return playerName, playerRealm end
+        function GetRealmName() return playerRealm end
+        function GetNormalizedRealmName() return "TestRealm" end
+        function GetServerTime() return serverTime end
+        function date() return "Jan 01, 2026" end
         function GetNumMacros()
             enumerationCalls = enumerationCalls + 1
-            return 1, 1
+            return createdAccountMacro and 2 or 1, createdCharacterMacro and 2 or 1
         end
         function GetMacroInfo(index)
             if index == 1 then return "Account", 101, "/cast [@mouseover] Heal" end
+            if index == 2 and createdAccountMacro then
+                return createdAccountMacro.name, createdAccountMacro.icon, createdAccountMacro.body
+            end
             if index == 4 then return "Character", 102, "/say character" end
+            if index == 5 and createdCharacterMacro then return createdCharacterMacro.name, createdCharacterMacro.icon, createdCharacterMacro.body end
             return nil
         end
         function GetMacroSpell(index)
@@ -236,8 +274,27 @@ def run_ui_smoke(root):
             return index
         end
         function IsShiftKeyDown() return shiftDown end
-        function CreateMacro() return 2 end
-        function DeleteMacro() end
+        function CreateMacro(name, icon, body, perCharacter)
+            if perCharacter then
+                if createdCharacterMacro then return nil end
+                createdCharacterMacro = { name = name, icon = icon, body = body }
+                if nativeMacroEventCallback then nativeMacroEventCallback() end
+                return 5
+            end
+            if createdAccountMacro then return nil end
+            createdAccountMacro = { name = name, icon = icon, body = body }
+            if nativeMacroEventCallback then nativeMacroEventCallback() end
+            return 2
+        end
+        function DeleteMacro(index)
+            deleteCalls = deleteCalls + 1
+            if index == 2 then
+                createdAccountMacro = nil
+            elseif index == 5 then
+                createdCharacterMacro = nil
+            end
+            if nativeMacroEventCallback then nativeMacroEventCallback() end
+        end
         function PickupMacro(index)
             pickupCalls[#pickupCalls + 1] = index
         end
@@ -260,6 +317,7 @@ def run_ui_smoke(root):
         "Utils/Helpers.lua",
         "Database.lua",
         "MacroRepository.lua",
+        "CharacterMacroLibrary.lua",
         "ActionBarRepository.lua",
         "MetadataRepository.lua",
         "Search.lua",
@@ -282,11 +340,212 @@ def run_ui_smoke(root):
         r"""
         local _, ms = ...
         ms:OnAddonLoaded()
+        local libraryStore = MacroStudioDB.characterLibrary
+        libraryStore.characters["guid:Player-1-OFFLINE"] = {
+            id = "guid:Player-1-OFFLINE",
+            guid = "Player-1-OFFLINE",
+            name = "Archived",
+            realm = "Other Realm",
+            displayName = "Archived - Other Realm",
+            normalizedDisplay = "archived - other realm",
+            identityCertain = true,
+            lastSynced = serverTime - 86400,
+            macros = {
+                { order = 1, name = "ArchiveHeal", icon = 777, body = "/cast Offline Library Heal" },
+            },
+        }
+        libraryStore.order[1] = "guid:Player-1-OFFLINE"
         ms:OnPlayerLogin()
         assert(ms.initialized, "full UI should initialize")
         assert(ms.frame and not ms.frame:IsShown(), "main window should remain hidden on login")
         assert(ms.selectedMacro and ms.selectedMacro.name == "Account", "initial refresh should select a macro")
         ms.frame:Show()
+        ms.frame:SetSize(ms.MIN_WIDTH, ms.MIN_HEIGHT)
+        local syncsBeforeWorldEntry = ms.CharacterMacroLibrary:GetSyncCount()
+        local enumerationsBeforeWorldEntry = enumerationCalls
+        ms.eventFrame:TriggerScript("OnEvent", "PLAYER_ENTERING_WORLD")
+        assert(ms.CharacterMacroLibrary:GetSyncCount() == syncsBeforeWorldEntry + 1
+                and enumerationCalls > enumerationsBeforeWorldEntry,
+            "world entry should defer one live repository and current snapshot refresh")
+        local librarySyncsBeforeBrowse = ms.CharacterMacroLibrary:GetSyncCount()
+        local enumerationsBeforeBrowse = enumerationCalls
+        local scansBeforeBrowse = ms.ActionBarRepository:GetScanCount()
+        assert(#ms.Sidebar.visibleCharacterButtons == 2,
+            "sidebar should show the current and stored offline characters")
+        ms:SetFilter("characters")
+        assert(#ms.MacroList.visibleRows == 2,
+            "All Characters should group only current and offline Character macros")
+        local offlineRow
+        for _, row in ipairs(ms.MacroList.visibleRows) do
+            if row.macro.source == "SNAPSHOT" then offlineRow = row end
+        end
+        assert(offlineRow and offlineRow.macro.characterDisplayName == "Archived - Other Realm",
+            "offline rows should carry their source character identity")
+        assert(rawget(offlineRow, "dragButton") == nil and not offlineRow.usageText:IsShown()
+                and not offlineRow.favorite:IsShown(),
+            "offline rows must not be draggable or expose action-bar/Favorite state")
+        local pickupsBeforeOfflineDrag = #pickupCalls
+        offlineRow:GetScript("OnDragStart")(offlineRow)
+        assert(#pickupCalls == pickupsBeforeOfflineDrag,
+            "offline row drag attempts must never pick up a native macro")
+        offlineRow:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "ArchiveHeal"
+                and GameTooltip.tooltipBody:find("read%-only snapshot")
+                and GameTooltip.tooltipBody:find("Archived %- Other Realm")
+                and GameTooltip.tooltipBody:find("Last synced"),
+            "offline hover should clearly identify read-only ownership and snapshot age")
+        offlineRow:TriggerScript("OnLeave")
+        offlineRow:GetScript("OnClick")(offlineRow)
+        local offlineSnapshot = ms.Helpers:CopyMacro(ms.selectedMacro)
+        assert(ms.Editor.state.offline and ms.Editor.copyButton:IsShown()
+                and not ms.Editor.saveButton:IsShown() and not ms.Editor.deleteButton:IsShown(),
+            "offline selection should replace native mutation actions with Copy")
+        assert(ms.Editor.copyButton:GetText() == "Copy to Current Character",
+            "Copy action should remain complete at minimum window size")
+        assert(ms.Editor.scopeText.wordWrap,
+            "offline character identity and read-only state should use responsive wrapping")
+        assert(ms.Editor.editBox:IsEnabled() and ms.Editor.scopeText:GetText():find("Read%-only snapshot")
+                and not ms.Editor.favoriteButton:IsShown() and not ms.Editor.categoryButton:IsShown(),
+            "offline bodies should stay selectable while organization controls remain unavailable")
+        ms.Editor.editBox:SetText("/say mutation attempt")
+        assert(ms.Editor:GetBody() == offlineSnapshot.body and not ms.Editor:IsDirty(),
+            "offline text mutation attempts should restore the stored body without becoming dirty")
+        local editsBeforeOfflineActions, deletesBeforeOfflineActions = editCalls, deleteCalls
+        ms:SaveSelectedMacro()
+        ms:RequestDeleteSelectedMacro()
+        assert(editCalls == editsBeforeOfflineActions and deleteCalls == deletesBeforeOfflineActions,
+            "offline Save/Delete requests must stop before native mutation APIs")
+
+
+        ms:SetSearchQuery("other realm")
+        assert(#ms.MacroList.visibleRows == 1
+                and ms.MacroList.visibleRows[1].macro.characterKey == offlineSnapshot.characterKey,
+            "All Characters search should match character realm metadata")
+        ms:SetSearchQuery("offline library")
+        assert(#ms.MacroList.visibleRows == 1
+                and ms.MacroList.visibleRows[1].macro.name == "ArchiveHeal",
+            "All Characters search should match offline macro bodies")
+        assert(enumerationCalls == enumerationsBeforeBrowse
+                and ms.ActionBarRepository:GetScanCount() == scansBeforeBrowse
+                and ms.CharacterMacroLibrary:GetSyncCount() == librarySyncsBeforeBrowse,
+            "library browsing and search must remain in-memory and side-effect free")
+        ms:SetSearchQuery("")
+        ms:SetFilter("libraryCharacter", offlineSnapshot.characterKey)
+        ms:SelectMacro(offlineSnapshot)
+
+        combat = true
+        ms:UpdateCombatState()
+        assert(not ms.Editor.copyButton:IsEnabled() and ms.Editor.stateText:GetText():find("Read%-only"),
+            "combat should disable Copy while preserving the read-only snapshot view")
+        assert(not ms:CopySelectedSnapshotToCurrentCharacter() and createdCharacterMacro == nil,
+            "combat must block snapshot copy before native creation")
+        combat = false
+        ms:UpdateCombatState()
+        assert(createdCharacterMacro == nil,
+            "leaving combat must never retry or automatically create the blocked copy")
+        assert(ms:CopySelectedSnapshotToCurrentCharacter(),
+            "a valid offline snapshot should copy through the native Character macro path")
+        assert(createdCharacterMacro
+                and createdCharacterMacro.name == offlineSnapshot.name
+                and createdCharacterMacro.icon == offlineSnapshot.icon
+                and createdCharacterMacro.body == offlineSnapshot.body,
+            "Copy should preserve the snapshot name, icon, and body exactly")
+        assert(ms.activeFilter.kind == "character" and not ms:IsOfflineMacro(ms.selectedMacro)
+                and ms.selectedMacro.scope == "CHARACTER",
+            "successful Copy should select the new live current-character macro")
+        assert(libraryStore.characters[offlineSnapshot.characterKey].macros[1].body == offlineSnapshot.body,
+            "Copy must not mutate the source snapshot")
+
+        ms:SetFilter("libraryCharacter", offlineSnapshot.characterKey)
+        ms:PromptForgetActiveCharacter()
+        assert(lastStaticPopup and lastStaticPopup.key == "MACROSTUDIO_FORGET_CHARACTER"
+                and StaticPopupDialogs.MACROSTUDIO_FORGET_CHARACTER.text:find("does not delete any WoW macros"),
+            "Forget Character should require explicit, deletion-safe confirmation")
+        StaticPopupDialogs.MACROSTUDIO_FORGET_CHARACTER.OnAccept(lastStaticPopup, lastStaticPopup.data)
+        assert(not ms.CharacterMacroLibrary:GetCharacter(offlineSnapshot.characterKey)
+                and createdCharacterMacro and ms.MacroRepository:FindByIndex(5),
+            "Forget should remove only MacroStudio snapshot data, never native macros")
+
+        local helperText = ms.MacroList.visibleEmptyLabels[#ms.MacroList.visibleEmptyLabels]
+        assert(helperText and helperText.wordWrap
+                and helperText:GetText() == "Log into another character with MacroStudio enabled to add it to your library.",
+            "Characters helper text should remain complete and wrapped at minimum window size")
+        for index = 1, 12 do
+            assert(ms.MetadataRepository:CreateCategory("Scale Category " .. index),
+                "scale-test Categories should be created")
+        end
+        for index = 1, 20 do
+            local characterId = "guid:Player-1-SCALE-" .. index
+            libraryStore.characters[characterId] = {
+                id = characterId,
+                guid = "Player-1-SCALE-" .. index,
+                name = "Scale" .. index,
+                realm = "Large Library",
+                displayName = "Scale" .. index .. " - Large Library",
+                normalizedDisplay = ("Scale" .. index .. " - Large Library"):lower(),
+                identityCertain = true,
+                lastSynced = serverTime - index,
+                macros = {},
+            }
+            libraryStore.order[#libraryStore.order + 1] = characterId
+        end
+
+        MacroStudioDB.settings.characterLibraryExpanded = nil
+        ms.Sidebar:Rebuild(ms.activeFilter)
+        assert(ms.frame:GetWidth() == ms.MIN_WIDTH and ms.frame:GetHeight() == ms.MIN_HEIGHT,
+            "sidebar scaling should retain the supported minimum window size")
+        assert(#ms.Sidebar.visibleCategoryButtons == 12 and ms.Sidebar.newButton:IsShown(),
+            "Categories and its controls should remain accessible before a large character library")
+        assert(not ms.Sidebar.charactersExpanded
+                and #ms.Sidebar.visibleCharacterButtons == 0
+                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters"
+                and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-PlusButton-UP"
+                and rawget(ms.Sidebar.characterToggleButton, "macroStudioTooltipTitle") == nil,
+            "large libraries should default to an obvious collapsed Characters control")
+        GameTooltip.tooltipTitle = nil
+        ms.Sidebar.characterToggleButton:TriggerScript("OnEnter")
+        assert(rawget(GameTooltip, "tooltipTitle") == nil,
+            "Characters disclosure hover should not show a tooltip")
+        ms.Sidebar.characterToggleButton:TriggerScript("OnLeave")
+        assert(ms.Sidebar.allCharactersButton:IsShown(),
+            "All Characters should remain visible while individual characters are collapsed")
+        ms.Sidebar.allCharactersButton:GetScript("OnClick")(ms.Sidebar.allCharactersButton)
+        assert(ms.activeFilter.kind == "characters" and not ms.Sidebar.charactersExpanded,
+            "All Characters should remain usable without expanding individual entries")
+
+        ms.Sidebar:ToggleCharacterList()
+        assert(MacroStudioDB.settings.characterLibraryExpanded
+                and ms.Sidebar.charactersExpanded
+                and #ms.Sidebar.visibleCharacterButtons == 21
+                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters"
+                and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-MinusButton-UP"
+                and rawget(ms.Sidebar.characterToggleButton, "macroStudioTooltipTitle") == nil,
+            "Characters should use an obvious expanded control and show every character")
+        ms.Sidebar:ToggleCharacterList()
+        assert(MacroStudioDB.settings.characterLibraryExpanded == false
+                and not ms.Sidebar.charactersExpanded
+                and #ms.Sidebar.visibleCharacterButtons == 0
+                and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-PlusButton-UP"
+                and rawget(ms.Sidebar.characterToggleButton, "macroStudioTooltipTitle") == nil,
+            "Characters should collapse without changing the active filter")
+
+        ms:Toggle()
+        assert(not ms.frame:IsShown(), "window toggle should close the minimum-size frame")
+        ms:Toggle()
+        assert(ms.frame:IsShown()
+                and MacroStudioDB.settings.characterLibraryExpanded == false
+                and not ms.Sidebar.charactersExpanded,
+            "character collapse state should persist through close and reopen")
+        ms.Database:Initialize()
+        ms.Sidebar:Rebuild(ms.activeFilter)
+        assert(MacroStudioDB.settings.characterLibraryExpanded == false
+                and not ms.Sidebar.charactersExpanded
+                and ms.Sidebar.allCharactersButton:IsShown(),
+            "character collapse state should persist through SavedVariables reinitialization")
+        ms:SetSearchQuery("")
+        ms:SetFilter("all")
+        ms:SelectMacro(ms.MacroRepository:GetAll()[1])
+
 
         local accountRow = ms.MacroList.visibleRows[1]
         assert(accountRow and accountRow.dragButton == "LeftButton",
@@ -329,6 +588,51 @@ def run_ui_smoke(root):
             "Shift-editor hover should reveal raw action slot numbers")
         ms.Editor.usageButton:TriggerScript("OnLeave")
         shiftDown = false
+
+        local scansBeforeSameNameCreate = ms.ActionBarRepository:GetScanCount()
+        deferTimers = true
+        nativeMacroEventCallback = function()
+            ms:OnMacrosChanged("UPDATE_MACROS")
+        end
+        local createdSameName, sameNameMacro = ms:CreateNativeMacro({
+            name = "Account",
+            icon = 202,
+            body = "/say same-name duplicate",
+            scope = "ACCOUNT",
+        })
+        assert(createdSameName and sameNameMacro and sameNameMacro.index == 2,
+            "same-name Create should return the exact new native macro")
+        assert(#timerCallbacks == 1
+                and ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameCreate,
+            "native Create and synchronous UPDATE_MACROS should debounce to one deferred refresh")
+        RunDeferredTimers()
+        local originalAccount = ms.MacroRepository:FindByIndex(1)
+        local originalCount, originalSlots = ms.ActionBarRepository:GetUsage(originalAccount)
+        assert(ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameCreate + 1
+                and originalCount == 2
+                and originalSlots[1] == 3
+                and originalSlots[2] == 15,
+            "creating a distinguishable same-name macro must preserve existing action-bar usage")
+
+        local scansBeforeSameNameDelete = ms.ActionBarRepository:GetScanCount()
+        assert(ms:DeleteSelectedMacro(ms.Helpers:CopyMacro(sameNameMacro)),
+            "same-name regression cleanup should delete the exact created macro")
+        assert(#timerCallbacks == 1
+                and ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameDelete,
+            "native Delete and synchronous UPDATE_MACROS should debounce to one deferred refresh")
+        RunDeferredTimers()
+        originalAccount = ms.MacroRepository:FindByIndex(1)
+        originalCount, originalSlots = ms.ActionBarRepository:GetUsage(originalAccount)
+        assert(ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameDelete + 1
+                and originalCount == 2
+                and originalSlots[1] == 3
+                and originalSlots[2] == 15,
+            "deleting a same-name neighbor must preserve settled exact action-bar usage")
+        nativeMacroEventCallback = nil
+        deferTimers = false
+        ms:SetFilter("all")
+        ms:SelectMacro(originalAccount)
+        accountRow = ms.MacroList.visibleRows[1]
 
         local scansBeforeActionChange = ms.ActionBarRepository:GetScanCount()
         actionSlots[3] = nil

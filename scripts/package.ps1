@@ -44,10 +44,13 @@ try {
 
     $tocLines = @(Get-Content -LiteralPath $tocPath)
     $tocVersion = $null
+    $tocIconTexture = $null
     foreach ($tocLine in $tocLines) {
-        if ($tocLine -match '^## Version:\s*(.+?)\s*$') {
+        if ($null -eq $tocVersion -and $tocLine -match '^## Version:\s*(.+?)\s*$') {
             $tocVersion = $Matches[1]
-            break
+        }
+        if ($null -eq $tocIconTexture -and $tocLine -match '^## IconTexture:\s*(.+?)\s*$') {
+            $tocIconTexture = $Matches[1]
         }
     }
     if ($null -eq $tocVersion) {
@@ -56,11 +59,24 @@ try {
     if ($tocVersion -ne $Version) {
         throw "Requested package version '$Version' does not match MacroStudio.toc version '$tocVersion'."
     }
+    if ($null -eq $tocIconTexture) {
+        throw 'MacroStudio.toc does not declare a ## IconTexture value.'
+    }
 
     $runtimePaths = New-Object 'System.Collections.Generic.List[string]'
     $seenPaths = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
     [void]$runtimePaths.Add('MacroStudio.toc')
     [void]$seenPaths.Add('MacroStudio.toc')
+
+    $normalizedIconTexture = $tocIconTexture.Replace('/', '\')
+    $iconPrefix = 'Interface\AddOns\MacroStudio\'
+    if (-not $normalizedIconTexture.StartsWith($iconPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "IconTexture must point inside the packaged MacroStudio addon: $tocIconTexture"
+    }
+    $iconRelativePath = Get-RuntimeRelativePath -TocLine $normalizedIconTexture.Substring($iconPrefix.Length)
+    if ($seenPaths.Add($iconRelativePath)) {
+        [void]$runtimePaths.Add($iconRelativePath)
+    }
 
     foreach ($tocLine in $tocLines) {
         $relativePath = Get-RuntimeRelativePath -TocLine $tocLine

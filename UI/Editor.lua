@@ -159,6 +159,7 @@ function Editor:Create(parent)
 
     local categoryLabel = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "Category:")
     categoryLabel:SetPoint("TOPLEFT", 14, -101)
+    self.categoryLabel = categoryLabel
 
     local categoryButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     categoryButton:SetSize(170, 22)
@@ -171,6 +172,7 @@ function Editor:Create(parent)
 
     local tagsLabel = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "Tags:")
     tagsLabel:SetPoint("TOPLEFT", 14, -132)
+    self.tagsLabel = tagsLabel
 
     local addTagButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     addTagButton:SetSize(66, 22)
@@ -240,6 +242,17 @@ function Editor:Create(parent)
     end)
     editBox:HookScript("OnTextChanged", function(_, userInput)
         if not self.suppressTextChanged then
+            if MacroStudio:IsOfflineMacro(self.macro) and self:GetBody() ~= self.savedBody then
+                self.suppressTextChanged = true
+                editBox:SetText(self.savedBody)
+                self.suppressTextChanged = false
+                self.notice = {
+                    message = "Offline snapshots are read-only; the saved text was restored.",
+                    color = ERROR_COLOR,
+                }
+                self:UpdateEditorState("read-only")
+                return
+            end
             self.notice = nil
             self:UpdateEditorState(userInput and "user" or "unsuppressed")
         end
@@ -273,6 +286,15 @@ function Editor:Create(parent)
         MacroStudio:RevertSelectedMacro()
     end)
     self.revertButton = revertButton
+    local copyButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    copyButton:SetSize(190, 24)
+    copyButton:SetPoint("TOPRIGHT", -14, -9)
+    copyButton:SetText("Copy to Current Character")
+    copyButton:SetScript("OnClick", function()
+        MacroStudio:CopySelectedSnapshotToCurrentCharacter()
+    end)
+    copyButton:Hide()
+    self.copyButton = copyButton
 
     local categoryMenu = createPopupMenu(panel, 184)
     categoryMenu:SetPoint("TOPLEFT", categoryButton, "BOTTOMLEFT", 0, -2)
@@ -307,8 +329,39 @@ function Editor:SetMacro(macro)
     self.externalConflict = false
     self.notice = nil
 
+    local offline = MacroStudio:IsOfflineMacro(macro)
+    self.nameText:ClearAllPoints()
+    self.nameText:SetPoint("TOPLEFT", 72, -44)
+    if offline then
+        self.nameText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -44)
+    else
+        self.nameText:SetPoint("TOPRIGHT", self.favoriteButton, "TOPLEFT", -10, -1)
+    end
+
+    self.scopeText:ClearAllPoints()
+    if offline then
+        self.scopeText:SetPoint("TOPLEFT", self.panel, "TOPLEFT", 72, -66)
+        self.scopeText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -66)
+        self.scopeText:SetWordWrap(true)
+    else
+        self.scopeText:SetPoint("TOPLEFT", self.nameText, "BOTTOMLEFT", 0, -5)
+        self.scopeText:SetPoint("RIGHT", self.deleteButton, "LEFT", -8, 0)
+        self.scopeText:SetWordWrap(false)
+    end
+
     self.nameText:SetText(macro and macro.name or "No macro selected")
-    self.scopeText:SetText(macro and (macro.scope == "ACCOUNT" and "Account Macro" or "Character Macro") or "Select a macro from the list.")
+    if offline then
+        self.scopeText:SetText(
+            "Viewing " .. (macro.characterDisplayName or "offline character")
+                .. "  |  Read-only snapshot  |  Last synced: "
+                .. MacroStudio.CharacterMacroLibrary:FormatLastSynced(macro.lastSynced)
+        )
+    else
+        self.scopeText:SetText(
+            macro and (macro.scope == "ACCOUNT" and "Account Macro" or "Character Macro")
+                or "Select a macro from the list."
+        )
+    end
     self.icon:SetTexture(macro and macro.icon or MacroStudio.DEFAULT_ICON)
     self:HideMetadataMenus()
     self:SetEditorText(self.savedBody)
@@ -346,26 +399,43 @@ function Editor:UpdateEditorState(reason)
     end
 
     local hasMacro = self.macro ~= nil
+    local offline = MacroStudio:IsOfflineMacro(self.macro)
     local body = self:GetBody()
-    local dirty = hasMacro and body ~= self.savedBody or false
+    local dirty = hasMacro and not offline and body ~= self.savedBody or false
     local length = MacroStudio.Helpers:TextLength(body)
     local overBy = length - MacroStudio.MAX_BODY_LENGTH
-    local targetSafe = hasMacro and MacroStudio.MacroRepository:IsSnapshotCurrent(self.macro) or false
+    local targetSafe = hasMacro
+        and not offline
+        and MacroStudio.MacroRepository:IsSnapshotCurrent(self.macro) or false
     local canSave = hasMacro
+        and not offline
         and dirty
         and not MacroStudio.inCombat
         and not self.externalConflict
         and targetSafe
         and length <= MacroStudio.MAX_BODY_LENGTH
-    local canRevert = hasMacro and dirty
+    local canRevert = hasMacro and not offline and dirty
     local canDelete = hasMacro
+        and not offline
         and not dirty
         and not MacroStudio.inCombat
         and not self.externalConflict
         and targetSafe
 
+    local canCopy, copyReason = false, nil
+    if offline then
+        canCopy, copyReason = MacroStudio.MacroRepository:ValidateCreateRequest({
+            name = self.macro.name,
+            body = self.macro.body,
+            icon = self.macro.icon,
+            scope = "CHARACTER",
+        })
+    end
+
     local saveReason
-    if not hasMacro then
+    if offline then
+        saveReason = "Offline character snapshots are read-only."
+    elseif not hasMacro then
         saveReason = "Select a macro before saving."
     elseif not dirty then
         saveReason = "There are no unsaved changes."
@@ -378,7 +448,9 @@ function Editor:UpdateEditorState(reason)
     end
 
     local deleteReason
-    if not hasMacro then
+    if offline then
+        deleteReason = "Offline snapshots cannot delete Blizzard macros."
+    elseif not hasMacro then
         deleteReason = "Select a macro before deleting."
     elseif dirty then
         deleteReason = "Save or Revert editor changes before deleting this macro."
@@ -397,16 +469,24 @@ function Editor:UpdateEditorState(reason)
         dirty = dirty,
         length = length,
         overBy = overBy,
+        offline = offline,
         targetSafe = targetSafe,
         canSave = canSave,
         saveReason = saveReason,
         canRevert = canRevert,
         canDelete = canDelete,
         deleteReason = deleteReason,
+        canCopy = canCopy,
+        copyReason = copyReason,
     }
 
     self.editBox:SetEnabled(hasMacro)
-    self.dirtyText:SetText(dirty and "Unsaved changes" or "")
+    if offline then
+        self.dirtyText:SetText("")
+    else
+        self.dirtyText:SetText(dirty and "Unsaved changes" or "")
+        self.dirtyText:SetTextColor(unpack(WARNING_COLOR))
+    end
     self.countText:SetText(string.format("%d / %d", length, MacroStudio.MAX_BODY_LENGTH))
 
     if length > MacroStudio.MAX_BODY_LENGTH then
@@ -421,6 +501,13 @@ function Editor:UpdateEditorState(reason)
     local statusColor = NORMAL_COLOR
     if not hasMacro then
         statusMessage = "No macro selected."
+    elseif offline then
+        if self.notice then
+            statusMessage = self.notice.message
+            statusColor = self.notice.color
+        else
+            statusMessage = "Read-only snapshot. Select text or use Copy above."
+        end
     elseif self.externalConflict or not targetSafe then
         statusMessage = "The native macro changed outside MacroStudio. Revert or refresh before modifying it."
         statusColor = ERROR_COLOR
@@ -443,14 +530,31 @@ function Editor:UpdateEditorState(reason)
         statusMessage = "Saved body is up to date."
     end
 
+    self.stateText:ClearAllPoints()
+    self.stateText:SetPoint("BOTTOMLEFT", 14, 19)
+    if offline then
+        self.stateText:SetPoint("BOTTOMRIGHT", self.panel, "BOTTOMRIGHT", -14, 19)
+    else
+        self.stateText:SetPoint("BOTTOMRIGHT", self.panel, "BOTTOMRIGHT", -190, 19)
+    end
     self.stateText:SetText(statusMessage)
     self.stateText:SetTextColor(unpack(statusColor))
+    self.saveButton:SetShown(not offline)
+    self.revertButton:SetShown(not offline)
+    self.deleteButton:SetShown(not offline)
+    self.copyButton:SetShown(offline)
     MacroStudio.Helpers:SetButtonEnabled(self.saveButton, canSave)
     MacroStudio.Helpers:SetButtonTooltip(self.saveButton, "Save Macro", canSave and "Save this body to the native macro." or saveReason)
     MacroStudio.Helpers:SetButtonEnabled(self.revertButton, canRevert)
     MacroStudio.Helpers:SetButtonTooltip(self.revertButton, "Revert Editor", canRevert and "Discard editor changes and reload the native macro." or "There are no editor changes to revert.")
     MacroStudio.Helpers:SetButtonEnabled(self.deleteButton, canDelete)
     MacroStudio.Helpers:SetButtonTooltip(self.deleteButton, "Delete Native Macro", canDelete and "Permanently delete this exact Blizzard-native macro." or deleteReason)
+    MacroStudio.Helpers:SetButtonEnabled(self.copyButton, canCopy)
+    MacroStudio.Helpers:SetButtonTooltip(
+        self.copyButton,
+        "Copy to Current Character",
+        canCopy and "Create a new native Character macro from this snapshot." or copyReason
+    )
     if MacroStudio.UpdateActionControls then
         MacroStudio:UpdateActionControls()
     end
@@ -486,6 +590,13 @@ function Editor:RefreshActionBarUsage()
     if not self.usageButton then
         return
     end
+    if MacroStudio:IsOfflineMacro(self.macro) then
+        self.actionBarUsageCount = 0
+        self.actionBarUsageSlots = nil
+        self.usageButton:Hide()
+        MacroStudio.Helpers:SetButtonTooltip(self.usageButton)
+        return
+    end
 
     local count, slots = MacroStudio.ActionBarRepository:GetUsage(self.macro)
     self.actionBarUsageCount = count
@@ -507,7 +618,19 @@ end
 
 function Editor:RefreshMetadata()
     local hasMacro = self.macro ~= nil
-    local presentation = MacroStudio.MetadataRepository:GetPresentation(self.macro)
+    local offline = MacroStudio:IsOfflineMacro(self.macro)
+    local presentation = offline
+        and { favorite = false, categoryName = "Unavailable", tags = {} }
+        or MacroStudio.MetadataRepository:GetPresentation(self.macro)
+
+    self.favoriteButton:SetShown(not offline)
+    self.categoryLabel:SetShown(not offline)
+    self.categoryButton:SetShown(not offline)
+    self.tagsLabel:SetShown(not offline)
+    self.tagsText:SetShown(not offline)
+    self.addTagButton:SetShown(not offline)
+    self.removeTagButton:SetShown(not offline)
+
     self.favoriteButton.Icon:SetDesaturated(not presentation.favorite)
     self.favoriteButton.Icon:SetAlpha(presentation.favorite and 1 or 0.45)
     self.favoriteButton.Text:SetText(presentation.favorite and "Favorited" or "Favorite")
@@ -527,10 +650,10 @@ function Editor:RefreshMetadata()
         self.duplicateText:SetText("")
     end
 
-    MacroStudio.Helpers:SetButtonEnabled(self.favoriteButton, hasMacro)
-    MacroStudio.Helpers:SetButtonEnabled(self.categoryButton, hasMacro)
-    MacroStudio.Helpers:SetButtonEnabled(self.addTagButton, hasMacro)
-    MacroStudio.Helpers:SetButtonEnabled(self.removeTagButton, hasMacro and #presentation.tags > 0)
+    MacroStudio.Helpers:SetButtonEnabled(self.favoriteButton, hasMacro and not offline)
+    MacroStudio.Helpers:SetButtonEnabled(self.categoryButton, hasMacro and not offline)
+    MacroStudio.Helpers:SetButtonEnabled(self.addTagButton, hasMacro and not offline)
+    MacroStudio.Helpers:SetButtonEnabled(self.removeTagButton, hasMacro and not offline and #presentation.tags > 0)
     self:RefreshActionBarUsage()
 end
 
@@ -547,7 +670,7 @@ function Editor:HideMetadataMenus()
 end
 
 function Editor:ToggleCategoryMenu()
-    if not self.macro then
+    if not self.macro or MacroStudio:IsOfflineMacro(self.macro) then
         return
     end
     self.addTagMenu:Hide()
@@ -587,7 +710,7 @@ function Editor:ToggleCategoryMenu()
 end
 
 function Editor:ToggleAddTagMenu()
-    if not self.macro then
+    if not self.macro or MacroStudio:IsOfflineMacro(self.macro) then
         return
     end
     self.categoryMenu:Hide()
@@ -635,7 +758,7 @@ function Editor:ToggleAddTagMenu()
 end
 
 function Editor:ToggleTagMenu()
-    if not self.macro then
+    if not self.macro or MacroStudio:IsOfflineMacro(self.macro) then
         return
     end
     self.categoryMenu:Hide()

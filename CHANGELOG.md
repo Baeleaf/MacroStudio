@@ -7,9 +7,11 @@ Notable user-facing changes to MacroStudio are documented here.
 ### Added
 
 - See which macros are currently placed on your action bars.
+- Browse Character macros from other characters used with MacroStudio and copy them to the current character.
 
 ### Fixed
 
+- Keep action-bar usage accurate after native macro creation, updates, deletion, and index changes.
 - Prevent resolved spell or item IDs from being mistaken for native macro indices when detecting action-bar usage.
 
 ## 1.1.0

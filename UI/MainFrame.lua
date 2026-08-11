@@ -200,6 +200,9 @@ function MacroStudio:Initialize()
     if not self.db and self.Database then
         self.Database:Initialize()
     end
+    if self.CharacterMacroLibrary then
+        self.CharacterMacroLibrary:Initialize()
+    end
 
     self.activeFilter = { kind = "all" }
     self.searchQuery = ""
@@ -209,10 +212,30 @@ function MacroStudio:Initialize()
     self:UpdateCombatState()
 end
 
+function MacroStudio:IsOfflineMacro(macro)
+    return self.CharacterMacroLibrary and self.CharacterMacroLibrary:IsOfflineMacro(macro) or false
+end
+
+function MacroStudio:MacroRecordsEqual(first, second)
+    return self.CharacterMacroLibrary:RecordsEqual(first, second)
+end
+
 function MacroStudio:GetFilteredMacros()
     local filtered = {}
     local filter = self.activeFilter or { kind = "all" }
     local query = self.searchQuery or ""
+
+    self.characterViewGroups = nil
+    if filter.kind == "characters" or filter.kind == "libraryCharacter" then
+        local groups = self.CharacterMacroLibrary:GetViewGroups(filter, query, self.MacroRepository:GetAll())
+        self.characterViewGroups = groups
+        for _, group in ipairs(groups) do
+            for _, macro in ipairs(group.macros) do
+                filtered[#filtered + 1] = macro
+            end
+        end
+        return filtered
+    end
 
     for _, macro in ipairs(self.MacroRepository:GetAll()) do
         local include = filter.kind == "all"
@@ -273,7 +296,8 @@ function MacroStudio:RefreshMacroList()
         self:GetFilteredMacros(),
         self.selectedMacro,
         self.activeFilter,
-        self:GetSearchQuery()
+        self:GetSearchQuery(),
+        self.characterViewGroups
     )
 end
 
@@ -289,9 +313,14 @@ function MacroStudio:SetFilter(kind, categoryId)
         kind = "all"
         categoryId = nil
     end
+    if kind == "libraryCharacter" and not self.CharacterMacroLibrary:GetCharacter(categoryId) then
+        kind = "characters"
+        categoryId = nil
+    end
     self.activeFilter = {
         kind = kind or "all",
         categoryId = categoryId,
+        characterId = kind == "libraryCharacter" and categoryId or nil,
     }
     self:RefreshOrganizationUI()
 end
@@ -310,7 +339,7 @@ function MacroStudio:RequestSelectMacro(macro)
     if not macro then
         return
     end
-    if self.selectedMacro and self.MacroRepository:SnapshotsEqual(self.selectedMacro, macro) then
+    if self.selectedMacro and self:MacroRecordsEqual(self.selectedMacro, macro) then
         return
     end
 
@@ -328,9 +357,15 @@ function MacroStudio:RequestPickupMacro(macro)
     if not macro then
         return false
     end
+    if self:IsOfflineMacro(macro) then
+        local message = "Offline character snapshots cannot be placed on action bars."
+        self.Editor:SetNotice(message, true)
+        self:Print(message)
+        return false
+    end
 
     local draggingDirtySelection = self.selectedMacro
-        and self.MacroRepository:SnapshotsEqual(self.selectedMacro, macro)
+        and self:MacroRecordsEqual(self.selectedMacro, macro)
         and self.Editor
         and self.Editor:IsDirty()
     local pickedUp, current, message = self.MacroRepository:Pickup(macro)
@@ -376,7 +411,11 @@ function MacroStudio:OnActionBarChanged(reason)
     self.pendingActionBarUsageRefresh = true
     local function refresh()
         self.pendingActionBarUsageRefresh = false
-        self:RefreshActionBarUsage(reason)
+        if reason == "PLAYER_ENTERING_WORLD" then
+            self:RefreshMacros(reason)
+        else
+            self:RefreshActionBarUsage(reason)
+        end
     end
 
     if C_Timer and type(C_Timer.After) == "function" then
@@ -386,20 +425,66 @@ function MacroStudio:OnActionBarChanged(reason)
     end
 end
 
+function MacroStudio:ScheduleMacroRefresh(reason)
+    if not self.initialized then
+        return
+    end
+
+    self.pendingMacroRefreshReason = reason or self.pendingMacroRefreshReason or "event"
+    if self.macroRefreshScheduled then
+        return
+    end
+
+    self.macroRefreshScheduled = true
+    local function refresh()
+        self.macroRefreshScheduled = nil
+        if self.nativeMutationInProgress then
+            self.pendingMacroRefresh = true
+            return
+        end
+
+        local refreshReason = self.pendingMacroRefreshReason or "event"
+        self.pendingMacroRefreshReason = nil
+        self.pendingMacroRefresh = nil
+        self:RefreshMacros(refreshReason)
+    end
+
+    if C_Timer and type(C_Timer.After) == "function" then
+        C_Timer.After(0, refresh)
+    else
+        refresh()
+    end
+end
+
+function MacroStudio:FinishNativeMacroMutation(reason)
+    self.nativeMutationInProgress = false
+    self.pendingMacroRefresh = nil
+    self:ScheduleMacroRefresh(reason or "native mutation")
+end
+
 function MacroStudio:RefreshMacros(reason)
     if not self.initialized then
         return
     end
 
     local macros = self.MacroRepository:Refresh()
+    if self.CharacterMacroLibrary and reason ~= "open" then
+        self.CharacterMacroLibrary:RefreshCurrentSnapshot(macros)
+    end
     if self.ActionBarRepository then
         self.ActionBarRepository:Refresh()
     end
     self.MetadataRepository:Reconcile(macros)
     local editorWasDirty = self.Editor:IsDirty()
     local exactSelection
+    local offlineSelection = self:IsOfflineMacro(self.selectedMacro)
+    if offlineSelection and not self.CharacterMacroLibrary:FindSnapshot(self.selectedMacro) then
+        self.selectedMacro = nil
+        self.Editor:Clear()
+        self.Editor:SetNotice("The stored character snapshot no longer exists.", true)
+    end
 
-    if self.selectedMacro then
+    if self.selectedMacro and not offlineSelection then
         for _, macro in ipairs(macros) do
             if self.MacroRepository:SnapshotsEqual(macro, self.selectedMacro) then
                 exactSelection = macro
@@ -408,7 +493,9 @@ function MacroStudio:RefreshMacros(reason)
         end
     end
 
-    if exactSelection then
+    if offlineSelection then
+        -- Offline selection is preserved without consulting native indices.
+    elseif exactSelection then
         self.selectedMacro.duplicateName = exactSelection.duplicateName
         self.selectedMacro.duplicateCount = exactSelection.duplicateCount
         self.Editor.macro = self.selectedMacro
@@ -439,11 +526,12 @@ end
 function MacroStudio:OnMacrosChanged(reason)
     if self.nativeMutationInProgress then
         self.pendingMacroRefresh = true
+        self.pendingMacroRefreshReason = reason or "UPDATE_MACROS"
         return
     end
     if self.initialized then
         self:Debug("UPDATE_MACROS received")
-        self:RefreshMacros(reason or "event")
+        self:ScheduleMacroRefresh(reason or "event")
     end
 end
 
@@ -466,13 +554,13 @@ function MacroStudio:SaveSelectedMacro()
     local body = self.Editor:GetBody()
     self.nativeMutationInProgress = true
     local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, body)
-    self.nativeMutationInProgress = false
-    self.pendingMacroRefresh = nil
+    self:FinishNativeMacroMutation("save")
 
     if not saved then
         self.Editor:SetNotice(message or "The macro could not be saved.", true)
         return
     end
+    self.CharacterMacroLibrary:RefreshCurrentSnapshot(self.MacroRepository:GetAll())
 
     if not updatedMacro then
         self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
@@ -495,6 +583,10 @@ function MacroStudio:RevertSelectedMacro()
         self.Editor:SetNotice("Select a macro before reverting.", true)
         return
     end
+    if self:IsOfflineMacro(self.selectedMacro) then
+        self.Editor:SetNotice("Offline snapshots are already showing their saved read-only body.", true)
+        return
+    end
 
     local latest, message = self.MacroRepository:ResolveLatest(self.selectedMacro)
     self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
@@ -512,7 +604,7 @@ function MacroStudio:RevertSelectedMacro()
 end
 
 function MacroStudio:ToggleSelectedFavorite()
-    if not self.selectedMacro then
+    if not self.selectedMacro or self:IsOfflineMacro(self.selectedMacro) then
         return
     end
     self.MetadataRepository:ToggleFavorite(self.selectedMacro)
@@ -520,7 +612,7 @@ function MacroStudio:ToggleSelectedFavorite()
 end
 
 function MacroStudio:AssignSelectedCategory(categoryId)
-    if not self.selectedMacro then
+    if not self.selectedMacro or self:IsOfflineMacro(self.selectedMacro) then
         return
     end
     local ok, message = self.MetadataRepository:SetCategory(self.selectedMacro, categoryId)
@@ -532,8 +624,8 @@ function MacroStudio:AssignSelectedCategory(categoryId)
 end
 
 function MacroStudio:AddExistingTag(tag)
-    if not self.selectedMacro then
-        return false, "Select a macro before assigning a tag."
+    if not self.selectedMacro or self:IsOfflineMacro(self.selectedMacro) then
+        return false, "Organization is unavailable for offline character snapshots."
     end
     local ok, message = self.MetadataRepository:AddTag(self.selectedMacro, tag)
     if not ok then
@@ -545,7 +637,7 @@ function MacroStudio:AddExistingTag(tag)
 end
 
 function MacroStudio:PromptAddTag()
-    if not self.selectedMacro then
+    if not self.selectedMacro or self:IsOfflineMacro(self.selectedMacro) then
         return
     end
     self.Dialogs:ShowAddTag(self.selectedMacro, function(tag)
@@ -559,7 +651,7 @@ function MacroStudio:PromptAddTag()
 end
 
 function MacroStudio:RemoveSelectedTag(tag)
-    if not self.selectedMacro then
+    if not self.selectedMacro or self:IsOfflineMacro(self.selectedMacro) then
         return
     end
     local ok, message = self.MetadataRepository:RemoveTag(self.selectedMacro, tag)
@@ -617,6 +709,39 @@ function MacroStudio:PromptDeleteCategory()
         self:SetFilter("all")
     end)
 end
+function MacroStudio:GetActiveLibraryCharacter()
+    if self.activeFilter and self.activeFilter.kind == "libraryCharacter" then
+        return self.CharacterMacroLibrary:GetCharacter(self.activeFilter.characterId)
+    end
+    return nil
+end
+
+function MacroStudio:PromptForgetActiveCharacter()
+    local character = self:GetActiveLibraryCharacter()
+    if not character then
+        return
+    end
+    if self.CharacterMacroLibrary:IsCurrentCharacter(character.id) then
+        self:Print("The current character cannot be forgotten.")
+        return
+    end
+
+    self.Dialogs:ShowForgetCharacter(character, function()
+        local ok, result = self.CharacterMacroLibrary:ForgetCharacter(character.id)
+        if not ok then
+            self:Print(result)
+            return
+        end
+        if self.selectedMacro
+            and self:IsOfflineMacro(self.selectedMacro)
+            and self.selectedMacro.characterKey == character.id then
+            self.selectedMacro = nil
+            self.Editor:Clear()
+        end
+        self:SetFilter("characters")
+        self:Print((result.displayName or "Character") .. " removed from the stored macro library.")
+    end)
+end
 
 function MacroStudio:ShowNewMacroDialog()
     self:UpdateActionControls()
@@ -638,12 +763,12 @@ function MacroStudio:CreateNativeMacro(request)
 
     self.nativeMutationInProgress = true
     local created, macro, message = self.MacroRepository:Create(request)
-    self.nativeMutationInProgress = false
-    self.pendingMacroRefresh = nil
+    self:FinishNativeMacroMutation("create")
     if not created then
         self:UpdateActionControls()
         return false, message or "The macro could not be created."
     end
+    self.CharacterMacroLibrary:RefreshCurrentSnapshot(self.MacroRepository:GetAll())
 
     self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
     if macro then
@@ -657,6 +782,35 @@ function MacroStudio:CreateNativeMacro(request)
     end
     return true, macro
 end
+function MacroStudio:CopySelectedSnapshotToCurrentCharacter()
+    local snapshot = self.selectedMacro
+    if not self:IsOfflineMacro(snapshot) then
+        self.Editor:SetNotice("Select an offline character macro to copy it.", true)
+        return false
+    end
+
+    local source = self.CharacterMacroLibrary:FindSnapshot(snapshot)
+    if not source then
+        self.Editor:SetNotice("This stored macro snapshot is no longer available.", true)
+        return false
+    end
+
+    local created, macroOrMessage = self:CreateNativeMacro({
+        name = source.name,
+        body = source.body,
+        icon = source.icon,
+        scope = "CHARACTER",
+    })
+    if not created then
+        self.Editor:SetNotice(macroOrMessage or "The snapshot could not be copied.", true)
+        return false
+    end
+
+    self:SetFilter("character")
+    self.Editor:SetNotice("Copied to the current character. The offline snapshot was not changed.", false)
+    return true, macroOrMessage
+end
+
 
 function MacroStudio:RequestDeleteSelectedMacro()
     local state = self.Editor and self.Editor.state
@@ -674,7 +828,7 @@ end
 function MacroStudio:DeleteSelectedMacro(snapshot)
     local state = self.Editor and self.Editor.state
     if not self.selectedMacro
-        or not self.MacroRepository:SnapshotsEqual(self.selectedMacro, snapshot)
+        or not self:MacroRecordsEqual(self.selectedMacro, snapshot)
         or not state
         or not state.canDelete then
         self.Editor:SetNotice(state and state.deleteReason or "The selected macro is no longer safe to delete.", true)
@@ -684,12 +838,12 @@ function MacroStudio:DeleteSelectedMacro(snapshot)
     local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(snapshot)
     self.nativeMutationInProgress = true
     local deleted, message = self.MacroRepository:Delete(snapshot)
-    self.nativeMutationInProgress = false
-    self.pendingMacroRefresh = nil
+    self:FinishNativeMacroMutation("delete")
     if not deleted then
         self.Editor:SetNotice(message or "The macro could not be deleted.", true)
         return false
     end
+    self.CharacterMacroLibrary:RefreshCurrentSnapshot(self.MacroRepository:GetAll())
 
     self.MetadataRepository:OnMacroDeleted(snapshot, trustedMetadataId)
     self.MetadataRepository:Reconcile(self.MacroRepository:GetAll())
