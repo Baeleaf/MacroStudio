@@ -707,6 +707,8 @@ assert "empty:SetWordWrap(true)" in macro_list_source and "empty:GetStringHeight
 assert 'self.emptyText:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -5, -yOffset - 4)' in sidebar_source
 category_section_index = sidebar_source.index("self.categoriesHeading:ClearAllPoints()")
 library_section_index = sidebar_source.index("self.libraryHeading:ClearAllPoints()")
+assert '"ORGANIZATION"' not in sidebar_source
+assert 'scrollFrame:SetPoint("TOPLEFT", 10, -164)' in sidebar_source
 assert category_section_index < library_section_index
 assert "characterLibraryExpanded" in sidebar_source
 assert "characterLibraryExpanded" not in library_source

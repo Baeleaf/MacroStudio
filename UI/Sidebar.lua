@@ -81,12 +81,8 @@ function Sidebar:Create(parent)
         previous = button
     end
 
-    local categoryHeading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "ORGANIZATION")
-    categoryHeading:SetPoint("TOPLEFT", 14, -164)
-    categoryHeading:SetTextColor(0.45, 0.72, 1)
-
     local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -184)
+    scrollFrame:SetPoint("TOPLEFT", 10, -164)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 76)
     self.scrollFrame = scrollFrame
 
