@@ -435,6 +435,67 @@ def run_ui_smoke(root):
         assert(helperText and helperText.wordWrap
                 and helperText:GetText() == "Log into another character with MacroStudio enabled to add it to your library.",
             "Characters helper text should remain complete and wrapped at minimum window size")
+        for index = 1, 12 do
+            assert(ms.MetadataRepository:CreateCategory("Scale Category " .. index),
+                "scale-test Categories should be created")
+        end
+        for index = 1, 20 do
+            local characterId = "guid:Player-1-SCALE-" .. index
+            libraryStore.characters[characterId] = {
+                id = characterId,
+                guid = "Player-1-SCALE-" .. index,
+                name = "Scale" .. index,
+                realm = "Large Library",
+                displayName = "Scale" .. index .. " - Large Library",
+                normalizedDisplay = ("Scale" .. index .. " - Large Library"):lower(),
+                identityCertain = true,
+                lastSynced = serverTime - index,
+                macros = {},
+            }
+            libraryStore.order[#libraryStore.order + 1] = characterId
+        end
+
+        MacroStudioDB.settings.characterLibraryExpanded = nil
+        ms.Sidebar:Rebuild(ms.activeFilter)
+        assert(ms.frame:GetWidth() == ms.MIN_WIDTH and ms.frame:GetHeight() == ms.MIN_HEIGHT,
+            "sidebar scaling should retain the supported minimum window size")
+        assert(#ms.Sidebar.visibleCategoryButtons == 12 and ms.Sidebar.newButton:IsShown(),
+            "Categories and its controls should remain accessible before a large character library")
+        assert(not ms.Sidebar.charactersExpanded
+                and #ms.Sidebar.visibleCharacterButtons == 0
+                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters  >",
+            "more than five known characters should default to a collapsed individual list")
+        assert(ms.Sidebar.allCharactersButton:IsShown(),
+            "All Characters should remain visible while individual characters are collapsed")
+        ms.Sidebar.allCharactersButton:GetScript("OnClick")(ms.Sidebar.allCharactersButton)
+        assert(ms.activeFilter.kind == "characters" and not ms.Sidebar.charactersExpanded,
+            "All Characters should remain usable without expanding individual entries")
+
+        ms.Sidebar:ToggleCharacterList()
+        assert(MacroStudioDB.settings.characterLibraryExpanded
+                and ms.Sidebar.charactersExpanded
+                and #ms.Sidebar.visibleCharacterButtons == 21
+                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters  v",
+            "Characters should expand to show every current and offline character")
+        ms.Sidebar:ToggleCharacterList()
+        assert(MacroStudioDB.settings.characterLibraryExpanded == false
+                and not ms.Sidebar.charactersExpanded
+                and #ms.Sidebar.visibleCharacterButtons == 0,
+            "Characters should collapse without changing the active filter")
+
+        ms:Toggle()
+        assert(not ms.frame:IsShown(), "window toggle should close the minimum-size frame")
+        ms:Toggle()
+        assert(ms.frame:IsShown()
+                and MacroStudioDB.settings.characterLibraryExpanded == false
+                and not ms.Sidebar.charactersExpanded,
+            "character collapse state should persist through close and reopen")
+        ms.Database:Initialize()
+        ms.Sidebar:Rebuild(ms.activeFilter)
+        assert(MacroStudioDB.settings.characterLibraryExpanded == false
+                and not ms.Sidebar.charactersExpanded
+                and ms.Sidebar.allCharactersButton:IsShown(),
+            "character collapse state should persist through SavedVariables reinitialization")
         ms:SetSearchQuery("")
         ms:SetFilter("all")
         ms:SelectMacro(ms.MacroRepository:GetAll()[1])

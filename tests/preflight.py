@@ -680,6 +680,14 @@ assert 'self.stateText:SetPoint("BOTTOMRIGHT", self.panel, "BOTTOMRIGHT", -14, 1
 assert 'empty:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -12, -yOffset)' in macro_list_source
 assert "empty:SetWordWrap(true)" in macro_list_source and "empty:GetStringHeight()" in macro_list_source
 assert 'self.emptyText:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -5, -yOffset - 4)' in sidebar_source
+category_section_index = sidebar_source.index("self.categoriesHeading:ClearAllPoints()")
+library_section_index = sidebar_source.index("self.libraryHeading:ClearAllPoints()")
+assert category_section_index < library_section_index
+assert "characterLibraryExpanded" in sidebar_source
+assert "characterLibraryExpanded" not in library_source
+assert "DEFAULT_EXPANDED_CHARACTER_LIMIT = 5" in sidebar_source
+assert "if self.charactersExpanded then" in sidebar_source
+assert 'self.charactersExpanded and "Characters  v" or "Characters  >"' in sidebar_source
 assert "#ms.Editor.editorFocusBorderEdges == 4" in (ROOT / "tests" / "ui_smoke.py").read_text(encoding="utf-8")
 assert "modalOverlay:EnableMouse(true)" in main_frame_source
 assert "modalOverlay:EnableMouseWheel(true)" in main_frame_source

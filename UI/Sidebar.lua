@@ -9,6 +9,7 @@ local Sidebar = {
 MacroStudio.Sidebar = Sidebar
 
 local BUTTON_HEIGHT = 25
+local DEFAULT_EXPANDED_CHARACTER_LIMIT = 5
 
 local function createFilterButton(parent, label, onClick, atlas)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
@@ -78,7 +79,7 @@ function Sidebar:Create(parent)
         previous = button
     end
 
-    local categoryHeading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "LIBRARY")
+    local categoryHeading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "ORGANIZATION")
     categoryHeading:SetPoint("TOPLEFT", 14, -164)
     categoryHeading:SetTextColor(0.45, 0.72, 1)
 
@@ -95,14 +96,19 @@ function Sidebar:Create(parent)
         scrollChild:SetWidth(math.max(1, frame:GetWidth()))
         scrollChild:SetHeight(math.max(frame:GetHeight(), self.contentHeight or 1))
     end)
-    local charactersHeading = MacroStudio.Helpers:CreateLabel(scrollChild, "GameFontNormalSmall", "CHARACTERS")
-    charactersHeading:SetTextColor(0.45, 0.72, 1)
-    self.charactersHeading = charactersHeading
+    local libraryHeading = MacroStudio.Helpers:CreateLabel(scrollChild, "GameFontNormalSmall", "LIBRARY")
+    libraryHeading:SetTextColor(0.45, 0.72, 1)
+    self.libraryHeading = libraryHeading
 
     local allCharactersButton = createFilterButton(scrollChild, "All Characters", function()
         MacroStudio:SetFilter("characters")
     end)
     self.allCharactersButton = allCharactersButton
+
+    local characterToggleButton = createFilterButton(scrollChild, "Characters  >", function()
+        self:ToggleCharacterList()
+    end)
+    self.characterToggleButton = characterToggleButton
 
     local categoriesHeading = MacroStudio.Helpers:CreateLabel(scrollChild, "GameFontNormalSmall", "CATEGORIES")
     categoriesHeading:SetTextColor(0.45, 0.72, 1)
@@ -117,6 +123,7 @@ function Sidebar:Create(parent)
     newButton:SetScript("OnClick", function()
         MacroStudio:PromptCreateCategory()
     end)
+    self.newButton = newButton
 
     local renameButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     renameButton:SetHeight(22)
@@ -174,6 +181,31 @@ function Sidebar:AcquireCharacterButton()
     end)
 end
 
+function Sidebar:GetCharacterListExpanded(characterCount)
+    local settings = MacroStudio.db and MacroStudio.db.settings
+    if not settings then
+        return false
+    end
+
+    local expanded = settings.characterLibraryExpanded
+    if type(expanded) ~= "boolean" then
+        expanded = (tonumber(characterCount) or 0) <= DEFAULT_EXPANDED_CHARACTER_LIMIT
+        settings.characterLibraryExpanded = expanded
+    end
+
+    return expanded
+end
+
+function Sidebar:ToggleCharacterList()
+    local settings = MacroStudio.db and MacroStudio.db.settings
+    if not settings then
+        return
+    end
+
+    local characterCount = #MacroStudio.CharacterMacroLibrary:GetCharacters()
+    settings.characterLibraryExpanded = not self:GetCharacterListExpanded(characterCount)
+    self:Rebuild(MacroStudio.activeFilter)
+end
 
 function Sidebar:Rebuild(activeFilter)
     for _, button in ipairs(self.visibleCategoryButtons) do
@@ -191,49 +223,6 @@ function Sidebar:Rebuild(activeFilter)
     self.visibleCharacterButtons = {}
 
     local yOffset = 0
-    self.charactersHeading:ClearAllPoints()
-    self.charactersHeading:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 4, -yOffset)
-    yOffset = yOffset + 20
-
-    self.allCharactersButton:ClearAllPoints()
-    self.allCharactersButton:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
-    self.allCharactersButton:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
-    self.allCharactersButton.selected = activeFilter and activeFilter.kind == "characters"
-    self.allCharactersButton:SetBackdropColor(
-        self.allCharactersButton.selected and 0.12 or 0.065,
-        self.allCharactersButton.selected and 0.32 or 0.08,
-        self.allCharactersButton.selected and 0.5 or 0.105,
-        1
-    )
-    yOffset = yOffset + BUTTON_HEIGHT + 3
-
-    local characters = MacroStudio.CharacterMacroLibrary:GetCharacters()
-    for _, character in ipairs(characters) do
-        local button = self:AcquireCharacterButton()
-        button:ClearAllPoints()
-        button:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
-        button:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
-        button.characterId = character.id
-        button.Text:SetText(character.displayName .. (character.isCurrent and "  Current" or ""))
-        button.selected = activeFilter
-            and activeFilter.kind == "libraryCharacter"
-            and activeFilter.characterId == character.id
-        button:SetBackdropColor(
-            button.selected and 0.12 or 0.065,
-            button.selected and 0.32 or 0.08,
-            button.selected and 0.5 or 0.105,
-            1
-        )
-        local detail = character.isCurrent
-            and "Current character - live native macros."
-            or ("Read-only snapshot. Last synced: "
-                .. MacroStudio.CharacterMacroLibrary:FormatLastSynced(character.lastSynced))
-        MacroStudio.Helpers:SetButtonTooltip(button, character.displayName, detail)
-        self.visibleCharacterButtons[#self.visibleCharacterButtons + 1] = button
-        yOffset = yOffset + BUTTON_HEIGHT + 3
-    end
-
-    yOffset = yOffset + 9
     self.categoriesHeading:ClearAllPoints()
     self.categoriesHeading:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 4, -yOffset)
     yOffset = yOffset + 20
@@ -267,6 +256,66 @@ function Sidebar:Rebuild(activeFilter)
         yOffset = yOffset + math.max(24, math.ceil(self.emptyText:GetStringHeight() or 0) + 8)
     elseif self.emptyText then
         self.emptyText:Hide()
+    end
+
+    yOffset = yOffset + 9
+    self.libraryHeading:ClearAllPoints()
+    self.libraryHeading:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 4, -yOffset)
+    yOffset = yOffset + 20
+
+    self.allCharactersButton:ClearAllPoints()
+    self.allCharactersButton:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
+    self.allCharactersButton:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
+    self.allCharactersButton.selected = activeFilter and activeFilter.kind == "characters"
+    self.allCharactersButton:SetBackdropColor(
+        self.allCharactersButton.selected and 0.12 or 0.065,
+        self.allCharactersButton.selected and 0.32 or 0.08,
+        self.allCharactersButton.selected and 0.5 or 0.105,
+        1
+    )
+    yOffset = yOffset + BUTTON_HEIGHT + 3
+
+    local characters = MacroStudio.CharacterMacroLibrary:GetCharacters()
+    self.charactersExpanded = self:GetCharacterListExpanded(#characters)
+
+    self.characterToggleButton:ClearAllPoints()
+    self.characterToggleButton:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
+    self.characterToggleButton:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
+    self.characterToggleButton.Text:SetText(self.charactersExpanded and "Characters  v" or "Characters  >")
+    self.characterToggleButton.selected = false
+    self.characterToggleButton:SetBackdropColor(0.065, 0.08, 0.105, 1)
+    MacroStudio.Helpers:SetButtonTooltip(
+        self.characterToggleButton,
+        "Character List",
+        self.charactersExpanded and "Hide individual characters." or "Show individual characters."
+    )
+    yOffset = yOffset + BUTTON_HEIGHT + 3
+
+    if self.charactersExpanded then
+        for _, character in ipairs(characters) do
+            local button = self:AcquireCharacterButton()
+            button:ClearAllPoints()
+            button:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
+            button:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
+            button.characterId = character.id
+            button.Text:SetText(character.displayName .. (character.isCurrent and "  Current" or ""))
+            button.selected = activeFilter
+                and activeFilter.kind == "libraryCharacter"
+                and activeFilter.characterId == character.id
+            button:SetBackdropColor(
+                button.selected and 0.12 or 0.065,
+                button.selected and 0.32 or 0.08,
+                button.selected and 0.5 or 0.105,
+                1
+            )
+            local detail = character.isCurrent
+                and "Current character - live native macros."
+                or ("Read-only snapshot. Last synced: "
+                    .. MacroStudio.CharacterMacroLibrary:FormatLastSynced(character.lastSynced))
+            MacroStudio.Helpers:SetButtonTooltip(button, character.displayName, detail)
+            self.visibleCharacterButtons[#self.visibleCharacterButtons + 1] = button
+            yOffset = yOffset + BUTTON_HEIGHT + 3
+        end
     end
 
     self.contentHeight = math.max(1, yOffset)

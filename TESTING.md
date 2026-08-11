@@ -22,6 +22,14 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 - [ ] `/reload`; confirm there is no duplication, data loss, or Lua error.
 - [ ] At minimum window size, confirm Characters helper and empty-state text remains fully readable.
 
+### Sidebar scalability
+
+- [ ] With 20+ known characters and many Categories, confirm Categories and its controls remain accessible without traversing the character list.
+- [ ] Collapse and expand Characters; confirm the indicator and individual entries update correctly.
+- [ ] While Characters is collapsed, confirm All Characters remains visible and usable.
+- [ ] Confirm the collapse state persists through close/reopen and `/reload`.
+- [ ] At minimum window size, confirm Categories, Library, and the Characters toggle remain usable.
+
 ### Phase 2 - Second character
 
 - [ ] Log into Character B and confirm B becomes Current.
