@@ -943,9 +943,14 @@ assert 'C_Timer.After(0, refresh)' in main_frame_source
 
 assert "CURRENT_SCHEMA_VERSION = 4" in database_source
 assert 'settingsButton:RegisterForClicks("LeftButtonUp")' in main_frame_source
-assert "self.Access:OpenSettings()" in main_frame_source
+assert 'settingsButton:HookScript("OnMouseDown"' in main_frame_source
+assert 'settingsButton:HookScript("OnMouseUp"' in main_frame_source
+assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
+assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
+assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120007" in toc_source
-assert "## Version: 1.1.0" in toc_source
+assert "## Version: 1.2.0-r3" in toc_source
+assert 'MacroStudio.VERSION = "1.2.0-r3"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -960,6 +965,9 @@ assert 'SLASH_MACROSTUDIO2 = "/ms"' in access_source
 assert "self.nativeMacroHandler = SlashCmdList[commandKey]" in access_source
 assert "SlashCmdList[self.nativeMacroCommandKey] = self.nativeMacroHandler" in access_source
 assert "IsNativeRegistrationTrusted" in access_source and "hash_SlashCmdList" in access_source
+assert "function Access:ToggleSettings" in access_source
+assert 'self:OpenSettings("slash")' in access_source
+assert 'self:ToggleSettings("minimap", true)' in access_source
 assert "function Access:ScheduleInitialize()" in access_source and "C_Timer.After(0, initialize)" in access_source
 assert 'command == "blizzard"' in access_source and "pcall(ShowMacroFrame)" in access_source
 assert 'pcall(self.nativeMacroHandler, "")' in access_source

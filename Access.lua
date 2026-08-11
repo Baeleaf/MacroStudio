@@ -207,8 +207,37 @@ function Access:OpenBlizzardMacroUI()
     return false
 end
 
-function Access:OpenSettings()
-    MacroStudio.Settings:Open()
+function Access:IsSettingsShown()
+    local settingsFrame = MacroStudio.Settings and MacroStudio.Settings.frame
+    return settingsFrame and settingsFrame:IsShown() or false
+end
+
+function Access:OpenSettings(source)
+    MacroStudio:Debug("settings open invoked", source or "unknown")
+    local opened = MacroStudio.Settings:Open()
+    MacroStudio:Debug("settings frame shown", self:IsSettingsShown())
+    return opened
+end
+
+function Access:CloseSettings(closeMainWindow, source)
+    MacroStudio:Debug("settings close invoked", source or "unknown", closeMainWindow and "with main" or "settings only")
+    local settingsFrame = MacroStudio.Settings and MacroStudio.Settings.frame
+    if settingsFrame and settingsFrame:IsShown() then
+        settingsFrame:Hide()
+    end
+    if closeMainWindow and MacroStudio.frame and MacroStudio.frame:IsShown() then
+        MacroStudio.frame:Hide()
+    end
+    return true
+end
+
+function Access:ToggleSettings(source, closeMainWindow)
+    MacroStudio:Debug("settings toggle invoked", source or "unknown", self:IsSettingsShown())
+    if self:IsSettingsShown() then
+        self:CloseSettings(closeMainWindow, source)
+        return false
+    end
+    return self:OpenSettings(source)
 end
 
 function Access:HandleSlashCommand(message)
@@ -228,7 +257,7 @@ function Access:HandleSlashCommand(message)
     elseif command == "blizzard" then
         self:OpenBlizzardMacroUI()
     elseif command == "settings" then
-        self:OpenSettings()
+        self:OpenSettings("slash")
     elseif command == "help" then
         MacroStudio:Print("/macrostudio or /ms - toggle MacroStudio")
         MacroStudio:Print("/ms settings - open MacroStudio settings")
@@ -244,7 +273,7 @@ end
 
 function Access:HandleLauncherClick(buttonName)
     if buttonName == "RightButton" then
-        self:OpenSettings()
+        self:ToggleSettings("minimap", true)
     else
         MacroStudio:Toggle()
     end

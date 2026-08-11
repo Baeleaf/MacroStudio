@@ -18,6 +18,47 @@ The Milestone 7 harness additionally covers unified name/icon/body drafts, one-c
 
 The Milestone 8 harness additionally covers default slash takeover, exact native-handler restoration, native fallback, preserved refresh/debug commands, settings migration, minimap visibility and radial persistence, launcher clicks, AddOn Compartment metadata, combat-safe opening, and conservative collision failure. Headless checks cannot prove real client slash load order, native frame visibility, minimap interaction, taint, or third-party ownership; test those phases live.
 
+## MS8 Settings Fix - 1.2.0-r3
+
+The headless harness verifies the installed title mouse-down hook, deferred shared-controller call, actual frame state, singleton reuse, overlay level, and minimap toggle transitions. It cannot prove how the live WoW client routes mouse-up through the draggable title-bar region, so complete these focused live checks.
+
+### Test A - Confirm build
+
+- [ ] Verify WoW reports or displays `1.2.0-r3`.
+
+### Test B - Title-bar button
+
+1. Open MacroStudio.
+2. Click **Settings** and confirm Settings opens.
+3. Click **Settings** again and confirm Settings closes while MacroStudio remains open.
+4. Repeat several times, including at minimum window size and after resizing.
+
+### Test C - Minimap right-click
+
+1. Close MacroStudio.
+2. Right-click the minimap `/M`; confirm MacroStudio and Settings open.
+3. Right-click `/M` again; confirm both close.
+4. Right-click again; confirm both reopen.
+
+### Test D - Mixed state
+
+1. Open MacroStudio with `/ms` while Settings is closed.
+2. Right-click the minimap `/M`; confirm Settings opens and MacroStudio stays open.
+3. Right-click again; confirm Settings and MacroStudio both close.
+
+### Test E - Other entry points
+
+- [ ] Confirm `/ms settings` opens or raises Settings without toggling it closed.
+- [ ] Confirm minimap left-click still toggles only MacroStudio.
+- [ ] Manually close Settings, then confirm the title button, `/ms settings`, and minimap right-click can reopen it.
+- [ ] Toggle the takeover and minimap-button settings and confirm both controls remain interactive.
+
+### Test F - Reload
+
+1. Run `/reload`.
+2. Confirm the title-bar Settings toggle once.
+3. Confirm the minimap right-click open/close sequence once.
+
 ## Milestone 8: Default Macro Window and Access Settings
 
 ### Phase 1 - Slash takeover

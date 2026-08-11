@@ -68,9 +68,11 @@ function Settings:Create()
 
     frame:SetScript("OnShow", function()
         self:Refresh()
+        MacroStudio:Debug("settings frame OnShow")
     end)
     frame:SetScript("OnHide", function()
         MacroStudio:SetMainWindowModalBlocked(false)
+        MacroStudio:Debug("settings frame OnHide")
     end)
 
     return frame

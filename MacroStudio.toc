@@ -6,7 +6,7 @@
 ## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter
 ## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave
 ## Author: Baeleaf
-## Version: 1.1.0
+## Version: 1.2.0-r3
 ## SavedVariables: MacroStudioDB
 
 Core.lua

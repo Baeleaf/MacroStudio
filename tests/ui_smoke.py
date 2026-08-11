@@ -460,41 +460,56 @@ def run_ui_smoke(root):
         SlashCmdList.MACROSTUDIO("blizzard")
         assert(nativeMacroOpenCalls == nativeOpensBeforeFallback + 1 and blizzardMacroOpenCalls == 2 and not ms.frame:IsShown(),
             "/ms blizzard should use the native Macro UI without changing MacroStudio visibility")
-        SlashCmdList.MACROSTUDIO("settings")
-        assert(ms.frame:IsShown() and ms.Settings.frame:IsShown()
-                and ms:IsMainWindowModalBlocked(),
-            "/ms settings should expose a compact General panel")
-        local sharedSettingsFrame = ms.Settings.frame
-        assert(ms.Settings.takeoverCheckbox:GetChecked() and ms.Settings.minimapCheckbox:GetChecked()
-                and ms.Settings.statusText:GetWidth() == 420,
-            "General settings should reflect persisted defaults in a minimum-size-safe layout")
-        ms.Settings.frame:Hide()
-        assert(not ms:IsMainWindowModalBlocked(), "closing Settings should restore main-window input")
-
         local sharedSettingsOpen = ms.Access.OpenSettings
+        local sharedSettingsToggle = ms.Access.ToggleSettings
         local sharedSettingsOpenCalls = 0
+        local sharedSettingsToggleCalls = 0
+        local lastSettingsToggleSource
         ms.Access.OpenSettings = function(access, ...)
             sharedSettingsOpenCalls = sharedSettingsOpenCalls + 1
             return sharedSettingsOpen(access, ...)
         end
+        ms.Access.ToggleSettings = function(access, source, ...)
+            sharedSettingsToggleCalls = sharedSettingsToggleCalls + 1
+            lastSettingsToggleSource = source
+            return sharedSettingsToggle(access, source, ...)
+        end
+
+        ms.frame:Show()
+        assert(ms.Settings.frame == nil, "title Settings should not require prior slash initialization")
+        assert(ms.settingsButton.clickButtons[1] == "LeftButtonUp"
+                and ms.settingsButton:GetFrameLevel() > ms.modalOverlay:GetFrameLevel(),
+            "the title Settings control should remain clickable above its modal overlay")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        local sharedSettingsFrame = ms.Settings.frame
+        assert(sharedSettingsToggleCalls == 1 and lastSettingsToggleSource == "title"
+                and sharedSettingsOpenCalls == 1 and sharedSettingsFrame:IsShown()
+                and ms.frame:IsShown() and ms:IsMainWindowModalBlocked(),
+            "title mouse-down should defer through the shared controller and open Settings")
+        assert(ms.Settings.takeoverCheckbox:IsEnabled() and ms.Settings.minimapCheckbox:IsEnabled()
+                and ms.Settings.statusText:GetWidth() == 420,
+            "Settings controls should remain interactive in the minimum-size-safe layout")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        assert(sharedSettingsToggleCalls == 2 and not sharedSettingsFrame:IsShown()
+                and ms.frame:IsShown() and not ms:IsMainWindowModalBlocked(),
+            "a second title click should close Settings while keeping MacroStudio open")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        assert(sharedSettingsToggleCalls == 3 and sharedSettingsOpenCalls == 2
+                and ms.Settings.frame == sharedSettingsFrame and sharedSettingsFrame:IsShown(),
+            "repeated title toggles should reuse the one Settings frame")
+        sharedSettingsFrame:Hide()
+        assert(not ms.Access:IsSettingsShown() and not ms:IsMainWindowModalBlocked(),
+            "manual Settings close should derive clean state from the actual frame")
+        ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
+        assert(sharedSettingsToggleCalls == 4 and sharedSettingsOpenCalls == 3
+                and sharedSettingsFrame:IsShown(),
+            "title Settings should reopen after a manual close")
+        sharedSettingsFrame:Hide()
         SlashCmdList.MACROSTUDIO("settings")
-        assert(sharedSettingsOpenCalls == 1 and ms.Settings.frame == sharedSettingsFrame,
-            "/ms settings should use the shared Settings path and existing frame")
-        sharedSettingsFrame:Hide()
-        assert(ms.settingsButton.clickButtons[1] == "LeftButtonUp",
-            "the title Settings button should explicitly dispatch its completed left click")
-        ms.settingsButton:TriggerScript("OnClick", "LeftButton")
-        assert(sharedSettingsOpenCalls == 2 and ms.Settings.frame == sharedSettingsFrame
-                and sharedSettingsFrame:IsShown(),
-            "the title button should use the shared Settings path and reuse the existing frame")
-        ms.settingsButton:TriggerScript("OnClick", "LeftButton")
-        assert(sharedSettingsOpenCalls == 3 and ms.Settings.frame == sharedSettingsFrame
-                and sharedSettingsFrame:IsShown(),
-            "repeated title clicks should raise the same Settings frame without duplication")
-        sharedSettingsFrame:Hide()
-        ms.settingsButton:TriggerScript("OnClick", "LeftButton")
-        assert(sharedSettingsOpenCalls == 4 and sharedSettingsFrame:IsShown(),
-            "the title button should reopen the same Settings frame after it is closed")
+        SlashCmdList.MACROSTUDIO("settings")
+        assert(sharedSettingsOpenCalls == 5 and sharedSettingsToggleCalls == 4
+                and ms.Settings.frame == sharedSettingsFrame and sharedSettingsFrame:IsShown(),
+            "/ms settings should open or raise the existing frame without toggling it closed")
         sharedSettingsFrame:Hide()
         local enumerationsBeforeSlashRefresh = enumerationCalls
         SlashCmdList.MACROSTUDIO("refresh")
@@ -526,9 +541,41 @@ def run_ui_smoke(root):
             "minimap dragging should persist angle without leaving a per-frame update running")
         ms.MinimapButton.button:TriggerScript("OnClick", "LeftButton")
         ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
-        assert(sharedSettingsOpenCalls == 5 and ms.Settings.frame == sharedSettingsFrame
-                and ms.Settings.frame:IsShown(), "minimap right-click should use the same Settings frame and path")
-        ms.Settings.frame:Hide()
+        assert(lastSettingsToggleSource == "minimap" and ms.frame:IsShown()
+                and ms.Settings.frame == sharedSettingsFrame and sharedSettingsFrame:IsShown(),
+            "first minimap right-click should open MacroStudio and the shared Settings frame")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not ms.frame:IsShown() and not sharedSettingsFrame:IsShown(),
+            "second minimap right-click should close Settings and MacroStudio")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(ms.frame:IsShown() and sharedSettingsFrame:IsShown()
+                and ms.Settings.frame == sharedSettingsFrame,
+            "third minimap right-click should reopen both without duplicating Settings")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not ms.frame:IsShown() and not sharedSettingsFrame:IsShown(),
+            "repeated minimap right-click toggles should remain stable")
+
+        sharedSettingsFrame:Show()
+        assert(sharedSettingsFrame:IsShown() and not ms.frame:IsShown(),
+            "orphan normalization fixture should start with only Settings shown")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not sharedSettingsFrame:IsShown() and not ms.frame:IsShown(),
+            "minimap right-click should close an orphaned Settings frame safely")
+
+        ms.frame:Show()
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(ms.frame:IsShown() and sharedSettingsFrame:IsShown(),
+            "with MacroStudio already open, minimap right-click should open Settings")
+        sharedSettingsFrame:Hide()
+        assert(ms.frame:IsShown() and not ms.Access:IsSettingsShown(),
+            "manual Settings close should not leave stale controller state")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(ms.frame:IsShown() and sharedSettingsFrame:IsShown()
+                and ms.Settings.frame == sharedSettingsFrame,
+            "minimap right-click should reopen Settings after manual close")
+        ms.MinimapButton.button:TriggerScript("OnClick", "RightButton")
+        assert(not ms.frame:IsShown() and not sharedSettingsFrame:IsShown(),
+            "closing the reopened minimap workflow should dismiss both frames")
         local editsBeforeCombatAccess, deletesBeforeCombatAccess = editCalls, deleteCalls
         combat = true
         SlashCmdList.MACROSTUDIO("")

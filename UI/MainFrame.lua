@@ -125,8 +125,25 @@ function MacroStudio:CreateMainFrame()
     settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -3, 0)
     settingsButton:SetText("Settings")
     settingsButton:RegisterForClicks("LeftButtonUp")
-    settingsButton:SetScript("OnClick", function()
-        self.Access:OpenSettings()
+    settingsButton:HookScript("OnMouseDown", function(_, button)
+        self:Debug("title settings mouse down", button or "unknown")
+        if button ~= "LeftButton" then
+            return
+        end
+        local function toggleSettings()
+            self.Access:ToggleSettings("title", false)
+        end
+        if C_Timer and type(C_Timer.After) == "function" then
+            C_Timer.After(0, toggleSettings)
+        else
+            toggleSettings()
+        end
+    end)
+    settingsButton:HookScript("OnMouseUp", function(_, button)
+        self:Debug("title settings mouse up", button or "unknown")
+    end)
+    settingsButton:SetScript("OnClick", function(_, button)
+        self:Debug("title settings OnClick", button or "unknown")
     end)
     self.Helpers:SetButtonTooltip(settingsButton, "Settings", "Configure MacroStudio access and launcher options.")
     self.settingsButton = settingsButton
@@ -173,6 +190,7 @@ function MacroStudio:CreateMainFrame()
     modalOverlay:SetScript("OnMouseUp", function() end)
     modalOverlay:SetScript("OnMouseWheel", function() end)
     modalOverlay:Hide()
+    settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)
     self.modalOverlay = modalOverlay
     self.mainWindowModalBlocked = false
 
