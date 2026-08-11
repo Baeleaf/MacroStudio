@@ -425,6 +425,43 @@ function MacroStudio:OnActionBarChanged(reason)
     end
 end
 
+function MacroStudio:ScheduleMacroRefresh(reason)
+    if not self.initialized then
+        return
+    end
+
+    self.pendingMacroRefreshReason = reason or self.pendingMacroRefreshReason or "event"
+    if self.macroRefreshScheduled then
+        return
+    end
+
+    self.macroRefreshScheduled = true
+    local function refresh()
+        self.macroRefreshScheduled = nil
+        if self.nativeMutationInProgress then
+            self.pendingMacroRefresh = true
+            return
+        end
+
+        local refreshReason = self.pendingMacroRefreshReason or "event"
+        self.pendingMacroRefreshReason = nil
+        self.pendingMacroRefresh = nil
+        self:RefreshMacros(refreshReason)
+    end
+
+    if C_Timer and type(C_Timer.After) == "function" then
+        C_Timer.After(0, refresh)
+    else
+        refresh()
+    end
+end
+
+function MacroStudio:FinishNativeMacroMutation(reason)
+    self.nativeMutationInProgress = false
+    self.pendingMacroRefresh = nil
+    self:ScheduleMacroRefresh(reason or "native mutation")
+end
+
 function MacroStudio:RefreshMacros(reason)
     if not self.initialized then
         return
@@ -489,11 +526,12 @@ end
 function MacroStudio:OnMacrosChanged(reason)
     if self.nativeMutationInProgress then
         self.pendingMacroRefresh = true
+        self.pendingMacroRefreshReason = reason or "UPDATE_MACROS"
         return
     end
     if self.initialized then
         self:Debug("UPDATE_MACROS received")
-        self:RefreshMacros(reason or "event")
+        self:ScheduleMacroRefresh(reason or "event")
     end
 end
 
@@ -516,8 +554,7 @@ function MacroStudio:SaveSelectedMacro()
     local body = self.Editor:GetBody()
     self.nativeMutationInProgress = true
     local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, body)
-    self.nativeMutationInProgress = false
-    self.pendingMacroRefresh = nil
+    self:FinishNativeMacroMutation("save")
 
     if not saved then
         self.Editor:SetNotice(message or "The macro could not be saved.", true)
@@ -726,8 +763,7 @@ function MacroStudio:CreateNativeMacro(request)
 
     self.nativeMutationInProgress = true
     local created, macro, message = self.MacroRepository:Create(request)
-    self.nativeMutationInProgress = false
-    self.pendingMacroRefresh = nil
+    self:FinishNativeMacroMutation("create")
     if not created then
         self:UpdateActionControls()
         return false, message or "The macro could not be created."
@@ -802,8 +838,7 @@ function MacroStudio:DeleteSelectedMacro(snapshot)
     local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(snapshot)
     self.nativeMutationInProgress = true
     local deleted, message = self.MacroRepository:Delete(snapshot)
-    self.nativeMutationInProgress = false
-    self.pendingMacroRefresh = nil
+    self:FinishNativeMacroMutation("delete")
     if not deleted then
         self.Editor:SetNotice(message or "The macro could not be deleted.", true)
         return false

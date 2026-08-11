@@ -76,8 +76,8 @@ Editing assistance must never silently rewrite a working macro or claim semantic
 
 ## Native macro management
 
-- [ ] Rename existing native macros.
-- [ ] Change an existing macro's icon or scope.
+- [ ] Edit an existing native macro's name and icon after creation, reusing safe `EditMacro` target revalidation and duplicate-name protections.
+- [ ] Change an existing macro's scope.
 - [ ] Duplicate a native macro.
 - [ ] Warn when destructive changes affect macros currently placed on action slots.
 

@@ -25,7 +25,7 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 ### Sidebar scalability
 
 - [ ] With 20+ known characters and many Categories, confirm Categories and its controls remain accessible without traversing the character list.
-- [ ] Collapse and expand Characters; confirm the indicator and individual entries update correctly.
+- [ ] Collapse and expand Characters; confirm the plus/minus icon, Show/Hide tooltip, and individual entries update correctly.
 - [ ] While Characters is collapsed, confirm All Characters remains visible and usable.
 - [ ] Confirm the collapse state persists through close/reopen and `/reload`.
 - [ ] At minimum window size, confirm Categories, Library, and the Characters toggle remain usable.
@@ -100,6 +100,7 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 
 - [x] Create same-name macros with different bodies and icons.
 - [x] Place only one on a bar and verify only that exact macro is marked.
+- [ ] With Macro A already on a bar, create same-name Macro B and confirm Macro A's indicator remains correct without another action-bar trigger.
 - [x] Use `/ms debug on` and capture the structural slot identity lines if either macro is unresolved or ambiguous.
 
 ### Phase 4: Live changes
@@ -156,6 +157,8 @@ This feature is included in MacroStudio 1.1.0. Test the current development buil
 
 ## 12.1 PTR Compatibility
 
+PTR smoke testing passed on Interface `120100`. The development TOC intentionally remains unchanged; the next public release should update `## Interface` to `120100` only after the live client confirms it.
+
 Record the PTR client build, verified Interface number, and MacroStudio commit before testing. Do not change `MacroStudio.toc` or add compatibility code until the PTR client exposes a real problem. This is a focused regression pass; use the historical checks below only when a phase fails.
 
 ### Branch workflow
@@ -173,6 +176,7 @@ Record the PTR client build, verified Interface number, and MacroStudio commit b
 - [ ] Run `/reload` and confirm no Lua errors.
 - [ ] Open MacroStudio with `/ms` and `/macrostudio`.
 - [ ] Confirm the complete window layout renders correctly.
+- [ ] Confirm WoW's AddOns list shows the MacroStudio project icon instead of the question-mark fallback.
 
 ### Phase 2: Native macro APIs
 

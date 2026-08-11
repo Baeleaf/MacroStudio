@@ -1,6 +1,7 @@
 ## Interface: 120007
 ## Title: MacroStudio
 ## Notes: A modern macro editor and organizer for World of Warcraft.
+## IconTexture: Interface\AddOns\MacroStudio\Media\MacroStudioIcon.tga
 ## Author: Baeleaf
 ## Version: 1.1.0
 ## SavedVariables: MacroStudioDB

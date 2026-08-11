@@ -125,7 +125,7 @@ Every Save and Delete starts from a copied snapshot. Immediately before the muta
 
 Save passes the enumerated index to `EditMacro`, refreshes, and resolves the returned/original/unique full-field result. Create refreshes capacity, validates all fields, calls `CreateMacro`, refreshes, and selects the returned or uniquely matching record. Delete refreshes, revalidates the exact snapshot, calls `DeleteMacro(index)`, and requires the relevant scope count to decrease by one.
 
-`UPDATE_MACROS` can fire around a native mutation. `UI/MainFrame.lua` defers that event while the repository is operating, then performs one controlled metadata reconciliation. For Delete, the trusted metadata record is removed first so a shifted neighbor cannot inherit it.
+`UPDATE_MACROS` can fire synchronously during a native mutation or before action-bar identity has settled. `UI/MainFrame.lua` coalesces those notifications and defers one repository, snapshot, metadata, and action-bar reconciliation until after the mutation completes. For Delete, the trusted metadata record is still removed first so a shifted neighbor cannot inherit it.
 
 ## Native action-bar drag handoff
 
@@ -157,7 +157,7 @@ The generated Retail API documentation identifies `ACTIONBAR_SLOT_CHANGED` as th
 - `UPDATE_SHAPESHIFT_FORM`
 - `UPDATE_POSSESS_BAR`
 
-`UPDATE_MACROS` remains part of macro reconciliation. It refreshes the macro repository first and then rebuilds action usage, so shifted or changed indices are checked against the new exact snapshots. An action-only event performs the same current-snapshot validation against the existing repository; a mismatch is omitted until reconciliation instead of being assigned to a neighbor.
+`UPDATE_MACROS` remains part of macro reconciliation. Its handler schedules one deferred, debounced refresh that rebuilds the macro repository before action usage, so Create, Save, Delete, rename, and index shifts are checked against settled exact snapshots. An action-only event performs the same current-snapshot validation against the existing repository; a mismatch is omitted until reconciliation instead of being assigned to a neighbor.
 
 The data path is:
 

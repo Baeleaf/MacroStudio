@@ -11,6 +11,7 @@ Notable user-facing changes to MacroStudio are documented here.
 
 ### Fixed
 
+- Keep action-bar usage accurate after native macro creation, updates, deletion, and index changes.
 - Prevent resolved spell or item IDs from being mistaken for native macro indices when detecting action-bar usage.
 
 ## 1.1.0

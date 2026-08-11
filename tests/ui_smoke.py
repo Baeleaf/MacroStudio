@@ -24,6 +24,11 @@ def run_ui_smoke(root):
         editCalls = 0
         deleteCalls = 0
         actionInfoCalls = 0
+        deferTimers = false
+        timerCallbacks = {}
+        nativeMacroEventCallback = nil
+        createdAccountMacro = nil
+        createdCharacterMacro = nil
         actionSlots = {
             [3] = { "macro", 1001, "spell", "Account", 101 },
             [15] = { "macro", 1001, "spell", "Account", 101 },
@@ -141,6 +146,7 @@ def run_ui_smoke(root):
         function Frame:SetColorTexture(red, green, blue, alpha)
             self.color = { red, green, blue, alpha }
         end
+        function Frame:SetTexture(texture) self.texture = texture end
         function Frame:TriggerScript(event, ...) RunHandlers(self, event, ...) end
         function Frame:CreateFontString()
             return setmetatable({ scripts = {}, hooks = {}, shown = true, text = "" }, Frame)
@@ -167,8 +173,22 @@ def run_ui_smoke(root):
             return frame
         end
 
+        function RunDeferredTimers()
+            local callbacks = timerCallbacks
+            timerCallbacks = {}
+            for _, callback in ipairs(callbacks) do
+                callback()
+            end
+        end
+
         C_Timer = {
-            After = function(_, callback) callback() end,
+            After = function(_, callback)
+                if deferTimers then
+                    timerCallbacks[#timerCallbacks + 1] = callback
+                else
+                    callback()
+                end
+            end,
         }
 
         ScrollUtil = {
@@ -221,10 +241,13 @@ def run_ui_smoke(root):
         function date() return "Jan 01, 2026" end
         function GetNumMacros()
             enumerationCalls = enumerationCalls + 1
-            return 1, createdCharacterMacro and 2 or 1
+            return createdAccountMacro and 2 or 1, createdCharacterMacro and 2 or 1
         end
         function GetMacroInfo(index)
             if index == 1 then return "Account", 101, "/cast [@mouseover] Heal" end
+            if index == 2 and createdAccountMacro then
+                return createdAccountMacro.name, createdAccountMacro.icon, createdAccountMacro.body
+            end
             if index == 4 then return "Character", 102, "/say character" end
             if index == 5 and createdCharacterMacro then return createdCharacterMacro.name, createdCharacterMacro.icon, createdCharacterMacro.body end
             return nil
@@ -255,11 +278,23 @@ def run_ui_smoke(root):
             if perCharacter then
                 if createdCharacterMacro then return nil end
                 createdCharacterMacro = { name = name, icon = icon, body = body }
+                if nativeMacroEventCallback then nativeMacroEventCallback() end
                 return 5
             end
+            if createdAccountMacro then return nil end
+            createdAccountMacro = { name = name, icon = icon, body = body }
+            if nativeMacroEventCallback then nativeMacroEventCallback() end
             return 2
         end
-        function DeleteMacro() deleteCalls = deleteCalls + 1 end
+        function DeleteMacro(index)
+            deleteCalls = deleteCalls + 1
+            if index == 2 then
+                createdAccountMacro = nil
+            elseif index == 5 then
+                createdCharacterMacro = nil
+            end
+            if nativeMacroEventCallback then nativeMacroEventCallback() end
+        end
         function PickupMacro(index)
             pickupCalls[#pickupCalls + 1] = index
         end
@@ -463,8 +498,14 @@ def run_ui_smoke(root):
             "Categories and its controls should remain accessible before a large character library")
         assert(not ms.Sidebar.charactersExpanded
                 and #ms.Sidebar.visibleCharacterButtons == 0
-                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters  >",
-            "more than five known characters should default to a collapsed individual list")
+                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters"
+                and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-PlusButton-UP"
+                and ms.Sidebar.characterToggleButton.macroStudioTooltipTitle == "Show characters",
+            "large libraries should default to an obvious collapsed Characters control")
+        ms.Sidebar.characterToggleButton:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Show characters",
+            "collapsed Characters hover should explain the disclosure action")
+        ms.Sidebar.characterToggleButton:TriggerScript("OnLeave")
         assert(ms.Sidebar.allCharactersButton:IsShown(),
             "All Characters should remain visible while individual characters are collapsed")
         ms.Sidebar.allCharactersButton:GetScript("OnClick")(ms.Sidebar.allCharactersButton)
@@ -475,12 +516,20 @@ def run_ui_smoke(root):
         assert(MacroStudioDB.settings.characterLibraryExpanded
                 and ms.Sidebar.charactersExpanded
                 and #ms.Sidebar.visibleCharacterButtons == 21
-                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters  v",
-            "Characters should expand to show every current and offline character")
+                and ms.Sidebar.characterToggleButton.Text:GetText() == "Characters"
+                and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-MinusButton-UP"
+                and ms.Sidebar.characterToggleButton.macroStudioTooltipTitle == "Hide characters",
+            "Characters should use an obvious expanded control and show every character")
+        ms.Sidebar.characterToggleButton:TriggerScript("OnEnter")
+        assert(GameTooltip.tooltipTitle == "Hide characters",
+            "expanded Characters hover should explain the disclosure action")
+        ms.Sidebar.characterToggleButton:TriggerScript("OnLeave")
         ms.Sidebar:ToggleCharacterList()
         assert(MacroStudioDB.settings.characterLibraryExpanded == false
                 and not ms.Sidebar.charactersExpanded
-                and #ms.Sidebar.visibleCharacterButtons == 0,
+                and #ms.Sidebar.visibleCharacterButtons == 0
+                and ms.Sidebar.characterToggleIcon.texture == "Interface\\Buttons\\UI-PlusButton-UP"
+                and ms.Sidebar.characterToggleButton.macroStudioTooltipTitle == "Show characters",
             "Characters should collapse without changing the active filter")
 
         ms:Toggle()
@@ -542,6 +591,51 @@ def run_ui_smoke(root):
             "Shift-editor hover should reveal raw action slot numbers")
         ms.Editor.usageButton:TriggerScript("OnLeave")
         shiftDown = false
+
+        local scansBeforeSameNameCreate = ms.ActionBarRepository:GetScanCount()
+        deferTimers = true
+        nativeMacroEventCallback = function()
+            ms:OnMacrosChanged("UPDATE_MACROS")
+        end
+        local createdSameName, sameNameMacro = ms:CreateNativeMacro({
+            name = "Account",
+            icon = 202,
+            body = "/say same-name duplicate",
+            scope = "ACCOUNT",
+        })
+        assert(createdSameName and sameNameMacro and sameNameMacro.index == 2,
+            "same-name Create should return the exact new native macro")
+        assert(#timerCallbacks == 1
+                and ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameCreate,
+            "native Create and synchronous UPDATE_MACROS should debounce to one deferred refresh")
+        RunDeferredTimers()
+        local originalAccount = ms.MacroRepository:FindByIndex(1)
+        local originalCount, originalSlots = ms.ActionBarRepository:GetUsage(originalAccount)
+        assert(ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameCreate + 1
+                and originalCount == 2
+                and originalSlots[1] == 3
+                and originalSlots[2] == 15,
+            "creating a distinguishable same-name macro must preserve existing action-bar usage")
+
+        local scansBeforeSameNameDelete = ms.ActionBarRepository:GetScanCount()
+        assert(ms:DeleteSelectedMacro(ms.Helpers:CopyMacro(sameNameMacro)),
+            "same-name regression cleanup should delete the exact created macro")
+        assert(#timerCallbacks == 1
+                and ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameDelete,
+            "native Delete and synchronous UPDATE_MACROS should debounce to one deferred refresh")
+        RunDeferredTimers()
+        originalAccount = ms.MacroRepository:FindByIndex(1)
+        originalCount, originalSlots = ms.ActionBarRepository:GetUsage(originalAccount)
+        assert(ms.ActionBarRepository:GetScanCount() == scansBeforeSameNameDelete + 1
+                and originalCount == 2
+                and originalSlots[1] == 3
+                and originalSlots[2] == 15,
+            "deleting a same-name neighbor must preserve settled exact action-bar usage")
+        nativeMacroEventCallback = nil
+        deferTimers = false
+        ms:SetFilter("all")
+        ms:SelectMacro(originalAccount)
+        accountRow = ms.MacroList.visibleRows[1]
 
         local scansBeforeActionChange = ms.ActionBarRepository:GetScanCount()
         actionSlots[3] = nil

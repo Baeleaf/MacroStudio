@@ -10,6 +10,8 @@ MacroStudio.Sidebar = Sidebar
 
 local BUTTON_HEIGHT = 25
 local DEFAULT_EXPANDED_CHARACTER_LIMIT = 5
+local COLLAPSED_CHARACTER_ICON = "Interface\\Buttons\\UI-PlusButton-UP"
+local EXPANDED_CHARACTER_ICON = "Interface\\Buttons\\UI-MinusButton-UP"
 
 local function createFilterButton(parent, label, onClick, atlas)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
@@ -105,10 +107,18 @@ function Sidebar:Create(parent)
     end)
     self.allCharactersButton = allCharactersButton
 
-    local characterToggleButton = createFilterButton(scrollChild, "Characters  >", function()
+    local characterToggleButton = createFilterButton(scrollChild, "Characters", function()
         self:ToggleCharacterList()
     end)
+    local characterToggleIcon = characterToggleButton:CreateTexture(nil, "ARTWORK")
+    characterToggleIcon:SetSize(16, 16)
+    characterToggleIcon:SetPoint("LEFT", 6, 0)
+    characterToggleIcon:SetTexture(COLLAPSED_CHARACTER_ICON)
+    characterToggleButton.Text:ClearAllPoints()
+    characterToggleButton.Text:SetPoint("LEFT", characterToggleIcon, "RIGHT", 5, 0)
+    characterToggleButton.Text:SetPoint("RIGHT", -6, 0)
     self.characterToggleButton = characterToggleButton
+    self.characterToggleIcon = characterToggleIcon
 
     local categoriesHeading = MacroStudio.Helpers:CreateLabel(scrollChild, "GameFontNormalSmall", "CATEGORIES")
     categoriesHeading:SetTextColor(0.45, 0.72, 1)
@@ -281,13 +291,15 @@ function Sidebar:Rebuild(activeFilter)
     self.characterToggleButton:ClearAllPoints()
     self.characterToggleButton:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
     self.characterToggleButton:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
-    self.characterToggleButton.Text:SetText(self.charactersExpanded and "Characters  v" or "Characters  >")
+    self.characterToggleButton.Text:SetText("Characters")
+    self.characterToggleIcon:SetTexture(
+        self.charactersExpanded and EXPANDED_CHARACTER_ICON or COLLAPSED_CHARACTER_ICON
+    )
     self.characterToggleButton.selected = false
     self.characterToggleButton:SetBackdropColor(0.065, 0.08, 0.105, 1)
     MacroStudio.Helpers:SetButtonTooltip(
         self.characterToggleButton,
-        "Character List",
-        self.charactersExpanded and "Hide individual characters." or "Show individual characters."
+        self.charactersExpanded and "Hide characters" or "Show characters"
     )
     yOffset = yOffset + BUTTON_HEIGHT + 3
 

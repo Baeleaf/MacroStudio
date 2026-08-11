@@ -659,6 +659,20 @@ core_source = (ROOT / "Core.lua").read_text(encoding="utf-8")
 library_source = (ROOT / "CharacterMacroLibrary.lua").read_text(encoding="utf-8")
 database_source = (ROOT / "Database.lua").read_text(encoding="utf-8")
 toc_source = (ROOT / "MacroStudio.toc").read_text(encoding="utf-8")
+package_source = (ROOT / "scripts" / "package.ps1").read_text(encoding="utf-8")
+ui_smoke_source = (ROOT / "tests" / "ui_smoke.py").read_text(encoding="utf-8")
+icon_line = next((line for line in toc_source.splitlines() if line.startswith("## IconTexture:")), None)
+assert icon_line == r"## IconTexture: Interface\AddOns\MacroStudio\Media\MacroStudioIcon.tga"
+icon_prefix = "Interface\\AddOns\\MacroStudio\\"
+icon_relative = icon_line.split(":", 1)[1].strip()
+assert icon_relative.startswith(icon_prefix)
+runtime_icon = ROOT / icon_relative[len(icon_prefix):].replace("\\", "/")
+assert runtime_icon.is_file()
+icon_bytes = runtime_icon.read_bytes()
+assert len(icon_bytes) == 18 + (64 * 64 * 3)
+assert icon_bytes[2] == 2 and icon_bytes[16] == 24 and icon_bytes[17] & 0x20
+assert int.from_bytes(icon_bytes[12:14], "little") == 64
+assert int.from_bytes(icon_bytes[14:16], "little") == 64
 snapshot_copy_source = library_source.split("local function copySnapshotMacro", 1)[1].split("local function copyLiveMacro", 1)[0]
 snapshot_refresh_source = library_source.split("function CharacterMacroLibrary:RefreshCurrentSnapshot", 1)[1].split("function CharacterMacroLibrary:GetSyncCount", 1)[0]
 search_update_source = main_frame_source.split("function MacroStudio:SetSearchQuery", 1)[1].split("function MacroStudio:RefreshMacroList", 1)[0]
@@ -687,8 +701,11 @@ assert "characterLibraryExpanded" in sidebar_source
 assert "characterLibraryExpanded" not in library_source
 assert "DEFAULT_EXPANDED_CHARACTER_LIMIT = 5" in sidebar_source
 assert "if self.charactersExpanded then" in sidebar_source
-assert 'self.charactersExpanded and "Characters  v" or "Characters  >"' in sidebar_source
-assert "#ms.Editor.editorFocusBorderEdges == 4" in (ROOT / "tests" / "ui_smoke.py").read_text(encoding="utf-8")
+assert 'COLLAPSED_CHARACTER_ICON = "Interface\\\\Buttons\\\\UI-PlusButton-UP"' in sidebar_source
+assert 'EXPANDED_CHARACTER_ICON = "Interface\\\\Buttons\\\\UI-MinusButton-UP"' in sidebar_source
+assert '"Hide characters" or "Show characters"' in sidebar_source
+assert '"Characters  >"' not in sidebar_source and '"Characters  v"' not in sidebar_source
+assert "#ms.Editor.editorFocusBorderEdges == 4" in ui_smoke_source
 assert "modalOverlay:EnableMouse(true)" in main_frame_source
 assert "modalOverlay:EnableMouseWheel(true)" in main_frame_source
 assert "SetMainWindowModalBlocked(true)" in macro_dialog_source
@@ -717,6 +734,13 @@ assert '"resolvedIndex"' in action_bar_source and '"identity"' in action_bar_sou
 assert "GetActionInfo" not in macro_list_source and "GetActionInfo" not in editor_source
 assert "GetMacroSpell" not in macro_list_source and "GetMacroItem" not in editor_source
 assert 'SetScript("OnUpdate"' not in action_bar_source and 'SetScript("OnUpdate"' not in main_frame_source
+assert "function MacroStudio:ScheduleMacroRefresh(reason)" in main_frame_source
+assert "function MacroStudio:FinishNativeMacroMutation(reason)" in main_frame_source
+assert 'self:ScheduleMacroRefresh(reason or "event")' in main_frame_source
+assert 'self:FinishNativeMacroMutation("save")' in main_frame_source
+assert 'self:FinishNativeMacroMutation("create")' in main_frame_source
+assert 'self:FinishNativeMacroMutation("delete")' in main_frame_source
+assert "creating a distinguishable same-name macro" in ui_smoke_source
 assert 'ACTIONBAR_SLOT_CHANGED = true' in core_source
 assert 'PLAYER_ENTERING_WORLD = true' in core_source
 assert 'UPDATE_BONUS_ACTIONBAR = true' in core_source
@@ -725,6 +749,9 @@ assert 'UPDATE_OVERRIDE_ACTIONBAR = true' in core_source
 assert 'C_Timer.After(0, refresh)' in main_frame_source
 
 assert "CURRENT_SCHEMA_VERSION = 3" in database_source
+assert "## Interface: 120007" in toc_source
+assert "tocIconTexture" in package_source
+assert "runtimePaths.Add($iconRelativePath)" in package_source
 assert toc_source.index("CharacterMacroLibrary.lua") < toc_source.index("ActionBarRepository.lua")
 assert 'source = "SNAPSHOT"' in library_source and 'source = "LIVE"' in library_source
 assert "index" not in snapshot_copy_source and "index" not in snapshot_refresh_source
