@@ -1,7 +1,7 @@
 local _, MacroStudio = ...
 
 local Database = {
-    CURRENT_SCHEMA_VERSION = 3,
+    CURRENT_SCHEMA_VERSION = 4,
 }
 MacroStudio.Database = Database
 
@@ -62,6 +62,17 @@ function Database:Initialize()
     if type(MacroStudioDB.settings) ~= "table" then
         MacroStudioDB.settings = {}
     end
+    if type(MacroStudioDB.settings.useMacroStudioSlashCommands) ~= "boolean" then
+        MacroStudioDB.settings.useMacroStudioSlashCommands = true
+    end
+    if type(MacroStudioDB.settings.showMinimapButton) ~= "boolean" then
+        MacroStudioDB.settings.showMinimapButton = true
+    end
+    local minimapAngle = tonumber(MacroStudioDB.settings.minimapAngle)
+    if not minimapAngle then
+        minimapAngle = 225
+    end
+    MacroStudioDB.settings.minimapAngle = minimapAngle % 360
     if type(MacroStudioDB.metadata) ~= "table" then
         MacroStudioDB.metadata = {}
     end

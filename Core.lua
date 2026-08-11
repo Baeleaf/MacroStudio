@@ -49,6 +49,12 @@ function MacroStudio:OnPlayerLogin()
     if self.Initialize then
         self:Initialize()
     end
+    if self.Access then
+        self.Access:ScheduleInitialize()
+    end
+    if self.MinimapButton then
+        self.MinimapButton:Initialize()
+    end
 end
 
 function MacroStudio:OnCombatEvent(inCombat)

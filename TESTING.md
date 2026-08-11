@@ -16,6 +16,56 @@ The Milestone 6 harness additionally covers schema migration, GUID isolation, un
 
 The Milestone 7 harness additionally covers unified name/icon/body drafts, one-call exact-index saves, duplicate-name edits, saved question-mark icon identity, action-bar reconciliation, all-field external conflict recovery, external deletion safety, and distinct live versus offline editor presentation.
 
+The Milestone 8 harness additionally covers default slash takeover, exact native-handler restoration, native fallback, preserved refresh/debug commands, settings migration, minimap visibility and radial persistence, launcher clicks, AddOn Compartment metadata, combat-safe opening, and conservative collision failure. Headless checks cannot prove real client slash load order, native frame visibility, minimap interaction, taint, or third-party ownership; test those phases live.
+
+## Milestone 8: Default Macro Window and Access Settings
+
+### Phase 1 - Slash takeover
+
+- [ ] With takeover enabled, confirm `/ms`, `/macrostudio`, `/m`, and `/macro` all toggle MacroStudio.
+- [ ] Confirm unknown `/ms` arguments print concise help guidance and are not sent to chat.
+
+### Phase 2 - Blizzard fallback
+
+- [ ] Run `/ms blizzard`; confirm Blizzard's native Macro UI opens and any MacroStudio draft remains intact.
+- [ ] Close/reopen both windows and confirm neither window changes the other's visibility or draft by itself.
+
+### Phase 3 - Takeover setting
+
+- [ ] Disable takeover; confirm `/m` and `/macro` immediately return to Blizzard while `/ms` and `/macrostudio` stay with MacroStudio.
+- [ ] Re-enable takeover; confirm `/m` and `/macro` immediately return to MacroStudio without `/reload`.
+
+### Phase 4 - Settings persistence
+
+- [ ] Open General settings from the title-bar button and `/ms settings`; confirm both controls remain usable at minimum window size.
+- [ ] Toggle each setting, then close/reopen, `/reload`, and logout/login; confirm the selected states persist.
+
+### Phase 5 - Minimap
+
+- [ ] Confirm the `/M` button is readable; left-click toggles MacroStudio and right-click opens Settings.
+- [ ] Drag it around the standard minimap, `/reload`, and confirm the radial position persists.
+- [ ] Hide and show it in Settings; confirm visibility changes immediately and the remembered position returns.
+
+### Phase 6 - AddOn Compartment
+
+- [ ] Confirm MacroStudio appears with its `/M` icon and clicking it toggles MacroStudio.
+- [ ] Hide the traditional minimap button and confirm AddOn Compartment access remains available.
+
+### Phase 7 - Blizzard coexistence
+
+- [ ] Make a dirty name/icon/body draft, run `/ms blizzard`, and edit the same native macro externally.
+- [ ] Confirm the existing conflict notice and Revert/deletion safety still recover without saving, discarding, or targeting a neighbor.
+
+### Phase 8 - Combat
+
+- [ ] During combat, open/toggle through `/m`, `/macro`, `/ms`, the minimap button, and AddOn Compartment; confirm no Lua, taint, blocked-action, or protected-action errors.
+- [ ] Confirm Save, Create, Delete, Copy to Current Character, and action-bar drag retain their existing combat protections and never retry automatically.
+
+### Phase 9 - Regression
+
+- [ ] Spot-check Create, name/icon/body editing, Save/Revert, Delete, search, categories, tags, Favorites, action-bar drag, and On Bar usage.
+- [ ] Spot-check current/offline character views, Copy to Current Character, Forget Character, and read-only snapshots.
+
 ## Milestone 7: Edit Macro Name and Icon (Completed)
 
 ### Phase 1 - Name editing

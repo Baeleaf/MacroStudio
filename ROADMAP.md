@@ -88,7 +88,12 @@ Editing assistance must never silently rewrite a working macro or claim semantic
 - [ ] Duplicate a native macro.
 - [ ] Warn when destructive changes affect macros currently placed on action slots.
 
-## Discoverability
+## Completed development (Unreleased): default macro window and access settings
 
-- [ ] Add a minimap or addon-compartment launcher.
-- [ ] Consider optional `/m` behavior only if it can safely coexist with Blizzard's `/macro` command.
+- [x] Route `/m` and `/macro` to MacroStudio by default while preserving `/ms` and `/macrostudio`.
+- [x] Restore the exact captured Blizzard handler immediately when takeover is disabled.
+- [x] Keep Blizzard's native Macro UI available through `/ms blizzard`.
+- [x] Provide a compact settings panel with persistent access and launcher preferences.
+- [x] Add an optional draggable minimap launcher with remembered radial position.
+- [x] Register through the supported AddOn Compartment TOC metadata without manipulating Blizzard frames.
+- [x] Detect pre-existing slash ownership conservatively and retain `/ms` instead of entering a command conflict.

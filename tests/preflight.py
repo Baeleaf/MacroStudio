@@ -233,7 +233,7 @@ library_tests = load(
     local library = ms.CharacterMacroLibrary
     local repo = ms.MacroRepository
 
-    assert(MacroStudioDB.schemaVersion == 3, "schema 2 should migrate to schema 3")
+    assert(MacroStudioDB.schemaVersion == 4, "schema 2 should migrate to schema 4")
     assert(MacroStudioDB.settings.migrationSentinel == "settings"
             and MacroStudioDB.settings.window.x == 27,
         "migration should preserve settings")
@@ -241,6 +241,10 @@ library_tests = load(
             and MacroStudioDB.categories.migrationSentinel == "categories"
             and MacroStudioDB.history.migrationSentinel == "history",
         "migration should preserve metadata, categories, and history")
+    assert(MacroStudioDB.settings.useMacroStudioSlashCommands == true
+            and MacroStudioDB.settings.showMinimapButton == true
+            and MacroStudioDB.settings.minimapAngle == 225,
+        "migration should add the default-on access settings without replacing existing settings")
     assert(type(MacroStudioDB.characterLibrary.characters) == "table"
             and type(MacroStudioDB.characterLibrary.order) == "table",
         "migration should create the character library store")
@@ -249,6 +253,14 @@ library_tests = load(
     assert(MacroStudioDB.characterLibrary == migratedLibrary
             and MacroStudioDB.settings.migrationSentinel == "settings",
         "migration should be idempotent and non-destructive")
+    MacroStudioDB.settings.useMacroStudioSlashCommands = false
+    MacroStudioDB.settings.showMinimapButton = false
+    MacroStudioDB.settings.minimapAngle = 123
+    ms.Database:Initialize()
+    assert(MacroStudioDB.settings.useMacroStudioSlashCommands == false
+            and MacroStudioDB.settings.showMinimapButton == false
+            and MacroStudioDB.settings.minimapAngle == 123,
+        "migration should preserve explicit access settings and minimap position")
 
     local alpha = library:Initialize()
     assert(alpha.id == "guid:Player-1-ALPHA" and alpha.identityCertain,
@@ -811,6 +823,9 @@ dialogs_source = (ROOT / "UI" / "Dialogs.lua").read_text(encoding="utf-8")
 repository_source = (ROOT / "MacroRepository.lua").read_text(encoding="utf-8")
 action_bar_source = (ROOT / "ActionBarRepository.lua").read_text(encoding="utf-8")
 core_source = (ROOT / "Core.lua").read_text(encoding="utf-8")
+access_source = (ROOT / "Access.lua").read_text(encoding="utf-8")
+minimap_source = (ROOT / "MinimapButton.lua").read_text(encoding="utf-8")
+settings_source = (ROOT / "UI" / "Settings.lua").read_text(encoding="utf-8")
 library_source = (ROOT / "CharacterMacroLibrary.lua").read_text(encoding="utf-8")
 database_source = (ROOT / "Database.lua").read_text(encoding="utf-8")
 toc_source = (ROOT / "MacroStudio.toc").read_text(encoding="utf-8")
@@ -926,11 +941,33 @@ assert 'UPDATE_VEHICLE_ACTIONBAR = true' in core_source
 assert 'UPDATE_OVERRIDE_ACTIONBAR = true' in core_source
 assert 'C_Timer.After(0, refresh)' in main_frame_source
 
-assert "CURRENT_SCHEMA_VERSION = 3" in database_source
+assert "CURRENT_SCHEMA_VERSION = 4" in database_source
 assert "## Interface: 120007" in toc_source
+assert "## Version: 1.1.0" in toc_source
+assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
+assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
+assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
 assert "tocIconTexture" in package_source
 assert "runtimePaths.Add($iconRelativePath)" in package_source
+assert toc_source.index("Access.lua") < toc_source.index("MacroRepository.lua")
+assert toc_source.index("MinimapButton.lua") < toc_source.index("MacroRepository.lua")
+assert toc_source.index("UI\\Settings.lua") < toc_source.index("UI\\MainFrame.lua")
 assert toc_source.index("CharacterMacroLibrary.lua") < toc_source.index("ActionBarRepository.lua")
+assert 'SLASH_MACROSTUDIO1 = "/macrostudio"' in access_source
+assert 'SLASH_MACROSTUDIO2 = "/ms"' in access_source
+assert "self.nativeMacroHandler = SlashCmdList[commandKey]" in access_source
+assert "SlashCmdList[self.nativeMacroCommandKey] = self.nativeMacroHandler" in access_source
+assert "IsNativeRegistrationTrusted" in access_source and "hash_SlashCmdList" in access_source
+assert "function Access:ScheduleInitialize()" in access_source and "C_Timer.After(0, initialize)" in access_source
+assert 'command == "blizzard"' in access_source and "pcall(ShowMacroFrame)" in access_source
+assert 'pcall(self.nativeMacroHandler, "")' in access_source
+assert 'command == "settings"' in access_source
+assert "Another addon" in access_source and "FindAliasCollision" in access_source
+assert 'RegisterForClicks("LeftButtonUp", "RightButtonUp")' in minimap_source
+assert 'button:SetScript("OnUpdate", nil)' in minimap_source
+assert "useMacroStudioSlashCommands" in settings_source
+assert "showMinimapButton" in settings_source
+assert "Media\\\\MacroStudioIcon.tga" in minimap_source
 assert 'source = "SNAPSHOT"' in library_source and 'source = "LIVE"' in library_source
 assert "index" not in snapshot_copy_source and "index" not in snapshot_refresh_source
 assert "GetActionInfo" not in library_source and "GetMacroSpell" not in library_source
@@ -942,4 +979,4 @@ assert "Offline character snapshots cannot be placed on action bars." in main_fr
 assert "does not delete any WoW macros" in dialogs_source
 assert "ActionBarRepository:GetUsage" not in snapshot_copy_source
 run_ui_smoke(ROOT)
-print("PASS MacroStudio 1.1.0 preflight")
+print("PASS MacroStudio development preflight")
