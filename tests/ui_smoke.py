@@ -117,6 +117,11 @@ def run_ui_smoke(root):
             RunHandlers(self, "OnTextChanged", true)
         end
         function Frame:SetWordWrap(enabled) self.wordWrap = enabled and true or false end
+        function Frame:SetFontObject(fontObject)
+            assert(type(fontObject) == "table",
+                "SetFontObject requires a font object, not its global-name string")
+            self.fontObject = fontObject
+        end
         function Frame:GetText() return rawget(self, "text") or "" end
         function Frame:GetNumLetters() return #(rawget(self, "text") or "") end
         function Frame:HighlightText(startOffset, endOffset)
@@ -237,6 +242,8 @@ def run_ui_smoke(root):
 
         UIParent = CreateFrame("Frame", "UIParent")
         UIParent:SetSize(1920, 1080)
+        ChatFontNormal = { name = "ChatFontNormal" }
+        GameFontNormalLarge = { name = "GameFontNormalLarge" }
         Minimap = CreateFrame("Frame", "Minimap", UIParent)
         Minimap:SetSize(140, 140)
         Minimap.centerX, Minimap.centerY = 960, 540
@@ -471,6 +478,14 @@ def run_ui_smoke(root):
         local exportSyncsBefore = ms.CharacterMacroLibrary:GetSyncCount()
         local exportEnumerationsBefore, exportActionInfoBefore = enumerationCalls, actionInfoCalls
         local savedExportBody = ms.selectedMacro.body
+        local sharedOpenExport = ms.Access.OpenExport
+        local openExportCalls = 0
+        local lastOpenExportSource
+        ms.Access.OpenExport = function(access, source, ...)
+            openExportCalls = openExportCalls + 1
+            lastOpenExportSource = source
+            return sharedOpenExport(access, source, ...)
+        end
         ms.Editor.editBox:SetUserText("/say unsaved portable export draft")
         assert(ms.Editor:IsDirty(), "portable export dirty-draft fixture")
         combat = true
@@ -481,8 +496,17 @@ def run_ui_smoke(root):
         assert(sharedExportFrame and sharedExportFrame:IsShown() and not ms.frame:IsShown()
                 and ms:IsMainWindowModalBlocked(),
             "/ms export should open one standalone Export UI during combat without opening the editor")
+        assert(ms.ExportDialog.editBox.fontObject == ChatFontNormal,
+            "Export should pass Retail's actual ChatFontNormal object to SetFontObject")
+        assert(openExportCalls == 1 and lastOpenExportSource == "slash",
+            "the installed /ms dispatcher should invoke the shared Export controller")
+        sharedExportFrame:Hide()
+        SlashCmdList.MACROSTUDIO("export")
+        assert(openExportCalls == 2 and lastOpenExportSource == "slash"
+                and ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown(),
+            "closing and repeating /ms export should reopen the same frame")
         assert(initialExportText:find('"formatVersion": 1', 1, true)
-                and initialExportText:find('"addonVersion": "1.3.0-r1"', 1, true)
+                and initialExportText:find('"addonVersion": "1.3.0-r2"', 1, true)
                 and initialExportText:find(savedExportBody, 1, true)
                 and not initialExportText:find("unsaved portable export draft", 1, true),
             "export should contain saved native data and exclude the dirty draft")
@@ -570,10 +594,25 @@ def run_ui_smoke(root):
         SlashCmdList.MACROSTUDIO("settings")
         ms.Settings.exportButton:TriggerScript("OnClick")
         assert(ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown()
-                and not sharedSettingsFrame:IsShown() and ms.ExportDialog.exportText == initialExportText,
+                and not sharedSettingsFrame:IsShown() and ms.ExportDialog.exportText == initialExportText
+                and openExportCalls == 3 and lastOpenExportSource == "settings",
             "Settings Export should open the same singleton UI and regenerate the same unchanged library")
         sharedExportFrame:Hide()
         assert(not ms:IsMainWindowModalBlocked(), "closing Export should restore main-window input")
+        SlashCmdList.MACROSTUDIO("export")
+        assert(openExportCalls == 4 and lastOpenExportSource == "slash"
+                and ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown(),
+            "slash Export should reopen after a Settings-button Export")
+        ms.frame:Hide()
+        assert(sharedExportFrame:IsShown(),
+            "the top-level Export frame should remain visible when the main window hides")
+        sharedExportFrame:Hide()
+        SlashCmdList.MACROSTUDIO("settings")
+        SlashCmdList.MACROSTUDIO("export")
+        assert(openExportCalls == 5 and lastOpenExportSource == "slash"
+                and sharedExportFrame:IsShown() and not sharedSettingsFrame:IsShown(),
+            "/ms export should replace an open Settings panel through the shared controller")
+        sharedExportFrame:Hide()
         sharedSettingsFrame:Show()
         sharedSettingsFrame:Hide()
 

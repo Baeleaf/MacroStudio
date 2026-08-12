@@ -40,7 +40,6 @@ function ExportDialog:Create()
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true)
     frame:Hide()
-    self.frame = frame
 
     local titleBar = CreateFrame("Frame", nil, frame)
     titleBar:SetPoint("TOPLEFT", 1, -1)
@@ -93,7 +92,7 @@ function ExportDialog:Create()
     textPanel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 52)
 
     local _, editBox, scrollBox = MacroStudio.Helpers:CreateNativeScrollingEditBox(textPanel, 6)
-    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetFontObject(ChatFontNormal)
     editBox:SetTextColor(0.86, 0.9, 0.96)
     editBox:SetWordWrap(true)
     editBox:SetAutoFocus(false)
@@ -146,6 +145,8 @@ function ExportDialog:Create()
     if UISpecialFrames then
         UISpecialFrames[#UISpecialFrames + 1] = frame:GetName()
     end
+    self.frame = frame
+    MacroStudio:Debug("Export frame created")
     return frame
 end
 
@@ -202,28 +203,29 @@ end
 
 function ExportDialog:Open(source)
     MacroStudio:Debug("export open invoked", source or "unknown")
-    if MacroStudio.Settings and MacroStudio.Settings.frame and MacroStudio.Settings.frame:IsShown() then
-        MacroStudio.Settings.frame:Hide()
-    end
     if not MacroStudio.initialized then
         MacroStudio:Initialize()
     end
     local frame = self:Create()
-    if MacroStudio:IsMainWindowModalBlocked() and not frame:IsShown() then
+    local settingsFrame = MacroStudio.Settings and MacroStudio.Settings.frame
+    local settingsShown = settingsFrame and settingsFrame:IsShown() or false
+    if MacroStudio:IsMainWindowModalBlocked() and not frame:IsShown() and not settingsShown then
         MacroStudio:Print("Close the current dialog before opening Export.")
         return false
     end
 
+    MacroStudio:Debug("Export serialization start")
     local text, summary = MacroStudio.PortableExport:Generate()
-    if not self:SetExport(text, summary) then
-        frame:Show()
-        frame:Raise()
-        MacroStudio:SetMainWindowModalBlocked(true)
-        return false
+    MacroStudio:Debug("Export serialization complete", type(text) == "string" and #text or 0, "bytes")
+    local displayComplete = self:SetExport(text, summary)
+
+    if settingsShown then
+        settingsFrame:Hide()
     end
 
     MacroStudio:SetMainWindowModalBlocked(true)
     frame:Show()
     frame:Raise()
-    return true
+    MacroStudio:Debug("Export frame shown", frame:IsShown())
+    return displayComplete
 end

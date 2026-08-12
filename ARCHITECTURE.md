@@ -19,7 +19,7 @@ Native WoW frames and APIs are used directly. Runtime addon code has no third-pa
 ```text
 format = "MacroStudioPortableLibrary"
 formatVersion = 1
-addonVersion = "1.3.0-r1"
+addonVersion = "1.3.0-r2"
 ```
 
 The serializer is narrow and purpose-built. It writes only the fields below in a fixed order, encodes control characters with JSON escapes, preserves UTF-8 bytes and macro-body newlines, and never serializes arbitrary Lua tables. Export and future Import must not use `load`, `loadstring`, or any evaluation of exported text. There is no runtime serialization dependency.

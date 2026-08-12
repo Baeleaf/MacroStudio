@@ -20,6 +20,35 @@ The Milestone 8 harness additionally covers default slash takeover, exact native
 
 The Milestone 9.1 harness parses synthetic portable JSON and covers deterministic ordering, both native scopes, 20 offline characters with 600 ordered snapshots, duplicate-name metadata identity, categories, tags, Favorites, numeric/path icons, multiline/quoted/backslash/Unicode/empty/maximum bodies, dirty-draft exclusion, combat, zero native writes, both entry points, singleton open/close, exact large-text display, and visible oversize failure. Headless checks cannot prove live WoW keyboard selection, Ctrl+C, clipboard behavior, EditBox rendering performance, taint, or the maintainer's real library size; complete the live phases below.
 
+## MS9.1 Export Entry Fix - 1.3.0-r2
+
+The headless harness invokes the installed `/ms` dispatcher and Settings button script through the same Export controller, enforces the real `SetFontObject` argument shape, and covers standalone visibility plus close/reopen and cross-entry singleton reuse. It cannot prove WoW chat EditBox submission or clearing, so verify those behaviors live.
+
+### Test A - Build
+
+- [ ] Confirm WoW reports `1.3.0-r2`.
+
+### Test B - Slash command
+
+- [ ] Immediately after login, run `/ms export`; confirm the command submits normally and visible export text opens.
+- [ ] Close Export and repeat `/ms export`; confirm the same interface reopens.
+
+### Test C - Settings button
+
+- [ ] Run `/ms settings`, click **Export MacroStudio Library**, and confirm Settings closes while Export opens and remains visible.
+
+### Test D - Cross-entry lifecycle
+
+- [ ] Run `/ms export` -> close -> **Settings -> Export** -> close -> `/ms export`; confirm all three openings work.
+
+### Test E - Reload
+
+- [ ] Run `/reload`, then immediately run `/ms export`; confirm Export opens with no Lua or chat error.
+
+### Test F - Combat
+
+- [ ] In combat, run `/ms export`; confirm Export opens without taint, blocked actions, or native writes.
+
 ## MS8 Settings Fix - 1.2.0-r3
 
 The headless harness verifies the installed title mouse-down hook, deferred shared-controller call, actual frame state, singleton reuse, overlay level, and minimap toggle transitions. It cannot prove how the live WoW client routes mouse-up through the draggable title-bar region, so complete these focused live checks.
@@ -96,7 +125,7 @@ This intentionally short checklist is used after WoW patches or hotfixes to deci
 
 ### Phase 1 - Build and access
 
-- [ ] Confirm the loaded build reports `1.3.0-r1`.
+- [ ] Confirm the loaded build reports `1.3.0-r2`.
 - [ ] Run `/ms export`, then use **Settings -> Export MacroStudio Library**; confirm both open the same Export UI.
 
 ### Phase 2 - Export contents

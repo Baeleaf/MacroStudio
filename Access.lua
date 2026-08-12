@@ -212,6 +212,11 @@ function Access:IsSettingsShown()
     return settingsFrame and settingsFrame:IsShown() or false
 end
 
+function Access:OpenExport(source)
+    MacroStudio:Debug("Export controller invoked", source or "unknown")
+    return MacroStudio.ExportDialog:Open(source)
+end
+
 function Access:OpenSettings(source)
     MacroStudio:Debug("settings open invoked", source or "unknown")
     local opened = MacroStudio.Settings:Open()
@@ -257,7 +262,8 @@ function Access:HandleSlashCommand(message)
     elseif command == "blizzard" then
         self:OpenBlizzardMacroUI()
     elseif command == "export" then
-        MacroStudio.ExportDialog:Open("slash")
+        MacroStudio:Debug("/ms export dispatch")
+        self:OpenExport("slash")
     elseif command == "settings" then
         self:OpenSettings("slash")
     elseif command == "help" then

@@ -184,7 +184,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "1.3.0-r1"
+namespace.VERSION = "1.3.0-r2"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -963,7 +963,7 @@ export_text, unusual_body, maximum_body = export_fixture("MacroStudio", namespac
 portable = json.loads(export_text)
 assert portable["format"] == "MacroStudioPortableLibrary"
 assert portable["formatVersion"] == 1
-assert portable["addonVersion"] == "1.3.0-r1"
+assert portable["addonVersion"] == "1.3.0-r2"
 assert len(portable["accountMacros"]) == 120
 assert [macro["id"] for macro in portable["accountMacros"][:2]] == ["account-001", "account-002"]
 assert portable["accountMacros"][-1]["id"] == "account-120"
@@ -1162,8 +1162,8 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120100" in toc_source
-assert "## Version: 1.3.0-r1" in toc_source
-assert 'MacroStudio.VERSION = "1.3.0-r1"' in core_source
+assert "## Version: 1.3.0-r2" in toc_source
+assert 'MacroStudio.VERSION = "1.3.0-r2"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -1188,8 +1188,14 @@ assert "function Access:ScheduleInitialize()" in access_source and "C_Timer.Afte
 assert 'command == "blizzard"' in access_source and "pcall(ShowMacroFrame)" in access_source
 assert 'pcall(self.nativeMacroHandler, "")' in access_source
 assert 'command == "settings"' in access_source
-assert 'command == "export"' in access_source and 'ExportDialog:Open("slash")' in access_source
-assert "Export MacroStudio Library" in settings_source and 'ExportDialog:Open("settings")' in settings_source
+assert 'function Access:OpenExport(source)' in access_source
+assert 'command == "export"' in access_source and 'self:OpenExport("slash")' in access_source
+assert 'MacroStudio:Debug("/ms export dispatch")' in access_source
+assert "Export MacroStudio Library" in settings_source and 'Access:OpenExport("settings")' in settings_source
+assert 'SetFontObject(ChatFontNormal)' in export_dialog_source
+assert 'SetFontObject("ChatFontNormal")' not in export_dialog_source
+assert 'self.ExportDialog.frame:Hide()' not in main_frame_source
+assert 'type(fontObject) == "table"' in ui_smoke_source
 assert 'FORMAT_VERSION = 1' in export_source and 'FORMAT_NAME = "MacroStudioPortableLibrary"' in export_source
 assert "loadstring" not in export_source and "load(" not in export_source
 assert "CreateMacro" not in export_source and "EditMacro" not in export_source and "DeleteMacro" not in export_source
