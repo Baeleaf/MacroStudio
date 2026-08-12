@@ -2,6 +2,12 @@
 
 Notable user-facing changes to MacroStudio are documented here.
 
+## Unreleased
+
+### Added
+
+- Export saved native macros, cross-character snapshots, and organization data as a portable, copyable library backup.
+
 ## 1.2.0
 
 ### Added

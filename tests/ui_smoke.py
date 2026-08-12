@@ -119,6 +119,10 @@ def run_ui_smoke(root):
         function Frame:SetWordWrap(enabled) self.wordWrap = enabled and true or false end
         function Frame:GetText() return rawget(self, "text") or "" end
         function Frame:GetNumLetters() return #(rawget(self, "text") or "") end
+        function Frame:HighlightText(startOffset, endOffset)
+            self.highlightStart = startOffset or 0
+            self.highlightEnd = endOffset or #(rawget(self, "text") or "")
+        end
         function Frame:SetScript(event, handler) self.scripts[event] = handler end
         function Frame:HookScript(event, handler)
             self.hooks[event] = self.hooks[event] or {}
@@ -391,6 +395,7 @@ def run_ui_smoke(root):
         "CharacterMacroLibrary.lua",
         "ActionBarRepository.lua",
         "MetadataRepository.lua",
+        "PortableExport.lua",
         "Search.lua",
         "UI/Dialogs.lua",
         "UI/IconPicker.lua",
@@ -398,6 +403,7 @@ def run_ui_smoke(root):
         "UI/Editor.lua",
         "UI/MacroList.lua",
         "UI/Sidebar.lua",
+        "UI/ExportDialog.lua",
         "UI/Settings.lua",
         "UI/MainFrame.lua",
     ]
@@ -460,6 +466,56 @@ def run_ui_smoke(root):
         SlashCmdList.MACROSTUDIO("blizzard")
         assert(nativeMacroOpenCalls == nativeOpensBeforeFallback + 1 and blizzardMacroOpenCalls == 2 and not ms.frame:IsShown(),
             "/ms blizzard should use the native Macro UI without changing MacroStudio visibility")
+
+        local exportEditsBefore, exportDeletesBefore = editCalls, deleteCalls
+        local exportSyncsBefore = ms.CharacterMacroLibrary:GetSyncCount()
+        local exportEnumerationsBefore, exportActionInfoBefore = enumerationCalls, actionInfoCalls
+        local savedExportBody = ms.selectedMacro.body
+        ms.Editor.editBox:SetUserText("/say unsaved portable export draft")
+        assert(ms.Editor:IsDirty(), "portable export dirty-draft fixture")
+        combat = true
+        SlashCmdList.MACROSTUDIO("export")
+        combat = false
+        local sharedExportFrame = ms.ExportDialog.frame
+        local initialExportText = ms.ExportDialog.exportText
+        assert(sharedExportFrame and sharedExportFrame:IsShown() and not ms.frame:IsShown()
+                and ms:IsMainWindowModalBlocked(),
+            "/ms export should open one standalone Export UI during combat without opening the editor")
+        assert(initialExportText:find('"formatVersion": 1', 1, true)
+                and initialExportText:find('"addonVersion": "1.3.0-r1"', 1, true)
+                and initialExportText:find(savedExportBody, 1, true)
+                and not initialExportText:find("unsaved portable export draft", 1, true),
+            "export should contain saved native data and exclude the dirty draft")
+        assert(ms.Editor:GetBody() == "/say unsaved portable export draft" and ms.Editor:IsDirty(),
+            "export should leave the unsaved editor draft untouched")
+        assert(editCalls == exportEditsBefore and deleteCalls == exportDeletesBefore
+                and not createdAccountMacro and not createdCharacterMacro
+                and ms.CharacterMacroLibrary:GetSyncCount() == exportSyncsBefore
+                and enumerationCalls == exportEnumerationsBefore and actionInfoCalls == exportActionInfoBefore,
+            "combat export should not write native macros or refresh character snapshots")
+        assert(ms.ExportDialog.summaryText:GetText():find("Account macros: 1", 1, true)
+                and ms.ExportDialog.summaryText:GetText():find("Offline characters: 1", 1, true),
+            "Export UI should show computed library counts")
+        ms.ExportDialog.selectAllButton:TriggerScript("OnClick")
+        assert(ms.ExportDialog.editBox.highlightStart == 0
+                and ms.ExportDialog.editBox.highlightEnd == #initialExportText,
+            "Select All should prepare the complete export text for Ctrl+C")
+        ms.ExportDialog.editBox:SetUserText("tampered")
+        assert(ms.ExportDialog.editBox:GetText() == initialExportText,
+            "Export UI should restore its generated read-only text after user input")
+        local largeText = string.rep("x", 500000)
+        assert(ms.ExportDialog:SetExport(largeText, {
+            accountMacros = 0, currentCharacterMacros = 0, offlineCharacters = 0,
+            offlineMacros = 0, categories = 0, tags = 0, favorites = 0,
+        }) and ms.ExportDialog.editBox:GetText() == largeText,
+            "large Export text should display completely without truncation")
+        assert(not ms.ExportDialog:SetExport(string.rep("y", ms.ExportDialog.MAX_DISPLAY_BYTES + 1), {
+            accountMacros = 0, currentCharacterMacros = 0, offlineCharacters = 0,
+            offlineMacros = 0, categories = 0, tags = 0, favorites = 0,
+        }) and ms.ExportDialog.editBox:GetText() == "" and not ms.ExportDialog.selectAllButton:IsEnabled(),
+            "oversized Export text should fail visibly without showing a partial backup")
+        sharedExportFrame:Hide()
+        ms.Editor:SetMacro(ms.selectedMacro)
         local sharedSettingsOpen = ms.Access.OpenSettings
         local sharedSettingsToggle = ms.Access.ToggleSettings
         local sharedSettingsOpenCalls = 0
@@ -486,7 +542,7 @@ def run_ui_smoke(root):
                 and sharedSettingsOpenCalls == 1 and sharedSettingsFrame:IsShown()
                 and ms.frame:IsShown() and ms:IsMainWindowModalBlocked(),
             "title mouse-down should defer through the shared controller and open Settings")
-        assert(ms.Settings.takeoverCheckbox:IsEnabled() and ms.Settings.minimapCheckbox:IsEnabled()
+        assert(ms.Settings.takeoverCheckbox:IsEnabled() and ms.Settings.minimapCheckbox:IsEnabled() and ms.Settings.exportButton:IsEnabled()
                 and ms.Settings.statusText:GetWidth() == 420,
             "Settings controls should remain interactive in the minimum-size-safe layout")
         ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
@@ -511,6 +567,16 @@ def run_ui_smoke(root):
                 and ms.Settings.frame == sharedSettingsFrame and sharedSettingsFrame:IsShown(),
             "/ms settings should open or raise the existing frame without toggling it closed")
         sharedSettingsFrame:Hide()
+        SlashCmdList.MACROSTUDIO("settings")
+        ms.Settings.exportButton:TriggerScript("OnClick")
+        assert(ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown()
+                and not sharedSettingsFrame:IsShown() and ms.ExportDialog.exportText == initialExportText,
+            "Settings Export should open the same singleton UI and regenerate the same unchanged library")
+        sharedExportFrame:Hide()
+        assert(not ms:IsMainWindowModalBlocked(), "closing Export should restore main-window input")
+        sharedSettingsFrame:Show()
+        sharedSettingsFrame:Hide()
+
         local enumerationsBeforeSlashRefresh = enumerationCalls
         SlashCmdList.MACROSTUDIO("refresh")
         assert(enumerationCalls > enumerationsBeforeSlashRefresh and ms.frame:IsShown(),

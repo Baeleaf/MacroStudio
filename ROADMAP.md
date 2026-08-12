@@ -56,12 +56,15 @@ The roadmap records shipped capabilities and likely future directions; unchecked
 - [x] Search offline macro names, complete bodies, character names, and realms without native rescans.
 - [x] Forget one offline snapshot with confirmation while preserving Blizzard macros and unrelated MacroStudio data.
 
-## Portability, backups, and history
+## Milestone 9: portability, backups, and history
 
-- [ ] Full-profile import/export.
-- [ ] Selective macro and metadata import/export.
-- [ ] Categories-only import/export.
-- [ ] Preview incoming changes and conflicts before writing native macros.
+- [x] Define portable format v1 independently from the SavedVariables schema and addon version.
+- [x] Export saved Account/current-character macros, offline snapshots, categories, tags, Favorites, and exact associations.
+- [x] Provide `/ms export` and Settings access to a selectable, copyable, read-only export view.
+- [ ] Parse and validate portable exports without executing code.
+- [ ] Preview incoming macros, metadata, and conflicts before any native writes.
+- [ ] Import only after explicit confirmation with safe duplicate/conflict choices.
+- [ ] Add selective macro, metadata, and categories-only transfer after full-library Import is proven safe.
 - [ ] Treat imported content as untrusted text and never execute it as Lua.
 - [ ] Snapshot/version history, backups, and recoverable deletion with sensible retention.
 

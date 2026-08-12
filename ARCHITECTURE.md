@@ -12,6 +12,77 @@ Version 1.2.0 also makes MacroStudio the default `/m` and `/macro` destination, 
 
 Native WoW frames and APIs are used directly. Runtime addon code has no third-party dependency. The Python/Lupa headless harness is development-only.
 
+## Milestone 9.1 portable export
+
+`PortableExport.lua` defines portable format v1 as deterministic, human-inspectable JSON. The interchange version is independent from both the SavedVariables schema and addon release:
+
+```text
+format = "MacroStudioPortableLibrary"
+formatVersion = 1
+addonVersion = "1.3.0-r1"
+```
+
+The serializer is narrow and purpose-built. It writes only the fields below in a fixed order, encodes control characters with JSON escapes, preserves UTF-8 bytes and macro-body newlines, and never serializes arbitrary Lua tables. Export and future Import must not use `load`, `loadstring`, or any evaluation of exported text. There is no runtime serialization dependency.
+
+```text
+portable library
+|-- format, formatVersion, addonVersion
+|-- accountMacros[]
+|   `-- id, order, scope, name, icon { kind, value }, body
+|-- currentCharacter
+|   |-- id
+|   |-- identity { guid, name, realm, identityCertain }
+|   `-- macros[]
+|-- offlineCharacters[]
+|   |-- id
+|   |-- identity { guid, name, realm, identityCertain }
+|   |-- lastSynced
+|   `-- macros[]
+`-- organization
+    |-- categories[] { id, name }
+    |-- tags[] { id, name }
+    `-- associations[] { macroId, favorite, categoryId, tagIds[] }
+```
+
+### Portable content
+
+Account and current-character macro definitions come from the saved in-memory native repository, never the editor draft. Each definition includes its native scope, exact saved name, selected icon identity, unchanged body, and deterministic export-local ID/order. A numeric icon remains a numeric file identity; a path remains an exact string path.
+
+The current character carries source GUID when available plus name and realm for context. Offline characters are emitted in stored library order with separate identities, optional last-synced timestamps, and ordered snapshots. A foreign GUID is source context only; MS9.2 must never treat it as proof that an imported Character macro belongs to the current native character.
+
+Categories retain their explicit order. Canonical tags use deterministic case-insensitive order. Organization associations point to export-local macro IDs derived from exact live repository attachments. Duplicate names therefore remain separate, and metadata attached to only one duplicate cannot migrate to its neighbor by name. Unresolved/stale reconciliation records are not guessed onto an export target.
+
+### Intentionally excluded state
+
+Portable format v1 does not contain:
+
+- native macro indices or durable native handles;
+- action-bar slots, cached `On Bar` usage, resolved spell/item identities, or action-bar events;
+- reconciliation caches, stale-index evidence, conflict state, dirty drafts, or open-dialog state;
+- SavedVariables schema internals, migration counters, debug state, or temporary caches;
+- window position/size, minimap position/visibility, slash-command takeover, or other local presentation settings;
+- `macros-cache.txt` or any Blizzard cache-file content.
+
+These values are runtime-derived, machine-specific, transient, or unsafe as portable identity. Export does not serialize `MacroStudioDB` wholesale.
+
+### Read-only generation and display
+
+`PortableExport:Generate()` only observes `MacroRepository`, `CharacterMacroLibrary`, and `MetadataRepository`. It does not refresh repositories or snapshots and cannot call `CreateMacro`, `EditMacro`, or `DeleteMacro`. Export works during combat, does not save/discard a dirty editor, and does not change categories, tags, Favorites, action bars, ordering, or local settings.
+
+`UI/ExportDialog.lua` presents the complete string in one native scrolling EditBox with unlimited configured letters. After assignment it compares the EditBox text byte-for-byte with the generated export. A 4 MiB safety ceiling is far above the tested near-full native and multi-character libraries; exceeding it or any client truncation produces a visible failure and no partial backup text. Addons cannot write to the operating-system clipboard, so the user explicitly selects the text and presses Ctrl+C.
+
+### MS9.2 Import contract
+
+Import is intentionally absent from MS9.1. A future importer must treat all text as untrusted data and follow this sequence:
+
+1. Parse JSON without executing code.
+2. Require the known format name/version and validate every type, length, required field, reference, and count within conservative limits.
+3. Resolve all category, tag, character, icon, and macro-ID references before proposing changes.
+4. Present a preview of creations, metadata associations, unsupported content, and duplicate/conflict choices.
+5. Never treat a native index, macro name alone, or foreign GUID as current native identity.
+6. Perform no native write until the user explicitly confirms the validated plan.
+7. Revalidate capacity, combat state, and exact native targets immediately before each authorized write, and fail safely without overwriting existing macros.
+
 ## Milestone 8 Retail and 12.1 access research
 
 Research compared installed Retail `12.0.7.68974` and extracted Blizzard UI source commit `c878310d8432a65bac029c7bacc24eeb2e662bbe` with 12.1 source tag `12.1.0`, commit `057e2e1429765a2b9e9eb100889f2b7e50317307` (`12.1.0.69214`). In both clients, `Blizzard_ChatFrameBase` registers the logical `SLASH_COMMAND.MACRO` command through `SlashCommandUtil.CheckAddSlashCommand`; the localized `SLASH_MACRO1` and `SLASH_MACRO2` aliases supply `/macro` and `/m` on the English client. `CheckAddSlashCommand` installs one callback in `SlashCmdList` for both aliases.
@@ -73,6 +144,8 @@ Core.lua
 - `CharacterMacroLibrary.lua` resolves conservative character identity, replaces the current character snapshot from saved live repository data, builds cross-character views, and forgets offline snapshots.
 - `ActionBarRepository.lua` owns native action-slot inspection and builds a conservative, read-only exact macro snapshot to raw-slot lookup.
 - `MetadataRepository.lua` owns virtual organization records, preserves them through trusted native identity edits, and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
+- `PortableExport.lua` builds portable format v1 and serializes only its fixed interchange schema in deterministic JSON.
+- `UI/ExportDialog.lua` owns the singleton scrollable Export view, exact display verification, and visible size/truncation failures.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
 - `Search.lua` performs read-only matching against native macro fields and attached metadata.
 - `UI/Editor.lua` owns the unified name/icon/body draft, derives Save/Delete state, reuses the icon picker, and owns the editor's complete four-edge focus treatment.

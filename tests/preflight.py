@@ -4,6 +4,7 @@ Requires Python 3 and lupa. The embedded Lua runtime compiles every addon file,
 then WoW API stubs exercise repository mutation, metadata, and section filters.
 """
 
+import json
 from pathlib import Path
 
 from lupa.lua51 import LuaRuntime
@@ -61,6 +62,7 @@ lua.execute(
     }
     debugMessages = {}
     editCalls, lastEditCall, editMoveToEnd = 0, nil, false
+    createCalls, deleteCalls = 0, 0
 
     function GetNumMacros()
         return #accountMacros, #characterMacros
@@ -114,6 +116,7 @@ lua.execute(
     }
 
     function CreateMacro(name, icon, body, perCharacter)
+        createCalls = createCalls + 1
         local target = perCharacter and characterMacros or accountMacros
         local capacity = perCharacter and MAX_CHARACTER_MACROS or MAX_ACCOUNT_MACROS
         if #target >= capacity then return nil end
@@ -145,6 +148,7 @@ lua.execute(
     end
 
     function DeleteMacro(index)
+        deleteCalls = deleteCalls + 1
         if index <= MAX_ACCOUNT_MACROS then
             table.remove(accountMacros, index)
         else
@@ -180,7 +184,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "1.1.0"
+namespace.VERSION = "1.3.0-r1"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -207,6 +211,7 @@ load_addon_file("MacroRepository.lua", namespace)
 load_addon_file("CharacterMacroLibrary.lua", namespace)
 load_addon_file("ActionBarRepository.lua", namespace)
 load_addon_file("MetadataRepository.lua", namespace)
+load_addon_file("PortableExport.lua", namespace)
 load_addon_file("Search.lua", namespace)
 load_addon_file("UI/MacroList.lua", namespace)
 load_addon_file("UI/MainFrame.lua", namespace)
@@ -811,6 +816,212 @@ tests = load(
 )
 tests("MacroStudio", namespace)
 
+export_fixture = load(
+    r'''
+    local _, ms = ...
+    local unusualBody = [[/say "quoted" 'apostrophe' \\ path; [mod]
+|cff00ff00Ünicode|r]]
+    local maximumBody = string.rep("x", 255)
+    Constants.MacroConsts.MAX_ACCOUNT_MACROS = 120
+    Constants.MacroConsts.MAX_CHARACTER_MACROS = 30
+    MAX_ACCOUNT_MACROS = 120
+    MAX_CHARACTER_MACROS = 30
+    accountMacros = {
+        { name = "Duplicate", icon = 134400, selectedIcon = 134400, body = unusualBody },
+        {
+            name = "Duplicate",
+            icon = "Interface\\Icons\\INV_Misc_QuestionMark",
+            selectedIcon = "Interface\\Icons\\INV_Misc_QuestionMark",
+            body = maximumBody,
+        },
+    }
+    for macroIndex = 3, 120 do
+        accountMacros[macroIndex] = {
+            name = "Account " .. macroIndex,
+            icon = 700000 + macroIndex,
+            selectedIcon = 700000 + macroIndex,
+            body = "/say account " .. macroIndex,
+        }
+    end
+    characterMacros = {
+        { name = "Duplicate", icon = 900001, selectedIcon = 900001, body = "" },
+    }
+    for macroIndex = 2, 30 do
+        characterMacros[macroIndex] = {
+            name = "Character " .. macroIndex,
+            icon = 900000 + macroIndex,
+            selectedIcon = 900000 + macroIndex,
+            body = "/say character " .. macroIndex,
+        }
+    end
+
+    MacroStudioDB = {
+        schemaVersion = 4,
+        settings = {
+            window = { point = "CENTER", width = 1100, height = 650 },
+            minimapAngle = 123,
+            showMinimapButton = false,
+            useMacroStudioSlashCommands = false,
+            privateSentinel = "must-not-export",
+        },
+        metadata = { records = {}, nextId = 1 },
+        categories = { byId = {}, order = {}, nextId = 1 },
+        characterLibrary = { characters = {}, order = {} },
+        actionBarSentinel = { slots = { 3, 15 } },
+    }
+    ms.db = MacroStudioDB
+    ms.CharacterMacroLibrary.currentCharacter = nil
+    ms.CharacterMacroLibrary.syncCount = 0
+    playerGUID = "Player-1-EXPORT"
+    playerName = "Exporter"
+    playerRealm = "Home Realm"
+    local current = ms.CharacterMacroLibrary:Initialize()
+    local macros = ms.MacroRepository:Refresh()
+    ms.CharacterMacroLibrary:RefreshCurrentSnapshot(macros, 500)
+
+    local store = MacroStudioDB.characterLibrary
+    for characterIndex = 1, 20 do
+        local key = "guid:Player-OFFLINE-" .. characterIndex
+        local realm = characterIndex == 1 and "Realm One"
+            or characterIndex == 2 and "Realm Two"
+            or ("Realm " .. characterIndex)
+        local record = {
+            id = key,
+            guid = "Player-OFFLINE-" .. characterIndex,
+            name = characterIndex <= 2 and "Same Name" or ("Offline " .. characterIndex),
+            realm = realm,
+            displayName = (characterIndex <= 2 and "Same Name" or ("Offline " .. characterIndex))
+                .. " - " .. realm,
+            identityCertain = true,
+            lastSynced = 1000 + characterIndex,
+            macros = {},
+        }
+        for macroIndex = 1, 30 do
+            record.macros[macroIndex] = {
+                order = macroIndex,
+                name = "Snapshot " .. macroIndex,
+                icon = macroIndex == 1 and "Interface\\Icons\\INV_Misc_QuestionMark" or (800000 + macroIndex),
+                body = macroIndex == 1 and unusualBody or ("/say offline " .. characterIndex .. ":" .. macroIndex),
+            }
+        end
+        store.characters[key] = record
+        store.order[#store.order + 1] = key
+    end
+
+    local metadata = ms.MetadataRepository
+    metadata.attachedByIndex = {}
+    metadata.attachedByRecord = {}
+    metadata.reconciliation = {}
+    metadata:Reconcile(macros)
+    local category
+    for categoryIndex = 1, 12 do
+        local created = assert(metadata:CreateCategory(
+            categoryIndex == 1 and "Raid & Utility" or ("Scale Category " .. categoryIndex)
+        ))
+        category = category or created
+    end
+    assert(metadata:SetCategory(macros[2], category.id))
+    assert(metadata:AddTag(macros[2], "Alpha Tag"))
+    assert(metadata:AddTag(macros[2], [[Quote " Tag]]))
+    for tagIndex = 3, 14 do
+        assert(metadata:AddTag(macros[2], string.format("Scale Tag %02d", tagIndex)))
+    end
+    assert(metadata:ToggleFavorite(macros[2]))
+    assert(metadata:ToggleFavorite(macros[121]))
+    for macroIndex = 10, 29 do
+        assert(metadata:ToggleFavorite(macros[macroIndex]))
+    end
+
+    local createsBefore, editsBefore, deletesBefore = createCalls, editCalls, deleteCalls
+    local syncsBefore = ms.CharacterMacroLibrary:GetSyncCount()
+    local settingsBefore = MacroStudioDB.settings.privateSentinel
+    combat = true
+    local firstText, firstSummary = ms.PortableExport:Generate()
+    local secondText, secondSummary = ms.PortableExport:Generate()
+    combat = false
+
+    assert(firstText == secondText, "unchanged libraries should serialize deterministically")
+    assert(firstSummary.accountMacros == 120 and firstSummary.currentCharacterMacros == 30,
+        "export summary should count near-full live native scopes")
+    assert(firstSummary.offlineCharacters == 20 and firstSummary.offlineMacros == 600,
+        "large export summary should count every offline character and snapshot")
+    assert(firstSummary.categories == 12 and firstSummary.tags == 14 and firstSummary.favorites == 22,
+        "export summary should count scaled organization content")
+    assert(secondSummary.offlineMacros == firstSummary.offlineMacros,
+        "repeated export summaries should remain stable")
+    assert(createCalls == createsBefore and editCalls == editsBefore and deleteCalls == deletesBefore,
+        "export must perform zero native macro mutations, including during combat")
+    assert(ms.CharacterMacroLibrary:GetSyncCount() == syncsBefore,
+        "export must not refresh or mutate character snapshots")
+    assert(MacroStudioDB.settings.privateSentinel == settingsBefore,
+        "export must not mutate local settings")
+    return firstText, unusualBody, maximumBody
+    ''',
+    "@portable-export-tests",
+)
+export_text, unusual_body, maximum_body = export_fixture("MacroStudio", namespace)
+portable = json.loads(export_text)
+assert portable["format"] == "MacroStudioPortableLibrary"
+assert portable["formatVersion"] == 1
+assert portable["addonVersion"] == "1.3.0-r1"
+assert len(portable["accountMacros"]) == 120
+assert [macro["id"] for macro in portable["accountMacros"][:2]] == ["account-001", "account-002"]
+assert portable["accountMacros"][-1]["id"] == "account-120"
+assert [macro["order"] for macro in portable["accountMacros"]] == list(range(1, 121))
+assert portable["accountMacros"][0]["name"] == portable["accountMacros"][1]["name"] == "Duplicate"
+assert portable["accountMacros"][0]["body"] == unusual_body
+assert portable["accountMacros"][1]["body"] == maximum_body and len(maximum_body) == 255
+assert portable["accountMacros"][0]["icon"] == {"kind": "file", "value": 134400}
+assert portable["accountMacros"][1]["icon"] == {
+    "kind": "path",
+    "value": r"Interface\Icons\INV_Misc_QuestionMark",
+}
+assert portable["currentCharacter"]["identity"] == {
+    "guid": "Player-1-EXPORT",
+    "name": "Exporter",
+    "realm": "Home Realm",
+    "identityCertain": True,
+}
+assert len(portable["currentCharacter"]["macros"]) == 30
+assert portable["currentCharacter"]["macros"][0]["name"] == "Duplicate"
+assert portable["currentCharacter"]["macros"][0]["body"] == ""
+offline = portable["offlineCharacters"]
+assert len(offline) == 20 and sum(len(character["macros"]) for character in offline) == 600
+assert offline[0]["identity"]["name"] == offline[1]["identity"]["name"] == "Same Name"
+assert offline[0]["identity"]["realm"] != offline[1]["identity"]["realm"]
+assert offline[0]["identity"]["guid"] != offline[1]["identity"]["guid"]
+assert [macro["order"] for macro in offline[0]["macros"]] == list(range(1, 31))
+assert offline[0]["macros"][0]["body"] == unusual_body
+categories = portable["organization"]["categories"]
+assert len(categories) == 12 and categories[0] == {"id": "category-001", "name": "Raid & Utility"}
+tags = portable["organization"]["tags"]
+assert len(tags) == 14 and [tag["name"] for tag in tags[:2]] == ["Alpha Tag", 'Quote " Tag']
+associations = {item["macroId"]: item for item in portable["organization"]["associations"]}
+assert "account-001" not in associations
+assert associations["account-002"]["favorite"] is True
+assert associations["account-002"]["categoryId"] == "category-001"
+assert associations["account-002"]["tagIds"] == [f"tag-{index:03d}" for index in range(1, 15)]
+assert associations["current-character-001"]["favorite"] is True
+assert sum(item["favorite"] for item in associations.values()) == 22
+
+def assert_no_nonportable_keys(value):
+    if isinstance(value, dict):
+        forbidden = {
+            "index", "lastKnownIndex", "settings", "window", "minimapAngle", "actionBarSlots",
+            "onBar", "dirtyDraft", "externalConflict", "reconciliation", "debug",
+        }
+        assert forbidden.isdisjoint(value), forbidden.intersection(value)
+        for nested in value.values():
+            assert_no_nonportable_keys(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            assert_no_nonportable_keys(nested)
+
+assert_no_nonportable_keys(portable)
+assert "must-not-export" not in export_text
+assert "120100" not in export_text
+assert len(export_text.encode("utf-8")) > 100_000
+
 macro_list_source = (ROOT / "UI" / "MacroList.lua").read_text(encoding="utf-8")
 sidebar_source = (ROOT / "UI" / "Sidebar.lua").read_text(encoding="utf-8")
 editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
@@ -826,6 +1037,8 @@ core_source = (ROOT / "Core.lua").read_text(encoding="utf-8")
 access_source = (ROOT / "Access.lua").read_text(encoding="utf-8")
 minimap_source = (ROOT / "MinimapButton.lua").read_text(encoding="utf-8")
 settings_source = (ROOT / "UI" / "Settings.lua").read_text(encoding="utf-8")
+export_source = (ROOT / "PortableExport.lua").read_text(encoding="utf-8")
+export_dialog_source = (ROOT / "UI" / "ExportDialog.lua").read_text(encoding="utf-8")
 library_source = (ROOT / "CharacterMacroLibrary.lua").read_text(encoding="utf-8")
 database_source = (ROOT / "Database.lua").read_text(encoding="utf-8")
 toc_source = (ROOT / "MacroStudio.toc").read_text(encoding="utf-8")
@@ -949,8 +1162,8 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120100" in toc_source
-assert "## Version: 1.2.0" in toc_source
-assert 'MacroStudio.VERSION = "1.2.0"' in core_source
+assert "## Version: 1.3.0-r1" in toc_source
+assert 'MacroStudio.VERSION = "1.3.0-r1"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -958,6 +1171,9 @@ assert "tocIconTexture" in package_source
 assert "runtimePaths.Add($iconRelativePath)" in package_source
 assert toc_source.index("Access.lua") < toc_source.index("MacroRepository.lua")
 assert toc_source.index("MinimapButton.lua") < toc_source.index("MacroRepository.lua")
+assert toc_source.index("MetadataRepository.lua") < toc_source.index("PortableExport.lua")
+assert toc_source.index("PortableExport.lua") < toc_source.index("UI\\ExportDialog.lua")
+assert toc_source.index("UI\\ExportDialog.lua") < toc_source.index("UI\\Settings.lua")
 assert toc_source.index("UI\\Settings.lua") < toc_source.index("UI\\MainFrame.lua")
 assert toc_source.index("CharacterMacroLibrary.lua") < toc_source.index("ActionBarRepository.lua")
 assert 'SLASH_MACROSTUDIO1 = "/macrostudio"' in access_source
@@ -972,6 +1188,17 @@ assert "function Access:ScheduleInitialize()" in access_source and "C_Timer.Afte
 assert 'command == "blizzard"' in access_source and "pcall(ShowMacroFrame)" in access_source
 assert 'pcall(self.nativeMacroHandler, "")' in access_source
 assert 'command == "settings"' in access_source
+assert 'command == "export"' in access_source and 'ExportDialog:Open("slash")' in access_source
+assert "Export MacroStudio Library" in settings_source and 'ExportDialog:Open("settings")' in settings_source
+assert 'FORMAT_VERSION = 1' in export_source and 'FORMAT_NAME = "MacroStudioPortableLibrary"' in export_source
+assert "loadstring" not in export_source and "load(" not in export_source
+assert "CreateMacro" not in export_source and "EditMacro" not in export_source and "DeleteMacro" not in export_source
+assert "lastKnownIndex" not in export_source and "ActionBarRepository" not in export_source
+assert "MAX_DISPLAY_BYTES" in export_dialog_source
+assert "self.editBox:GetText() ~= text" in export_dialog_source
+assert "No partial export was shown" in export_dialog_source
+assert "HighlightText" in export_dialog_source and "Ctrl+C" in export_dialog_source
+assert "SetMaxLetters(0)" in export_dialog_source
 assert "Another addon" in access_source and "FindAliasCollision" in access_source
 assert 'RegisterForClicks("LeftButtonUp", "RightButtonUp")' in minimap_source
 assert 'button:SetScript("OnUpdate", nil)' in minimap_source

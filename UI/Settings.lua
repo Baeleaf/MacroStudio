@@ -19,7 +19,7 @@ function Settings:Create()
     end
 
     local frame = MacroStudio.Helpers:CreatePanel(UIParent)
-    frame:SetSize(470, 245)
+    frame:SetSize(470, 310)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetToplevel(true)
@@ -57,6 +57,20 @@ function Settings:Create()
     status:SetJustifyV("TOP")
     status:SetWordWrap(true)
     self.statusText = status
+
+    local dataHeading = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "DATA")
+    dataHeading:SetPoint("TOPLEFT", 20, -194)
+    dataHeading:SetTextColor(0.35, 0.75, 1)
+
+    local export = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    export:SetSize(210, 26)
+    export:SetPoint("TOPLEFT", dataHeading, "BOTTOMLEFT", 0, -9)
+    export:SetText("Export MacroStudio Library")
+    export:SetScript("OnClick", function()
+        MacroStudio.ExportDialog:Open("settings")
+    end)
+    MacroStudio.Helpers:SetButtonTooltip(export, "Portable Export", "Open a selectable, copyable export of saved macro-library content.")
+    self.exportButton = export
 
     local done = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     done:SetSize(90, 26)

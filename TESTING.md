@@ -18,6 +18,8 @@ The Milestone 7 harness additionally covers unified name/icon/body drafts, one-c
 
 The Milestone 8 harness additionally covers default slash takeover, exact native-handler restoration, native fallback, preserved refresh/debug commands, settings migration, minimap visibility and radial persistence, launcher clicks, AddOn Compartment metadata, combat-safe opening, and conservative collision failure. Headless checks cannot prove real client slash load order, native frame visibility, minimap interaction, taint, or third-party ownership; test those phases live.
 
+The Milestone 9.1 harness parses synthetic portable JSON and covers deterministic ordering, both native scopes, 20 offline characters with 600 ordered snapshots, duplicate-name metadata identity, categories, tags, Favorites, numeric/path icons, multiline/quoted/backslash/Unicode/empty/maximum bodies, dirty-draft exclusion, combat, zero native writes, both entry points, singleton open/close, exact large-text display, and visible oversize failure. Headless checks cannot prove live WoW keyboard selection, Ctrl+C, clipboard behavior, EditBox rendering performance, taint, or the maintainer's real library size; complete the live phases below.
+
 ## MS8 Settings Fix - 1.2.0-r3
 
 The headless harness verifies the installed title mouse-down hook, deferred shared-controller call, actual frame state, singleton reuse, overlay level, and minimap toggle transitions. It cannot prove how the live WoW client routes mouse-up through the draggable title-bar region, so complete these focused live checks.
@@ -89,6 +91,52 @@ This intentionally short checklist is used after WoW patches or hotfixes to deci
 ### Phase 6 - Persistence
 
 - [ ] Run `/reload`; confirm Settings, window geometry, minimap position, native macro state, and library data persist.
+
+## Milestone 9.1: Portable Export
+
+### Phase 1 - Build and access
+
+- [ ] Confirm the loaded build reports `1.3.0-r1`.
+- [ ] Run `/ms export`, then use **Settings -> Export MacroStudio Library**; confirm both open the same Export UI.
+
+### Phase 2 - Export contents
+
+- [ ] Generate a full export and compare its computed Account, current-character, offline-character, offline-snapshot, category, tag, and Favorite counts with the library.
+- [ ] Confirm the complete export text is scrollable, inspectable, selectable with Ctrl+A, and copyable with Ctrl+C.
+
+### Phase 3 - Macro fidelity
+
+- [ ] Spot-check a normal macro, multiline body, duplicate name, question-mark icon, long body, punctuation/quotes/backslashes, Unicode, and an empty body.
+- [ ] Confirm the serialized values represent the saved native definitions exactly without cleanup or normalization.
+
+### Phase 4 - Organization
+
+- [ ] Spot-check a Favorite, category, tag, and metadata assigned to only one duplicate-name macro.
+- [ ] Confirm each association names the intended export-local macro ID rather than a macro name or native index.
+
+### Phase 5 - Cross-character
+
+- [ ] Inspect at least two offline characters and confirm GUID context when available, name, realm, last sync, and ordered snapshots.
+- [ ] Confirm same-name characters on different realms remain separate and export does not mutate either snapshot.
+
+### Phase 6 - Dirty draft
+
+- [ ] Create an unsaved name/icon/body edit, generate Export, and confirm the draft remains untouched.
+- [ ] Confirm Export contains the latest saved native macro and does not Save or discard the draft.
+
+### Phase 7 - Combat
+
+- [ ] Generate Export during combat; confirm it works with no taint, blocked-action errors, or native macro writes.
+
+### Phase 8 - Large export / reload
+
+- [ ] With the real macro library, generate a full export, scroll throughout it, use Ctrl+A and Ctrl+C, and confirm there is no truncation.
+- [ ] Close/reopen Export, run `/reload`, and generate it again with no Lua errors or corrupted UI.
+
+### Phase 9 - Regression
+
+- [ ] Spot-check `/m`, `/macro`, Settings, minimap, Edit, Save/Revert, Create/Delete, action-bar drag, and **On Bar**.
+- [ ] Spot-check the offline library and **Copy to Current Character**.
 
 ## Milestone 8: Default Macro Window and Access Settings (Completed)
 

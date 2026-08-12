@@ -215,6 +215,9 @@ function MacroStudio:CreateMainFrame()
         if self.Settings and self.Settings.frame then
             self.Settings.frame:Hide()
         end
+        if self.ExportDialog and self.ExportDialog.frame then
+            self.ExportDialog.frame:Hide()
+        end
     end)
 
     frame:Hide()

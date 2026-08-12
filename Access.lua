@@ -256,11 +256,14 @@ function Access:HandleSlashCommand(message)
         MacroStudio.frame:Show()
     elseif command == "blizzard" then
         self:OpenBlizzardMacroUI()
+    elseif command == "export" then
+        MacroStudio.ExportDialog:Open("slash")
     elseif command == "settings" then
         self:OpenSettings("slash")
     elseif command == "help" then
         MacroStudio:Print("/macrostudio or /ms - toggle MacroStudio")
         MacroStudio:Print("/ms settings - open MacroStudio settings")
+        MacroStudio:Print("/ms export - export the portable MacroStudio library")
         MacroStudio:Print("/ms blizzard - open Blizzard's Macro UI")
         MacroStudio:Print("/ms refresh - force a fallback macro refresh")
         MacroStudio:Print("/ms debug [on|off] - control debug logging")
