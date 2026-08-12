@@ -116,7 +116,10 @@ def run_ui_smoke(root):
             self.text = text
             RunHandlers(self, "OnTextChanged", true)
         end
-        function Frame:SetWordWrap(enabled) self.wordWrap = enabled and true or false end
+        function Frame:SetWordWrap(enabled)
+            assert(self.frameType ~= "EditBox", "Retail EditBox has no SetWordWrap method")
+            self.wordWrap = enabled and true or false
+        end
         function Frame:SetFontObject(fontObject)
             assert(type(fontObject) == "table",
                 "SetFontObject requires a font object, not its global-name string")
@@ -197,9 +200,10 @@ def run_ui_smoke(root):
             return setmetatable({ scripts = {}, hooks = {}, shown = true, text = "" }, Frame)
         end
 
-        function CreateFrame(_, name, parent, template)
+        function CreateFrame(frameType, name, parent, template)
             local frame = setmetatable({
                 name = name,
+                frameType = frameType,
                 parent = parent,
                 template = template,
                 scripts = {},
@@ -506,7 +510,7 @@ def run_ui_smoke(root):
                 and ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown(),
             "closing and repeating /ms export should reopen the same frame")
         assert(initialExportText:find('"formatVersion": 1', 1, true)
-                and initialExportText:find('"addonVersion": "1.3.0-r2"', 1, true)
+                and initialExportText:find('"addonVersion": "1.3.0-r3"', 1, true)
                 and initialExportText:find(savedExportBody, 1, true)
                 and not initialExportText:find("unsaved portable export draft", 1, true),
             "export should contain saved native data and exclude the dirty draft")
@@ -613,6 +617,36 @@ def run_ui_smoke(root):
                 and sharedExportFrame:IsShown() and not sharedSettingsFrame:IsShown(),
             "/ms export should replace an open Settings panel through the shared controller")
         sharedExportFrame:Hide()
+
+        local realGenerate = ms.PortableExport.Generate
+        ms.PortableExport.Generate = function(exporter)
+            exporter:SetStage("collecting offline characters")
+            error("synthetic structural failure")
+        end
+        SlashCmdList.MACROSTUDIO("settings")
+        local settingsBeforeFailure = ms.Settings.frame
+        local settingsFailureContained = pcall(function()
+            ms.Settings.exportButton:TriggerScript("OnClick")
+        end)
+        assert(settingsFailureContained and settingsBeforeFailure:IsShown()
+                and not sharedExportFrame:IsShown()
+                and ms.Access.lastExportFailure.stage == "collecting offline characters"
+                and ms.Settings.statusText:GetText():find("Export failed at collecting offline characters", 1, true)
+                and not ms.Settings.statusText:GetText():find(savedExportBody, 1, true),
+            "Settings Export failures should be contained, visible, body-safe, and leave Settings open")
+        settingsBeforeFailure:Hide()
+        local slashFailureContained = pcall(function()
+            SlashCmdList.MACROSTUDIO("export")
+        end)
+        assert(slashFailureContained and not sharedExportFrame:IsShown()
+                and ms.Access.lastExportFailure.stage == "collecting offline characters",
+            "the installed slash dispatcher should contain Export failures and return normally")
+        ms.PortableExport.Generate = realGenerate
+        SlashCmdList.MACROSTUDIO("export")
+        assert(sharedExportFrame:IsShown() and ms.Access.lastExportFailure == nil,
+            "Export should recover and reopen normally after a contained failure")
+        sharedExportFrame:Hide()
+
         sharedSettingsFrame:Show()
         sharedSettingsFrame:Hide()
 

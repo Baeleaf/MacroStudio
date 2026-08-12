@@ -19,7 +19,7 @@ Native WoW frames and APIs are used directly. Runtime addon code has no third-pa
 ```text
 format = "MacroStudioPortableLibrary"
 formatVersion = 1
-addonVersion = "1.3.0-r2"
+addonVersion = "1.3.0-r3"
 ```
 
 The serializer is narrow and purpose-built. It writes only the fields below in a fixed order, encodes control characters with JSON escapes, preserves UTF-8 bytes and macro-body newlines, and never serializes arbitrary Lua tables. Export and future Import must not use `load`, `loadstring`, or any evaluation of exported text. There is no runtime serialization dependency.
@@ -66,6 +66,10 @@ Portable format v1 does not contain:
 These values are runtime-derived, machine-specific, transient, or unsafe as portable identity. Export does not serialize `MacroStudioDB` wholesale.
 
 ### Read-only generation and display
+
+Export is a staged pipeline: build the narrow portable model, validate its complete structure and references, serialize deterministic JSON, validate display capacity, populate the EditBox, and only then show the window and dismiss Settings. Model validation reports field paths without echoing macro contents, validates UTF-8 and array shape, and prevents unsupported icon/reference structures from reaching serialization.
+
+The shared `Access:OpenExport()` controller narrowly contains Export errors with `xpcall`. A failure reports its current stage in chat, leaves Settings visible when it was the launch source, hides partial Export UI, and returns normally to WoW's slash dispatcher. The Export frame is an independent `UIParent` child and is cached only after complete construction. Retail scrolling EditBoxes provide multiline wrapping through their template and do not expose `SetWordWrap`.
 
 `PortableExport:Generate()` only observes `MacroRepository`, `CharacterMacroLibrary`, and `MetadataRepository`. It does not refresh repositories or snapshots and cannot call `CreateMacro`, `EditMacro`, or `DeleteMacro`. Export works during combat, does not save/discard a dirty editor, and does not change categories, tags, Favorites, action bars, ordering, or local settings.
 

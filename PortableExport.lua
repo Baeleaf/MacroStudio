@@ -6,6 +6,15 @@ local PortableExport = {
 }
 MacroStudio.PortableExport = PortableExport
 
+function PortableExport:SetStage(stage)
+    self.stage = stage
+    MacroStudio:Debug("Portable Export stage", stage)
+end
+
+function PortableExport:GetStage()
+    return self.stage
+end
+
 local JSON_ESCAPES = {
     ['"'] = '\\"',
     ['\\'] = '\\\\',
@@ -86,6 +95,7 @@ local function normalizedTag(tag)
 end
 
 function PortableExport:Build()
+    self:SetStage("initializing portable model")
     local data = {
         format = self.FORMAT_NAME,
         formatVersion = self.FORMAT_VERSION,
@@ -104,12 +114,14 @@ function PortableExport:Build()
         },
     }
 
+    self:SetStage("collecting current-character identity")
     local currentSummary = MacroStudio.CharacterMacroLibrary:GetCurrentCharacter()
     local currentRecord = currentSummary
         and MacroStudio.CharacterMacroLibrary:GetCharacter(currentSummary.id)
         or currentSummary
     data.currentCharacter.identity = portableIdentity(currentRecord)
     local exportIdByNativeIndex = {}
+    self:SetStage("collecting account and current-character macros")
     local accountOrder = 0
     local characterOrder = 0
     for _, macro in ipairs(MacroStudio.MacroRepository:GetAll()) do
@@ -136,6 +148,7 @@ function PortableExport:Build()
         end
     end
 
+    self:SetStage("collecting offline characters")
     local store = MacroStudio.CharacterMacroLibrary:GetStore()
     for _, characterKey in ipairs(store and store.order or {}) do
         local record = store.characters[characterKey]
@@ -160,6 +173,7 @@ function PortableExport:Build()
         end
     end
 
+    self:SetStage("collecting categories and tags")
     local categoryIdBySourceId = {}
     for categoryIndex, category in ipairs(MacroStudio.MetadataRepository:GetCategories()) do
         local exportId = string.format("category-%03d", categoryIndex)
@@ -180,6 +194,7 @@ function PortableExport:Build()
         tagIdByName[normalizedTag(tag)] = exportId
     end
 
+    self:SetStage("collecting metadata associations")
     local favoriteCount = 0
     for _, macro in ipairs(MacroStudio.MacroRepository:GetAll()) do
         local macroId = exportIdByNativeIndex[macro.index]
@@ -221,7 +236,236 @@ function PortableExport:Build()
         tags = #data.organization.tags,
         favorites = favoriteCount,
     }
+    self:SetStage("portable model built")
     return data, summary
+end
+
+local function invalid(path, reason)
+    error("Invalid portable export at " .. path .. ": " .. reason, 0)
+end
+
+local function isInteger(value)
+    return type(value) == "number"
+        and value == value
+        and value ~= math.huge
+        and value ~= -math.huge
+        and value == math.floor(value)
+end
+
+local function validUtf8(value)
+    local index = 1
+    while index <= #value do
+        local first = string.byte(value, index)
+        if first <= 0x7F then
+            index = index + 1
+        else
+            local second = string.byte(value, index + 1)
+            local third = string.byte(value, index + 2)
+            local fourth = string.byte(value, index + 3)
+            local twoByte = first >= 0xC2 and first <= 0xDF
+                and second and second >= 0x80 and second <= 0xBF
+            local threeByte = first >= 0xE0 and first <= 0xEF
+                and second and third
+                and second >= 0x80 and second <= 0xBF
+                and third >= 0x80 and third <= 0xBF
+                and not (first == 0xE0 and second < 0xA0)
+                and not (first == 0xED and second > 0x9F)
+            local fourByte = first >= 0xF0 and first <= 0xF4
+                and second and third and fourth
+                and second >= 0x80 and second <= 0xBF
+                and third >= 0x80 and third <= 0xBF
+                and fourth >= 0x80 and fourth <= 0xBF
+                and not (first == 0xF0 and second < 0x90)
+                and not (first == 0xF4 and second > 0x8F)
+            if twoByte then
+                index = index + 2
+            elseif threeByte then
+                index = index + 3
+            elseif fourByte then
+                index = index + 4
+            else
+                return false, index
+            end
+        end
+    end
+    return true
+end
+
+local function requireString(value, path, allowNil)
+    if value == nil and allowNil then
+        return
+    end
+    if type(value) ~= "string" then
+        invalid(path, allowNil and "expected a string or null" or "expected a string")
+    end
+    local valid, byteOffset = validUtf8(value)
+    if not valid then
+        invalid(path, "contains invalid UTF-8 at byte " .. byteOffset)
+    end
+end
+
+local function validateArray(value, path, callback)
+    if type(value) ~= "table" then
+        invalid(path, "expected an array")
+    end
+    local count = 0
+    local maximum = 0
+    for key in pairs(value) do
+        if not isInteger(key) or key < 1 then
+            invalid(path, "contains a non-array key")
+        end
+        count = count + 1
+        maximum = math.max(maximum, key)
+    end
+    if maximum ~= count then
+        invalid(path, "contains a sparse array")
+    end
+    for index = 1, maximum do
+        callback(value[index], path .. "[" .. index .. "]", index)
+    end
+end
+
+local function requireId(value, path, knownIds)
+    requireString(value, path)
+    if value == "" then
+        invalid(path, "must not be empty")
+    end
+    if knownIds[value] then
+        invalid(path, "duplicates another export-local ID")
+    end
+    knownIds[value] = true
+end
+
+local function validateIcon(icon, path)
+    if type(icon) ~= "table" then
+        invalid(path, "expected an icon record")
+    end
+    if icon.kind == "file" then
+        if not isInteger(icon.value) then
+            invalid(path .. ".value", "expected an integer file ID")
+        end
+    elseif icon.kind == "path" then
+        requireString(icon.value, path .. ".value")
+        if icon.value == "" then
+            invalid(path .. ".value", "must not be empty")
+        end
+    else
+        invalid(path .. ".kind", "expected 'file' or 'path'")
+    end
+end
+
+local function validateIdentity(identity, path)
+    if type(identity) ~= "table" then
+        invalid(path, "expected a character identity")
+    end
+    requireString(identity.guid, path .. ".guid", true)
+    requireString(identity.name, path .. ".name")
+    requireString(identity.realm, path .. ".realm")
+    if type(identity.identityCertain) ~= "boolean" then
+        invalid(path .. ".identityCertain", "expected a boolean")
+    end
+end
+
+local function validateMacros(macros, path, expectedScope, knownMacroIds)
+    validateArray(macros, path, function(macro, macroPath, index)
+        if type(macro) ~= "table" then
+            invalid(macroPath, "expected a macro record")
+        end
+        requireId(macro.id, macroPath .. ".id", knownMacroIds)
+        if macro.order ~= index then
+            invalid(macroPath .. ".order", "must match its portable array order")
+        end
+        if macro.scope ~= expectedScope then
+            invalid(macroPath .. ".scope", "expected " .. expectedScope)
+        end
+        requireString(macro.name, macroPath .. ".name")
+        validateIcon(macro.icon, macroPath .. ".icon")
+        requireString(macro.body, macroPath .. ".body")
+    end)
+end
+
+function PortableExport:Validate(data)
+    self:SetStage("validating portable model")
+    if type(data) ~= "table" then
+        invalid("root", "expected a portable model")
+    end
+    if data.format ~= self.FORMAT_NAME then
+        invalid("format", "unexpected format name")
+    end
+    if data.formatVersion ~= self.FORMAT_VERSION then
+        invalid("formatVersion", "unsupported format version")
+    end
+    requireString(data.addonVersion, "addonVersion")
+
+    local macroIds = {}
+    validateMacros(data.accountMacros, "accountMacros", "ACCOUNT", macroIds)
+    if type(data.currentCharacter) ~= "table" then
+        invalid("currentCharacter", "expected a character record")
+    end
+    requireString(data.currentCharacter.id, "currentCharacter.id")
+    validateIdentity(data.currentCharacter.identity, "currentCharacter.identity")
+    validateMacros(data.currentCharacter.macros, "currentCharacter.macros", "CHARACTER", macroIds)
+
+    local characterIds = {}
+    validateArray(data.offlineCharacters, "offlineCharacters", function(character, path)
+        if type(character) ~= "table" then
+            invalid(path, "expected a character record")
+        end
+        requireId(character.id, path .. ".id", characterIds)
+        validateIdentity(character.identity, path .. ".identity")
+        if character.lastSynced ~= nil and not isInteger(character.lastSynced) then
+            invalid(path .. ".lastSynced", "expected an integer or null")
+        end
+        validateMacros(character.macros, path .. ".macros", "CHARACTER", macroIds)
+    end)
+
+    if type(data.organization) ~= "table" then
+        invalid("organization", "expected an organization record")
+    end
+    local categoryIds = {}
+    validateArray(data.organization.categories, "organization.categories", function(category, path)
+        if type(category) ~= "table" then
+            invalid(path, "expected a category record")
+        end
+        requireId(category.id, path .. ".id", categoryIds)
+        requireString(category.name, path .. ".name")
+    end)
+    local tagIds = {}
+    validateArray(data.organization.tags, "organization.tags", function(tag, path)
+        if type(tag) ~= "table" then
+            invalid(path, "expected a tag record")
+        end
+        requireId(tag.id, path .. ".id", tagIds)
+        requireString(tag.name, path .. ".name")
+    end)
+    local associatedMacroIds = {}
+    validateArray(data.organization.associations, "organization.associations", function(association, path)
+        if type(association) ~= "table" then
+            invalid(path, "expected an association record")
+        end
+        requireString(association.macroId, path .. ".macroId")
+        if not macroIds[association.macroId] then
+            invalid(path .. ".macroId", "references an unknown macro ID")
+        end
+        if associatedMacroIds[association.macroId] then
+            invalid(path .. ".macroId", "duplicates another association")
+        end
+        associatedMacroIds[association.macroId] = true
+        if type(association.favorite) ~= "boolean" then
+            invalid(path .. ".favorite", "expected a boolean")
+        end
+        requireString(association.categoryId, path .. ".categoryId", true)
+        if association.categoryId and not categoryIds[association.categoryId] then
+            invalid(path .. ".categoryId", "references an unknown category ID")
+        end
+        validateArray(association.tagIds, path .. ".tagIds", function(tagId, tagPath)
+            requireString(tagId, tagPath)
+            if not tagIds[tagId] then
+                invalid(tagPath, "references an unknown tag ID")
+            end
+        end)
+    end)
+    return true
 end
 
 local function writeIcon(lines, level, icon)
@@ -355,6 +599,14 @@ function PortableExport:Serialize(data)
 end
 
 function PortableExport:Generate()
+    self.stage = nil
     local data, summary = self:Build()
-    return self:Serialize(data), summary, data
+    self:Validate(data)
+    self:SetStage("serializing JSON")
+    local text = self:Serialize(data)
+    if type(text) ~= "string" or text == "" then
+        invalid("serializedText", "serializer returned no text")
+    end
+    self.stage = nil
+    return text, summary, data
 end

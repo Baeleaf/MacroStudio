@@ -108,6 +108,14 @@ function Settings:Refresh()
     end
 end
 
+function Settings:ShowExportError(message)
+    if not self.frame or not self.frame:IsShown() then
+        return
+    end
+    self.statusText:SetText(message or "MacroStudio Export failed.")
+    self.statusText:SetTextColor(1, 0.4, 0.35)
+end
+
 function Settings:Open()
     MacroStudio:Show()
     local frame = self:Create()

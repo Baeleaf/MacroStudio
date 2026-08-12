@@ -19,12 +19,24 @@ local function summaryText(summary)
     )
 end
 
+function ExportDialog:SetStage(stage)
+    self.stage = stage
+    MacroStudio:Debug("Export stage", stage)
+end
+
+function ExportDialog:GetStage()
+    local portableStage = MacroStudio.PortableExport and MacroStudio.PortableExport:GetStage()
+    return portableStage or self.stage
+end
+
 function ExportDialog:Create()
     if self.frame then
         return self.frame
     end
 
-    local frame = CreateFrame("Frame", "MacroStudioExportFrame", UIParent, "BackdropTemplate")
+    self:SetStage("creating export window")
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    self.creatingFrame = frame
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -94,7 +106,6 @@ function ExportDialog:Create()
     local _, editBox, scrollBox = MacroStudio.Helpers:CreateNativeScrollingEditBox(textPanel, 6)
     editBox:SetFontObject(ChatFontNormal)
     editBox:SetTextColor(0.86, 0.9, 0.96)
-    editBox:SetWordWrap(true)
     editBox:SetAutoFocus(false)
     editBox:SetMaxLetters(0)
     editBox:SetScript("OnEscapePressed", function()
@@ -142,16 +153,30 @@ function ExportDialog:Create()
         MacroStudio:SetMainWindowModalBlocked(false)
     end)
 
-    if UISpecialFrames then
-        UISpecialFrames[#UISpecialFrames + 1] = frame:GetName()
-    end
     self.frame = frame
+    self.creatingFrame = nil
     MacroStudio:Debug("Export frame created")
     return frame
 end
 
+function ExportDialog:HandleFailure()
+    local partialFrame = self.creatingFrame
+    self.creatingFrame = nil
+    if partialFrame then
+        partialFrame:Hide()
+    end
+    if self.frame then
+        self.frame:Hide()
+    end
+    self.exportText = nil
+    self.settingText = false
+    local settingsFrame = MacroStudio.Settings and MacroStudio.Settings.frame
+    MacroStudio:SetMainWindowModalBlocked(settingsFrame and settingsFrame:IsShown() or false)
+end
+
 function ExportDialog:SetExport(text, summary)
     local frame = self:Create()
+    self:SetStage("populating export text")
     self.formatText:SetText("Portable format version " .. MacroStudio.PortableExport.FORMAT_VERSION)
     self.summaryText:SetText(summaryText(summary))
 
@@ -163,7 +188,7 @@ function ExportDialog:SetExport(text, summary)
         self.exportText = nil
         self.summaryText:SetText("Export failed: no portable text was generated.")
         self.summaryText:SetTextColor(1, 0.35, 0.3)
-        return false
+        return false, "no portable text was generated"
     end
     if #text > self.MAX_DISPLAY_BYTES then
         self.settingText = true
@@ -177,7 +202,7 @@ function ExportDialog:SetExport(text, summary)
             self.MAX_DISPLAY_BYTES
         ))
         self.summaryText:SetTextColor(1, 0.35, 0.3)
-        return false
+        return false, "portable text exceeds the display safety limit"
     end
 
     self.settingText = true
@@ -189,7 +214,7 @@ function ExportDialog:SetExport(text, summary)
         self.summaryText:SetText("Export failed visibly because the complete text could not be displayed. No partial export was shown.")
         self.summaryText:SetTextColor(1, 0.35, 0.3)
         MacroStudio.Helpers:SetButtonEnabled(self.selectAllButton, false)
-        return false
+        return false, "the complete portable text could not be displayed"
     end
 
     self.exportText = text
@@ -203,6 +228,7 @@ end
 
 function ExportDialog:Open(source)
     MacroStudio:Debug("export open invoked", source or "unknown")
+    self.stage = nil
     if not MacroStudio.initialized then
         MacroStudio:Initialize()
     end
@@ -214,18 +240,26 @@ function ExportDialog:Open(source)
         return false
     end
 
-    MacroStudio:Debug("Export serialization start")
+    self:SetStage("building portable model")
     local text, summary = MacroStudio.PortableExport:Generate()
-    MacroStudio:Debug("Export serialization complete", type(text) == "string" and #text or 0, "bytes")
-    local displayComplete = self:SetExport(text, summary)
+    self:SetStage("validating output")
+    local displayComplete, displayError = self:SetExport(text, summary)
+    if not displayComplete then
+        error(displayError or "portable text could not be displayed", 0)
+    end
+
+    self:SetStage("showing export window")
+    frame:Show()
+    frame:Raise()
+    if not frame:IsShown() then
+        error("the Export window did not become visible", 0)
+    end
 
     if settingsShown then
         settingsFrame:Hide()
     end
-
     MacroStudio:SetMainWindowModalBlocked(true)
-    frame:Show()
-    frame:Raise()
     MacroStudio:Debug("Export frame shown", frame:IsShown())
-    return displayComplete
+    self.stage = nil
+    return true
 end

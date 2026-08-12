@@ -20,6 +20,34 @@ The Milestone 8 harness additionally covers default slash takeover, exact native
 
 The Milestone 9.1 harness parses synthetic portable JSON and covers deterministic ordering, both native scopes, 20 offline characters with 600 ordered snapshots, duplicate-name metadata identity, categories, tags, Favorites, numeric/path icons, multiline/quoted/backslash/Unicode/empty/maximum bodies, dirty-draft exclusion, combat, zero native writes, both entry points, singleton open/close, exact large-text display, and visible oversize failure. Headless checks cannot prove live WoW keyboard selection, Ctrl+C, clipboard behavior, EditBox rendering performance, taint, or the maintainer's real library size; complete the live phases below.
 
+## MS9.1 Export Live Fix - 1.3.0-r3
+
+The r3 harness expands the portable fixture to 21 offline characters, including missing optional identity fields, a legacy zero-macro character, stale metadata, CRLF, tabs, links, and invalid UTF-8 validation. Retail error capture identified the failed stage as Export-window construction: `ScrollingEditBoxTemplate` returns an EditBox without `SetWordWrap`, while the earlier headless frame stub incorrectly supplied that method to every frame type. The harness now models that Retail API boundary and verifies stage-specific protected failures.
+
+### A. Confirm build
+
+- [ ] Confirm WoW reports `1.3.0-r3`.
+
+### B. Slash export
+
+1. Run `/ms export` and confirm Enter submits normally.
+2. Confirm the Export window opens with visible serialized text.
+3. If it fails, record the exact `MacroStudio Export failed at <stage>` message.
+
+### C. Settings export
+
+1. Run `/ms settings` and click **Export MacroStudio Library**.
+2. Confirm Export opens and Settings disappears only after Export is visible.
+3. If Export fails, confirm Settings remains visible and reports the failure stage.
+
+### D. Reload
+
+- [ ] Run `/reload`, then immediately run `/ms export`; confirm Export opens.
+
+### E. Continue content testing
+
+- [ ] Only after Export opens, resume the existing Milestone 9.1 content phases below.
+
 ## MS9.1 Export Entry Fix - 1.3.0-r2
 
 The headless harness invokes the installed `/ms` dispatcher and Settings button script through the same Export controller, enforces the real `SetFontObject` argument shape, and covers standalone visibility plus close/reopen and cross-entry singleton reuse. It cannot prove WoW chat EditBox submission or clearing, so verify those behaviors live.
@@ -125,7 +153,7 @@ This intentionally short checklist is used after WoW patches or hotfixes to deci
 
 ### Phase 1 - Build and access
 
-- [ ] Confirm the loaded build reports `1.3.0-r2`.
+- [ ] Confirm the loaded build reports `1.3.0-r3`.
 - [ ] Run `/ms export`, then use **Settings -> Export MacroStudio Library**; confirm both open the same Export UI.
 
 ### Phase 2 - Export contents

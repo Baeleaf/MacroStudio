@@ -184,7 +184,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "1.3.0-r2"
+namespace.VERSION = "1.3.0-r3"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -822,6 +822,7 @@ export_fixture = load(
     local unusualBody = [[/say "quoted" 'apostrophe' \\ path; [mod]
 |cff00ff00Ünicode|r]]
     local maximumBody = string.rep("x", 255)
+    unusualBody = unusualBody .. "\r\n\t|Hitem:123::::::::|h[item]|h"
     Constants.MacroConsts.MAX_ACCOUNT_MACROS = 120
     Constants.MacroConsts.MAX_CHARACTER_MACROS = 30
     MAX_ACCOUNT_MACROS = 120
@@ -907,11 +908,27 @@ export_fixture = load(
         store.characters[key] = record
         store.order[#store.order + 1] = key
     end
+    local legacyKey = "unknown:legacy:missing-identity"
+    store.characters[legacyKey] = {
+        id = legacyKey,
+        identityCertain = false,
+        macros = {},
+        legacyOptionalField = true,
+    }
+    store.order[#store.order + 1] = legacyKey
 
     local metadata = ms.MetadataRepository
     metadata.attachedByIndex = {}
     metadata.attachedByRecord = {}
     metadata.reconciliation = {}
+    MacroStudioDB.metadata.records["metadata-orphan"] = {
+        favorite = true,
+        tags = { "Orphan Tag" },
+        snapshot = {
+            scope = "ACCOUNT", lastKnownIndex = 999, name = "Missing",
+            icon = 134400, body = "/say synthetic orphan",
+        },
+    }
     metadata:Reconcile(macros)
     local category
     for categoryIndex = 1, 12 do
@@ -943,9 +960,9 @@ export_fixture = load(
     assert(firstText == secondText, "unchanged libraries should serialize deterministically")
     assert(firstSummary.accountMacros == 120 and firstSummary.currentCharacterMacros == 30,
         "export summary should count near-full live native scopes")
-    assert(firstSummary.offlineCharacters == 20 and firstSummary.offlineMacros == 600,
-        "large export summary should count every offline character and snapshot")
-    assert(firstSummary.categories == 12 and firstSummary.tags == 14 and firstSummary.favorites == 22,
+    assert(firstSummary.offlineCharacters == 21 and firstSummary.offlineMacros == 600,
+        "large export summary should count legacy zero-macro characters and every snapshot")
+    assert(firstSummary.categories == 12 and firstSummary.tags == 15 and firstSummary.favorites == 22,
         "export summary should count scaled organization content")
     assert(secondSummary.offlineMacros == firstSummary.offlineMacros,
         "repeated export summaries should remain stable")
@@ -955,6 +972,22 @@ export_fixture = load(
         "export must not refresh or mutate character snapshots")
     assert(MacroStudioDB.settings.privateSentinel == settingsBefore,
         "export must not mutate local settings")
+
+    local invalidModel = ms.PortableExport:Build()
+    invalidModel.offlineCharacters[1].macros[1].icon = { kind = "unsupported", value = {} }
+    local iconValid, iconError = pcall(ms.PortableExport.Validate, ms.PortableExport, invalidModel)
+    assert(not iconValid
+            and tostring(iconError):find("offlineCharacters[1].macros[1].icon.kind", 1, true)
+            and not tostring(iconError):find(unusualBody, 1, true),
+        "unsupported model structures should fail with a useful path and no macro-body leak")
+
+    invalidModel = ms.PortableExport:Build()
+    invalidModel.accountMacros[1].body = "bad" .. string.char(255) .. "utf8"
+    local utf8Valid, utf8Error = pcall(ms.PortableExport.Validate, ms.PortableExport, invalidModel)
+    assert(not utf8Valid
+            and tostring(utf8Error):find("accountMacros[1].body", 1, true)
+            and tostring(utf8Error):find("invalid UTF-8", 1, true),
+        "invalid string bytes should fail at the exact portable field")
     return firstText, unusualBody, maximumBody
     ''',
     "@portable-export-tests",
@@ -963,7 +996,7 @@ export_text, unusual_body, maximum_body = export_fixture("MacroStudio", namespac
 portable = json.loads(export_text)
 assert portable["format"] == "MacroStudioPortableLibrary"
 assert portable["formatVersion"] == 1
-assert portable["addonVersion"] == "1.3.0-r2"
+assert portable["addonVersion"] == "1.3.0-r3"
 assert len(portable["accountMacros"]) == 120
 assert [macro["id"] for macro in portable["accountMacros"][:2]] == ["account-001", "account-002"]
 assert portable["accountMacros"][-1]["id"] == "account-120"
@@ -986,21 +1019,31 @@ assert len(portable["currentCharacter"]["macros"]) == 30
 assert portable["currentCharacter"]["macros"][0]["name"] == "Duplicate"
 assert portable["currentCharacter"]["macros"][0]["body"] == ""
 offline = portable["offlineCharacters"]
-assert len(offline) == 20 and sum(len(character["macros"]) for character in offline) == 600
+assert len(offline) == 21 and sum(len(character["macros"]) for character in offline) == 600
 assert offline[0]["identity"]["name"] == offline[1]["identity"]["name"] == "Same Name"
 assert offline[0]["identity"]["realm"] != offline[1]["identity"]["realm"]
 assert offline[0]["identity"]["guid"] != offline[1]["identity"]["guid"]
 assert [macro["order"] for macro in offline[0]["macros"]] == list(range(1, 31))
 assert offline[0]["macros"][0]["body"] == unusual_body
+assert offline[-1]["identity"] == {
+    "guid": None, "name": "", "realm": "", "identityCertain": False,
+}
+assert offline[-1]["lastSynced"] is None and offline[-1]["macros"] == []
 categories = portable["organization"]["categories"]
 assert len(categories) == 12 and categories[0] == {"id": "category-001", "name": "Raid & Utility"}
 tags = portable["organization"]["tags"]
-assert len(tags) == 14 and [tag["name"] for tag in tags[:2]] == ["Alpha Tag", 'Quote " Tag']
+assert len(tags) == 15 and [tag["name"] for tag in tags[:2]] == ["Alpha Tag", "Orphan Tag"]
+assert 'Quote " Tag' in [tag["name"] for tag in tags]
+tag_id_by_name = {tag["name"]: tag["id"] for tag in tags}
+assigned_tag_names = {"Alpha Tag", 'Quote " Tag'} | {f"Scale Tag {index:02d}" for index in range(3, 15)}
 associations = {item["macroId"]: item for item in portable["organization"]["associations"]}
 assert "account-001" not in associations
 assert associations["account-002"]["favorite"] is True
 assert associations["account-002"]["categoryId"] == "category-001"
-assert associations["account-002"]["tagIds"] == [f"tag-{index:03d}" for index in range(1, 15)]
+assert set(associations["account-002"]["tagIds"]) == {
+    tag_id_by_name[name] for name in assigned_tag_names
+}
+assert tag_id_by_name["Orphan Tag"] not in associations["account-002"]["tagIds"]
 assert associations["current-character-001"]["favorite"] is True
 assert sum(item["favorite"] for item in associations.values()) == 22
 
@@ -1162,8 +1205,8 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120100" in toc_source
-assert "## Version: 1.3.0-r2" in toc_source
-assert 'MacroStudio.VERSION = "1.3.0-r2"' in core_source
+assert "## Version: 1.3.0-r3" in toc_source
+assert 'MacroStudio.VERSION = "1.3.0-r3"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -1196,6 +1239,13 @@ assert 'SetFontObject(ChatFontNormal)' in export_dialog_source
 assert 'SetFontObject("ChatFontNormal")' not in export_dialog_source
 assert 'self.ExportDialog.frame:Hide()' not in main_frame_source
 assert 'type(fontObject) == "table"' in ui_smoke_source
+assert "editBox:SetWordWrap(true)" not in export_dialog_source
+assert 'self.frameType ~= "EditBox"' in ui_smoke_source
+assert "xpcall" in access_source and "lastExportFailure" in access_source
+assert "Export failed at " in access_source and "HandleFailure" in access_source
+assert "function PortableExport:Validate(data)" in export_source
+assert "validUtf8" in export_source and "Invalid portable export at " in export_source
+assert export_source.index("self:Build()") < export_source.index("self:Validate(data)") < export_source.index("self:Serialize(data)")
 assert 'FORMAT_VERSION = 1' in export_source and 'FORMAT_NAME = "MacroStudioPortableLibrary"' in export_source
 assert "loadstring" not in export_source and "load(" not in export_source
 assert "CreateMacro" not in export_source and "EditMacro" not in export_source and "DeleteMacro" not in export_source

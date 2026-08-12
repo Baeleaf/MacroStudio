@@ -212,9 +212,40 @@ function Access:IsSettingsShown()
     return settingsFrame and settingsFrame:IsShown() or false
 end
 
+local function conciseExportError(value)
+    local message = tostring(value or "unknown error")
+    message = message:gsub("[\r\n]+", " "):gsub("%s+", " ")
+    if #message > 320 then
+        message = message:sub(1, 317) .. "..."
+    end
+    return message
+end
+
 function Access:OpenExport(source)
     MacroStudio:Debug("Export controller invoked", source or "unknown")
-    return MacroStudio.ExportDialog:Open(source)
+    self.lastExportFailure = nil
+    local ok, result = xpcall(function()
+        return MacroStudio.ExportDialog:Open(source)
+    end, conciseExportError)
+    if ok then
+        return result
+    end
+
+    local stage = MacroStudio.ExportDialog:GetStage()
+        or MacroStudio.PortableExport:GetStage()
+        or "unknown stage"
+    local message = "Export failed at " .. stage .. ": " .. result
+    self.lastExportFailure = {
+        stage = stage,
+        message = result,
+    }
+    MacroStudio.ExportDialog:HandleFailure()
+    MacroStudio:Print(message)
+    if MacroStudio.Settings then
+        MacroStudio.Settings:ShowExportError(message)
+    end
+    MacroStudio:Debug("Export failure contained", stage, result)
+    return false
 end
 
 function Access:OpenSettings(source)
