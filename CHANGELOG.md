@@ -9,6 +9,10 @@ Notable user-facing changes to MacroStudio are documented here.
 - Export saved native macros, cross-character snapshots, and organization data as a portable, copyable library backup.
 - Import portable MacroStudio libraries through validation, preview, capacity checks, explicit confirmation, and non-destructive merge safeguards.
 
+### Fixed
+
+- Accept archival offline snapshot names and bodies during portable Import without applying current native macro limits.
+
 ## 1.2.0
 
 ### Added

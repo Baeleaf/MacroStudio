@@ -60,7 +60,10 @@ def _model():
                 "id": "offline-same-name",
                 "identity": {"guid": "Player-OFF-OTHER", "name": "Shared", "realm": "Same Realm", "identityCertain": True},
                 "lastSynced": 150,
-                "macros": [_macro("offline-other-001", 1, "CHARACTER", "Other", "/say other guid", 303)],
+                "macros": [_macro(
+                    "offline-other-001", 1, "CHARACTER",
+                    "Historical Macro Name Longer Than Sixteen", "h" * 400, 303,
+                )],
             },
             {
                 "id": "offline-zero",
@@ -133,11 +136,19 @@ def run_import_tests(lua, namespace, large_export_text):
         _macro("account-failure-2", 2, "ACCOUNT", "Failure Two", "/say two", 502),
     ]
 
+    native_invalid_model = copy.deepcopy(capacity_model)
+    native_invalid_model["accountMacros"] = [
+        _macro("account-long-name", 1, "ACCOUNT", "Account Macro Name Longer Than Sixteen", "/say safe", 701),
+    ]
+    native_invalid_model["currentCharacter"]["macros"] = [
+        _macro("character-long-body", 1, "CHARACTER", "Long Body", "b" * 300, 702),
+    ]
+
     test_chunk = load(
         r"""
         local _, ms, validText, largeText, malformed, truncated, unsupported, duplicateIds,
             badReference, missingField, badCharacter, badScope, badType, extraKey, duplicateKey,
-            duplicateCharacter, duplicateTagRef, capacityText, ambiguityText, failureText = ...
+            duplicateCharacter, duplicateTagRef, capacityText, ambiguityText, failureText, nativeInvalidText = ...
 
 
         local function expectInvalid(text, fragment)
@@ -170,9 +181,16 @@ def run_import_tests(lua, namespace, large_export_text):
                 and parsed.accountMacros[3].body:find("\n\t", 1, true)
                 and parsed.accountMacros[3].icon.kind == "path",
             "Unicode, escapes, multiline bodies, and path icons should round-trip through JSON")
+        assert(parsed.offlineCharacters[3].macros[1].name == "Historical Macro Name Longer Than Sixteen"
+                and #parsed.offlineCharacters[3].macros[1].body == 400,
+            "portable validation must preserve offline names and bodies beyond current native limits")
+
         local large = ms.PortableImport:ParseAndValidate(largeText)
-        assert(#large.accountMacros == 120 and #large.offlineCharacters == 21,
-            "large tested r4 exports should remain valid format-v1 import input")
+        assert(#large.accountMacros == 120 and #large.offlineCharacters == 21
+                and large.offlineCharacters[1].macros[4].name == "Historical Macro Name Longer Than Sixteen"
+                and #large.offlineCharacters[1].macros[5].body == 400
+                and large.offlineCharacters[1].macros[6].icon.value == 0,
+            "current r5 Export output with archival-only values must pass format-v1 Import validation")
 
         local nativeCreate = CreateMacro
         local function resetDestination()
@@ -237,6 +255,27 @@ def run_import_tests(lua, namespace, large_export_text):
             return index
         end
 
+        local nativeBlocked = ms.PortableImport:Preview(nativeInvalidText, { importCharacterMacros = true })
+        assert(nativeBlocked.account.blocked == 1 and nativeBlocked.account.create == 0
+                and nativeBlocked.character.blocked == 1 and nativeBlocked.character.create == 0
+                and nativeBlocked.capacityOK and not nativeBlocked.nativeContentOK and not nativeBlocked.applyOK,
+            "portable native-target records should reach Preview and be classified as uncreatable")
+        local blockedWarnings = table.concat(nativeBlocked.warnings, " ")
+        assert(blockedWarnings:find("Account macro #1 cannot be created: Macro names are limited to 16 characters.", 1, true)
+                and blockedWarnings:find("Character macro #1 cannot be created: Macro bodies are limited to 255 characters.", 1, true),
+            "Preview should identify each blocked native target and its current client constraint")
+        local writesBeforeBlocked = createCalls
+        ms.PortableImport:SetActivePlan(nativeBlocked)
+        local blockedOK, _, blockedMessage = ms.PortableImport:Apply(nativeBlocked)
+        assert(not blockedOK and blockedMessage:find("cannot be created", 1, true)
+                and createCalls == writesBeforeBlocked,
+            "Apply must reject a native-invalid full batch without silently skipping or writing")
+        local disabledModel = ms.PortableImport:ParseAndValidate(nativeInvalidText)
+        disabledModel.accountMacros = {}
+        local disabledCharacter = ms.PortableImport:BuildPlan(disabledModel, { importCharacterMacros = false })
+        assert(disabledCharacter.character.disabled == 1 and disabledCharacter.character.blocked == 0
+                and disabledCharacter.nativeContentOK and disabledCharacter.applyOK,
+            "a source Character record should not face native constraints when its native import is disabled")
         local plan = ms.PortableImport:Preview(validText, { importCharacterMacros = true })
         assert(plan.account.create == 2 and plan.account.present == 1 and plan.account.ambiguous == 0,
             "preview should reuse only unique exact Account matches and create same-name different content")
@@ -244,8 +283,9 @@ def run_import_tests(lua, namespace, large_export_text):
             "preview should target source Character macros to the destination current character")
         assert(plan.currentCharacter == "Destination - Destination Realm",
             "preview must make the destination current character explicit")
-        assert(plan.capacityOK and plan.accountAvailable == 4 and plan.characterAvailable == 4,
-            "preview should preflight live native scope capacities")
+        assert(plan.capacityOK and plan.nativeContentOK and plan.applyOK
+                and plan.accountAvailable == 4 and plan.characterAvailable == 4,
+            "preview should preflight live native scope capacity and content")
         assert(plan.offline.added == 3 and plan.offline.updated == 1 and plan.offline.kept == 1,
             "offline planning should add foreign/zero records, update newer GUID data, and preserve newer local data")
         assert(plan.categoryConflicts == 1 and plan.categoriesAdded == 1 and plan.tagsAdded == 1,
@@ -288,6 +328,10 @@ def run_import_tests(lua, namespace, large_export_text):
                 and store.characters["guid:Player-OFF-UPDATE"].macros[1].body == "/say source newer"
                 and store.characters["guid:Player-OFF-LOCAL"].lastSynced == 300,
             "newer source GUID snapshots should update while newer local snapshots remain intact")
+        assert(store.characters["guid:Player-OFF-OTHER"].macros[1].name
+                    == "Historical Macro Name Longer Than Sixteen"
+                and #store.characters["guid:Player-OFF-OTHER"].macros[1].body == 400,
+            "offline Import should preserve archival macro content exactly without native creation")
         for _, characterId in ipairs(store.order) do
             for _, macro in ipairs(store.characters[characterId].macros or {}) do
                 assert(macro.index == nil and macro.lastKnownIndex == nil,
@@ -402,6 +446,6 @@ def run_import_tests(lua, namespace, large_export_text):
         _dump(bad_reference), _dump(missing_field), _dump(bad_character), _dump(bad_scope),
         _dump(bad_type), _dump(extra_key), '{"format":1,"format":2}',
         _dump(duplicate_character), _dump(duplicate_tag_ref),
-        _dump(capacity_model), _dump(ambiguity_model), _dump(failure_model),
+        _dump(capacity_model), _dump(ambiguity_model), _dump(failure_model), _dump(native_invalid_model),
     )
     assert result is True

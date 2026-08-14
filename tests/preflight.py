@@ -185,7 +185,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "1.3.0-r4"
+namespace.VERSION = "1.3.0-r5"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -824,6 +824,8 @@ export_fixture = load(
     local unusualBody = [[/say "quoted" 'apostrophe' \\ path; [mod]
 |cff00ff00Ünicode|r]]
     local maximumBody = string.rep("x", 255)
+    local longOfflineName = "Historical Macro Name Longer Than Sixteen"
+    local longOfflineBody = string.rep("h", 400)
     unusualBody = unusualBody .. "\r\n\t|Hitem:123::::::::|h[item]|h"
     Constants.MacroConsts.MAX_ACCOUNT_MACROS = 120
     Constants.MacroConsts.MAX_CHARACTER_MACROS = 30
@@ -902,9 +904,12 @@ export_fixture = load(
         for macroIndex = 1, 30 do
             record.macros[macroIndex] = {
                 order = macroIndex,
-                name = "Snapshot " .. macroIndex,
-                icon = macroIndex == 1 and "Interface\\Icons\\INV_Misc_QuestionMark" or (800000 + macroIndex),
-                body = macroIndex == 1 and unusualBody or ("/say offline " .. characterIndex .. ":" .. macroIndex),
+                name = characterIndex == 1 and macroIndex == 4 and longOfflineName
+                    or ("Snapshot " .. macroIndex),
+                icon = characterIndex == 1 and macroIndex == 6 and 0
+                    or (macroIndex == 1 and "Interface\\Icons\\INV_Misc_QuestionMark" or (800000 + macroIndex)),
+                body = characterIndex == 1 and macroIndex == 5 and longOfflineBody
+                    or (macroIndex == 1 and unusualBody or ("/say offline " .. characterIndex .. ":" .. macroIndex)),
             }
         end
         store.characters[key] = record
@@ -998,7 +1003,7 @@ export_text, unusual_body, maximum_body = export_fixture("MacroStudio", namespac
 portable = json.loads(export_text)
 assert portable["format"] == "MacroStudioPortableLibrary"
 assert portable["formatVersion"] == 1
-assert portable["addonVersion"] == "1.3.0-r4"
+assert portable["addonVersion"] == "1.3.0-r5"
 assert len(portable["accountMacros"]) == 120
 assert [macro["id"] for macro in portable["accountMacros"][:2]] == ["account-001", "account-002"]
 assert portable["accountMacros"][-1]["id"] == "account-120"
@@ -1027,6 +1032,9 @@ assert offline[0]["identity"]["realm"] != offline[1]["identity"]["realm"]
 assert offline[0]["identity"]["guid"] != offline[1]["identity"]["guid"]
 assert [macro["order"] for macro in offline[0]["macros"]] == list(range(1, 31))
 assert offline[0]["macros"][0]["body"] == unusual_body
+assert offline[0]["macros"][3]["name"] == "Historical Macro Name Longer Than Sixteen"
+assert len(offline[0]["macros"][4]["body"]) == 400
+assert offline[0]["macros"][5]["icon"] == {"kind": "file", "value": 0}
 assert offline[-1]["identity"] == {
     "guid": None, "name": "", "realm": "", "identityCertain": False,
 }
@@ -1212,8 +1220,8 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120100" in toc_source
-assert "## Version: 1.3.0-r4" in toc_source
-assert 'MacroStudio.VERSION = "1.3.0-r4"' in core_source
+assert "## Version: 1.3.0-r5" in toc_source
+assert 'MacroStudio.VERSION = "1.3.0-r5"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -1271,7 +1279,12 @@ assert "function PortableImport:BuildModel(raw)" in import_source and "checkKeys
 assert "loadstring" not in import_source and "load(" not in import_source
 assert "CreateMacro" not in import_source and "EditMacro" not in import_source and "DeleteMacro" not in import_source
 assert "MacroStudio.MacroRepository:Create(item.request)" in import_source
-assert "plan.capacityOK" in import_source and "plan.stateSignature" in import_source
+assert "plan.capacityOK" in import_source and "plan.nativeContentOK" in import_source
+assert "ValidateMacroContent" not in import_source[:import_source.index("local function validateNativeCreation")]
+assert "MacroStudio.MacroRepository:ValidateMacroContent" in import_source
+assert "MacroStudio.MacroRepository:NormalizeMacroName" in import_source
+assert "plan.applyOK" in import_source and "plan.stateSignature" in import_source
+assert 'item.action = "blocked"' in import_source and "cannot be created:" in import_source
 assert "plan ~= self.activePlan" in import_source and "changed after Preview" in import_source
 assert "InCombatLockdown" in import_source and "Editor:IsDirty()" in import_source
 assert "finalMappedMacros" in import_source and "sourceCounts[key] == 1 and #matches == 1" in import_source

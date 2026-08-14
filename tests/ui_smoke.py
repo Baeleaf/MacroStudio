@@ -512,7 +512,7 @@ def run_ui_smoke(root):
                 and ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown(),
             "closing and repeating /ms export should reopen the same frame")
         assert(initialExportText:find('"formatVersion": 1', 1, true)
-                and initialExportText:find('"addonVersion": "1.3.0-r4"', 1, true)
+                and initialExportText:find('"addonVersion": "1.3.0-r5"', 1, true)
                 and initialExportText:find(savedExportBody, 1, true)
                 and not initialExportText:find("unsaved portable export draft", 1, true),
             "export should contain saved native data and exclude the dirty draft")
@@ -678,6 +678,19 @@ def run_ui_smoke(root):
                 and ms.ImportDialog.statusText:GetText():find("JSON byte", 1, true),
             "malformed Import text should fail visibly before Preview")
         local importEditsBefore, importDeletesBefore = editCalls, deleteCalls
+        local blockedImportText, replacements = initialExportText:gsub(
+            '"name": "Account"', '"name": "Account Macro Name Longer Than Sixteen"', 1
+        )
+        assert(replacements == 1, "native-blocker UI fixture should alter exactly one Account macro")
+        ms.ImportDialog.inputEditBox:SetUserText(blockedImportText)
+        ms.ImportDialog.validateButton:TriggerScript("OnClick")
+        assert(ms.ImportDialog.mode == "preview" and ms.ImportDialog.plan.account.blocked == 1
+                and not ms.ImportDialog.plan.applyOK and not ms.ImportDialog.applyButton:IsEnabled()
+                and ms.ImportDialog.outputEditBox:GetText():find("Cannot create: 1", 1, true)
+                and ms.ImportDialog.outputEditBox:GetText():find("Macro names are limited to 16 characters", 1, true),
+            "Preview should display a native-content blocker and disable Apply without rejecting portable JSON")
+        ms.ImportDialog:BackToPaste()
+
         ms.ImportDialog.inputEditBox:SetUserText(initialExportText)
         combat = true
         ms.ImportDialog.validateButton:TriggerScript("OnClick")

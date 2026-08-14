@@ -39,14 +39,15 @@ local function previewText(plan)
             #model.organization.categories, #model.organization.tags, #model.organization.associations, sourceFavorites),
         "",
         "ACCOUNT MACROS",
-        string.format("Create: %d    Already present: %d    Ambiguous/skip: %d",
-            plan.account.create, plan.account.present, plan.account.ambiguous),
+        string.format("Create: %d    Already present: %d    Cannot create: %d    Ambiguous/skip: %d",
+            plan.account.create, plan.account.present, plan.account.blocked, plan.account.ambiguous),
         string.format("Capacity: %d required, %d available", plan.account.create, plan.accountAvailable),
         "",
         "CURRENT-CHARACTER MACROS",
         "Destination: " .. plan.currentCharacter,
-        string.format("Create: %d    Already present: %d    Ambiguous/skip: %d    Disabled: %d",
-            plan.character.create, plan.character.present, plan.character.ambiguous, plan.character.disabled),
+        string.format("Create: %d    Already present: %d    Cannot create: %d    Ambiguous/skip: %d    Disabled: %d",
+            plan.character.create, plan.character.present, plan.character.blocked,
+            plan.character.ambiguous, plan.character.disabled),
         string.format("Capacity: %d required, %d available", plan.character.create, plan.characterAvailable),
         "",
         "OFFLINE LIBRARY",
@@ -320,8 +321,8 @@ function ImportDialog:ValidateAndPreview()
     MacroStudio.PortableImport:SetActivePlan(plan)
     self:SetOutput(previewText(plan))
     self:SetMode("preview")
-    MacroStudio.Helpers:SetButtonEnabled(self.applyButton, plan.capacityOK)
-    if plan.capacityOK then
+    MacroStudio.Helpers:SetButtonEnabled(self.applyButton, plan.applyOK)
+    if plan.applyOK then
         self:SetStatus("Preview complete. Confirm Apply Import to begin native writes.", false)
     else
         self:SetStatus(table.concat(plan.warnings, " "), true)
@@ -331,7 +332,7 @@ function ImportDialog:ValidateAndPreview()
 end
 
 function ImportDialog:RequestApply()
-    if not self.plan or not self.plan.capacityOK then return false end
+    if not self.plan or not self.plan.applyOK then return false end
     return MacroStudio.Dialogs:ShowConfirmImport(self.plan, function() self:ApplyConfirmed() end)
 end
 

@@ -22,13 +22,36 @@ The Milestone 9.1 harness parses synthetic portable JSON and covers deterministi
 
 The Milestone 9.2 harness adds a dedicated synthetic Import suite plus full-TOC UI smoke coverage. It exercises non-executable JSON parsing, malformed/truncated/unsupported input, duplicate keys/IDs/references, Unicode and escapes, the large MS9.1 format-v1 fixture, exact reuse, same-name safety, ambiguity, Account/Character capacity, explicit current-character mapping, confirmation-before-write, synchronous `UPDATE_MACROS`, final identity reconciliation, additive metadata, GUID/timestamp offline rules, repeat Import, combat/dirty/stale guards, and partial native failure/retry. It asserts that Import never calls `EditMacro` or `DeleteMacro`. Headless checks cannot prove live paste performance, protected API behavior, taint, or cross-account/region persistence; complete the phases below.
 
+## MS9.2 Round-Trip Validation Fix - 1.3.0-r5
+
+### Test A - Build
+
+- [ ] Confirm WoW reports `1.3.0-r5` with Interface `120100`.
+
+### Test B - NA self-import
+
+1. Run `/ms export` on NA and copy the entire fresh export.
+2. Run `/ms import`, paste it, and click **Validate & Preview**.
+3. Confirm format v1 is accepted, self-import reaches Preview, existing native macros are recognized appropriately, and no offline macro name causes a validation error.
+
+### Test C - Previously failing offline snapshot
+
+- [ ] Inspect the previously failing offline character and confirm its long-name macro is preserved as a read-only snapshot without native mutation or truncation.
+- [ ] If practical, confirm archival bodies beyond current native limits remain intact and copyable.
+
+### Test D - Resume MS9.2
+
+- [ ] Only after Tests B and C pass, resume the existing NA/EU Milestone 9.2 plan below.
+
+Automated r5 coverage generates a format-v1 Export containing an offline name over 16 characters, an offline body over 255 characters, and a historical numeric icon value, then immediately validates it through Import. It also imports an archival long-name/body snapshot without native writes and verifies that over-limit Account/current-character targets reach Preview as explicit **Cannot create** blockers with Apply disabled.
+
 ## Milestone 9.2: Safe Portable Import
 
 Milestone 9.2 remains under **Unreleased** until these live-client phases pass. Use synthetic data or a reviewed backup; do not use a sole irreplaceable library copy.
 
 ### Phase 1 - Build and access
 
-- [ ] Confirm WoW reports `1.3.0-r4` with Interface `120100`.
+- [ ] Confirm WoW reports `1.3.0-r5` with Interface `120100`.
 - [ ] Run `/ms import`, then use **Settings -> Import MacroStudio Library**; confirm both open the same Import window.
 - [ ] Confirm `/ms export` still opens the tested format-v1 Export window.
 

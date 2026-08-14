@@ -354,9 +354,6 @@ local function importIcon(value, path)
     local iconValue = required(value, "value", path)
     if kind == "file" then
         iconValue = expectInteger(iconValue, path .. ".value")
-        if iconValue <= 0 then
-            fail(path .. ".value", "file ID must be positive")
-        end
     elseif kind == "path" then
         iconValue = expectString(iconValue, path .. ".value")
         if iconValue == "" then
@@ -381,17 +378,6 @@ local function importMacro(value, path, expectedScope)
     }
     if macro.scope ~= expectedScope then
         fail(path .. ".scope", "expected " .. expectedScope)
-    end
-    local valid, reason, normalized = MacroStudio.MacroRepository:ValidateMacroContent({
-        name = macro.name,
-        icon = macro.icon.value,
-        body = macro.body,
-    })
-    if not valid then
-        fail(path, reason)
-    end
-    if normalized.name ~= macro.name then
-        fail(path .. ".name", "cannot be recreated exactly by the native macro API")
     end
     return macro
 end
@@ -729,8 +715,24 @@ function PortableImport:BuildOfflinePlan(model)
     return plan
 end
 
+local function validateNativeCreation(request)
+    local normalizedName = MacroStudio.Helpers:Trim(
+        MacroStudio.MacroRepository:NormalizeMacroName(request.name)
+    )
+    local valid, reason = MacroStudio.MacroRepository:ValidateMacroContent({
+        name = normalizedName,
+        icon = request.icon,
+        body = request.body,
+    })
+    if not valid then return false, reason end
+    if normalizedName ~= request.name then
+        return false, "Macro name cannot be recreated exactly by the native macro API."
+    end
+    return true
+end
+
 local function buildNativePlanForScope(sourceMacros, scope, importEnabled)
-    local result = { items = {}, create = 0, present = 0, ambiguous = 0, disabled = 0 }
+    local result = { items = {}, create = 0, present = 0, ambiguous = 0, disabled = 0, blocked = 0, blockers = {} }
     local sourceCounts = {}
     local destinationGroups = {}
     for _, source in ipairs(sourceMacros) do
@@ -754,16 +756,29 @@ local function buildNativePlanForScope(sourceMacros, scope, importEnabled)
         if not importEnabled then
             item.action = "disabled"
             result.disabled = result.disabled + 1
-        elseif #matches == 0 then
-            item.action = "create"
-            result.create = result.create + 1
         elseif #matches == 1 and sourceCounts[key] == 1 then
             item.action = "reuse"
             item.target = matches[1]
             result.present = result.present + 1
-        else
+        elseif #matches > 0 then
             item.action = "ambiguous"
             result.ambiguous = result.ambiguous + 1
+        else
+            local valid, reason = validateNativeCreation(item.request)
+            if valid then
+                item.action = "create"
+                result.create = result.create + 1
+            else
+                item.action = "blocked"
+                item.blockReason = reason
+                result.blocked = result.blocked + 1
+                result.blockers[#result.blockers + 1] = string.format(
+                    "%s macro #%d cannot be created: %s",
+                    scope == "ACCOUNT" and "Account" or "Character",
+                    source.order,
+                    reason
+                )
+            end
         end
         result.items[#result.items + 1] = item
     end
@@ -797,6 +812,10 @@ function PortableImport:BuildPlan(model, options)
         warnings = {},
     }
     plan.capacityOK = account.create <= plan.accountAvailable and character.create <= plan.characterAvailable
+    plan.nativeContentOK = account.blocked == 0 and character.blocked == 0
+    plan.applyOK = plan.capacityOK and plan.nativeContentOK
+    for _, blocker in ipairs(account.blockers) do plan.warnings[#plan.warnings + 1] = blocker end
+    for _, blocker in ipairs(character.blockers) do plan.warnings[#plan.warnings + 1] = blocker end
     if account.create > plan.accountAvailable then
         plan.warnings[#plan.warnings + 1] = string.format(
             "Import needs %d Account macro slots, but only %d are available.",
@@ -991,7 +1010,7 @@ function PortableImport:Apply(plan)
     if refreshed.stateSignature ~= plan.stateSignature then
         return false, nil, "Native macros or MacroStudio library data changed after Preview. Run Validate & Preview again."
     end
-    if not refreshed.capacityOK then
+    if not refreshed.applyOK then
         return false, nil, table.concat(refreshed.warnings, " ")
     end
     plan = refreshed
