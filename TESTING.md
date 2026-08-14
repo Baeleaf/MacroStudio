@@ -20,7 +20,48 @@ The Milestone 8 harness additionally covers default slash takeover, exact native
 
 The Milestone 9.1 harness parses synthetic portable JSON and covers deterministic ordering, both native scopes, 20 offline characters with 600 ordered snapshots, duplicate-name metadata identity, categories, tags, Favorites, numeric/path icons, multiline/quoted/backslash/Unicode/empty/maximum bodies, dirty-draft exclusion, combat, zero native writes, both entry points, singleton open/close, exact large-text display, and visible oversize failure. Headless checks cannot prove live WoW keyboard selection, Ctrl+C, clipboard behavior, EditBox rendering performance, taint, or the maintainer's real library size; complete the live phases below.
 
-The Milestone 9.2 harness adds a dedicated synthetic Import suite plus full-TOC UI smoke coverage. It exercises non-executable JSON parsing, malformed/truncated/unsupported input, duplicate keys/IDs/references, Unicode and escapes, the large MS9.1 format-v1 fixture, exact reuse, same-name safety, ambiguity, Account/Character capacity, explicit current-character mapping, confirmation-before-write, synchronous `UPDATE_MACROS`, final identity reconciliation, additive metadata, GUID/timestamp offline rules, repeat Import, combat/dirty/stale guards, and partial native failure/retry. It asserts that Import never calls `EditMacro` or `DeleteMacro`. Headless checks cannot prove live paste performance, protected API behavior, taint, or cross-account/region persistence; complete the phases below.
+The Milestone 9.2 harness adds a dedicated synthetic Import suite plus full-TOC UI smoke coverage. It exercises non-executable JSON parsing, malformed/truncated/unsupported input, duplicate keys/IDs/references, Unicode and escapes, the large MS9.1 format-v1 fixture, exact reuse, same-name safety, ambiguity, explicit statuses, global/section/individual selection, character master state, search/filter persistence, metadata dependency pruning, selection-aware Account/Character capacity, selected-only confirmation and Apply, atomic offline selection, unselected snapshot preservation, explicit current-character mapping, synchronous `UPDATE_MACROS`, final identity reconciliation, GUID/timestamp offline rules, repeat Import, combat/dirty/stale guards, and partial native failure/retry. It asserts that Import never calls `EditMacro` or `DeleteMacro`. Headless checks cannot prove live paste performance, protected API behavior, taint, or cross-account/region persistence; complete the phases below.
+
+## MS9.2 Selectable Import Preview - 1.3.0-r6
+
+### Test A - NA self-preview
+
+- [ ] Confirm WoW reports `1.3.0-r6` with Interface `120100`.
+- [ ] Fresh NA Export -> Import -> **Validate & Preview**; confirm the Preview is structured and readable, the single Create row is immediately identifiable, Already Present rows are understandable, and Preview performs no native writes.
+
+### Test B - Search and details
+
+- [ ] Search by macro name, character, realm, category, and tag without changing selection.
+- [ ] Inspect native name, body, icon, scope, source context, metadata, status, and planned action.
+- [ ] Confirm same-name/different-content and blocked/ambiguous explanations are explicit.
+
+### Test C - Native selection
+
+- [ ] Exercise global All/None, Account All/None, Character All/None, individual Account/Character rows, and the source-character master toggle.
+- [ ] Confirm the Selected Import summary and Apply eligibility update immediately while search/filter changes preserve choices.
+
+### Test D - Offline Library
+
+- [ ] Expand several characters and confirm there is one checkbox per complete character snapshot.
+- [ ] Confirm child macros expose read-only name/icon/body/order/source details but have no individual checkbox.
+- [ ] Exercise Offline All/None and individual character selection; confirm selected snapshots apply atomically and deselected snapshots remain untouched.
+
+### Test E - Organization
+
+- [ ] Select/deselect categories, tags, and Restore Favorites.
+- [ ] Confirm deselected macro associations are pruned, no orphan definitions are created, and existing destination metadata remains untouched.
+
+### Test F - Capacity
+
+- [ ] Toggle selected Account and Character creations and confirm capacity counts update from the selection.
+- [ ] Confirm an over-capacity selection disables Apply while a smaller fitting subset enables it without deletion or silent skipping.
+
+### Test G - Confirmation
+
+- [ ] Open **Apply Selected Import** and confirm it describes exactly the current selection.
+- [ ] Cancel, then resume broader NA/EU Milestone 9.2 testing.
+
+Offline macro selection is intentionally unavailable: MacroStudio stores complete GUID-keyed synchronized character snapshots, while child order and export-local macro IDs are not durable identities. Per-macro selection could create partial or hybrid snapshots or overwrite reordered records. Preview therefore keeps child macros inspectable but applies or leaves untouched one complete character snapshot at a time.
 
 ## MS9.2 Round-Trip Validation Fix - 1.3.0-r5
 
@@ -51,7 +92,7 @@ Milestone 9.2 remains under **Unreleased** until these live-client phases pass. 
 
 ### Phase 1 - Build and access
 
-- [ ] Confirm WoW reports `1.3.0-r5` with Interface `120100`.
+- [ ] Confirm WoW reports `1.3.0-r6` with Interface `120100`.
 - [ ] Run `/ms import`, then use **Settings -> Import MacroStudio Library**; confirm both open the same Import window.
 - [ ] Confirm `/ms export` still opens the tested format-v1 Export window.
 
@@ -70,7 +111,7 @@ Milestone 9.2 remains under **Unreleased** until these live-client phases pass. 
 ### Phase 4 - Safe new macro import
 
 - [ ] Use a small synthetic export with one new Account macro, one new Character macro, one category, one tag, and one Favorite.
-- [ ] Confirm Preview counts, click **Apply Import**, accept the confirmation, and verify the Results counts.
+- [ ] Confirm Preview counts, click **Apply Selected Import**, accept the confirmation, and verify the Results counts.
 - [ ] Verify both native macros and their exact metadata.
 
 ### Phase 5 - Same-name safety
@@ -85,7 +126,7 @@ Milestone 9.2 remains under **Unreleased** until these live-client phases pass. 
 
 ### Phase 7 - Capacity
 
-- [ ] Near Account capacity, confirm an over-capacity full batch disables **Apply Import** before any write.
+- [ ] Near Account capacity, confirm an over-capacity selection disables **Apply Selected Import** before any write.
 - [ ] Repeat near Character capacity. Confirm no macro is deleted automatically in either scope.
 
 ### Phase 8 - Current-character mapping

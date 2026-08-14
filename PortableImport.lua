@@ -681,18 +681,24 @@ function PortableImport:BuildOfflinePlan(model)
         local item = { source = source }
         if source.guid and destination and source.guid == destination.guid then
             item.action = "skip_current"
+            item.status = "current"
+            item.blockReason = "This is the current character; its live native macros are handled separately."
             plan.skippedCurrent = plan.skippedCurrent + 1
         else
             local localRecord, matchCount = findLocalCharacter(source)
             if matchCount > 1 then
                 item.action = "keep"
+                item.status = "ambiguous"
+                item.blockReason = "Multiple local snapshots match this identity, so MacroStudio will not guess."
                 plan.kept = plan.kept + 1
                 plan.warnings[#plan.warnings + 1] = "An offline character identity is ambiguous locally and will be preserved without changes."
             elseif not localRecord then
                 item.action = "add"
+                item.status = "new"
                 plan.added = plan.added + 1
             elseif snapshotsEqual(source, localRecord) then
                 item.action = "keep"
+                item.status = "existing"
                 item.targetId = localRecord.id
                 plan.kept = plan.kept + 1
             else
@@ -700,10 +706,13 @@ function PortableImport:BuildOfflinePlan(model)
                 local localTime = tonumber(localRecord.lastSynced)
                 if source.guid and sourceTime and localTime and sourceTime > localTime then
                     item.action = "update"
+                    item.status = "update"
                     item.targetId = localRecord.id
                     plan.updated = plan.updated + 1
                 else
                     item.action = "keep"
+                    item.status = sourceTime and localTime and localTime > sourceTime and "local_newer" or "preserved"
+                    item.blockReason = "The local snapshot is newer or cannot be compared safely, so it will be preserved."
                     item.targetId = localRecord.id
                     plan.kept = plan.kept + 1
                     plan.warnings[#plan.warnings + 1] = "A local offline snapshot was newer or could not be compared, so it will be preserved."
@@ -735,6 +744,7 @@ local function buildNativePlanForScope(sourceMacros, scope, importEnabled)
     local result = { items = {}, create = 0, present = 0, ambiguous = 0, disabled = 0, blocked = 0, blockers = {} }
     local sourceCounts = {}
     local destinationGroups = {}
+    local destinationNames = {}
     for _, source in ipairs(sourceMacros) do
         local key = identityKey(source)
         sourceCounts[key] = (sourceCounts[key] or 0) + 1
@@ -744,6 +754,7 @@ local function buildNativePlanForScope(sourceMacros, scope, importEnabled)
             local key = nativeIdentityKey(macro)
             destinationGroups[key] = destinationGroups[key] or {}
             destinationGroups[key][#destinationGroups[key] + 1] = macro
+            destinationNames[normalizedName(macro.name)] = true
         end
     end
     for _, source in ipairs(sourceMacros) do
@@ -752,24 +763,32 @@ local function buildNativePlanForScope(sourceMacros, scope, importEnabled)
         local item = {
             source = source,
             request = { name = source.name, body = source.body, icon = iconValue(source.icon), scope = scope },
+            sameNameExists = destinationNames[normalizedName(source.name)] == true,
         }
         if not importEnabled then
             item.action = "disabled"
+            item.status = "disabled"
+            item.blockReason = "Importing source Character macros is turned off."
             result.disabled = result.disabled + 1
         elseif #matches == 1 and sourceCounts[key] == 1 then
             item.action = "reuse"
+            item.status = "existing"
             item.target = matches[1]
             result.present = result.present + 1
         elseif #matches > 0 then
             item.action = "ambiguous"
+            item.status = "ambiguous"
+            item.blockReason = "Multiple exact destination matches exist, so MacroStudio will not guess."
             result.ambiguous = result.ambiguous + 1
         else
             local valid, reason = validateNativeCreation(item.request)
             if valid then
                 item.action = "create"
+                item.status = "new"
                 result.create = result.create + 1
             else
                 item.action = "blocked"
+                item.status = "blocked"
                 item.blockReason = reason
                 result.blocked = result.blocked + 1
                 result.blockers[#result.blockers + 1] = string.format(
@@ -793,7 +812,7 @@ local function currentDestinationText()
     return (current.name or "Unknown Character") .. " - " .. (current.realm or "Unknown Realm")
 end
 
-function PortableImport:BuildPlan(model, options)
+function PortableImport:BuildPlan(model, options, selection)
     options = options or {}
     local importCharacterMacros = options.importCharacterMacros ~= false
     local account = buildNativePlanForScope(model.accountMacros, "ACCOUNT", true)
@@ -837,19 +856,33 @@ function PortableImport:BuildPlan(model, options)
         localCategories[normalizedName(category.name)] = category
     end
     local categoryById = {}
+    plan.categoryItems = {}
+    plan.categoryById = {}
     plan.categoriesAdded = 0
     for _, category in ipairs(model.organization.categories) do
         categoryById[category.id] = category
-        if not localCategories[normalizedName(category.name)] then
-            plan.categoriesAdded = plan.categoriesAdded + 1
-        end
+        local target = localCategories[normalizedName(category.name)]
+        local item = { source = category, target = target, action = target and "reuse" or "create" }
+        plan.categoryItems[#plan.categoryItems + 1] = item
+        plan.categoryById[category.id] = item
+        if not target then plan.categoriesAdded = plan.categoriesAdded + 1 end
     end
+
     local localTags = {}
     for _, tag in ipairs(MacroStudio.MetadataRepository:GetAllTags()) do
         localTags[normalizedName(tag)] = tag
     end
     local tagById = {}
-    for _, tag in ipairs(model.organization.tags) do tagById[tag.id] = tag end
+    plan.tagItems = {}
+    plan.tagById = {}
+    for _, tag in ipairs(model.organization.tags) do
+        tagById[tag.id] = tag
+        local target = localTags[normalizedName(tag.name)]
+        local item = { source = tag, target = target, action = target and "reuse" or "create" }
+        plan.tagItems[#plan.tagItems + 1] = item
+        plan.tagById[tag.id] = item
+    end
+
     local itemById = {}
     for _, item in ipairs(account.items) do itemById[item.source.id] = item end
     for _, item in ipairs(character.items) do itemById[item.source.id] = item end
@@ -861,25 +894,34 @@ function PortableImport:BuildPlan(model, options)
     for _, association in ipairs(model.organization.associations) do
         local item = itemById[association.macroId]
         if item and (item.action == "create" or item.action == "reuse") then
-            local associationPlan = { source = association, item = item, category = categoryById[association.categoryId], tags = {} }
+            local presentation = item.action == "reuse"
+                and MacroStudio.MetadataRepository:GetPresentation(item.target) or {}
+            local associationPlan = {
+                source = association,
+                item = item,
+                category = categoryById[association.categoryId],
+                tags = {},
+                presentation = presentation,
+            }
             if association.favorite then plan.favoritesRestored = plan.favoritesRestored + 1 end
+            if associationPlan.category then
+                plan.categoryById[associationPlan.category.id].hasAssociation = true
+            end
             for _, tagId in ipairs(association.tagIds) do
                 local tag = tagById[tagId]
                 associationPlan.tags[#associationPlan.tags + 1] = tag
+                plan.tagById[tag.id].hasAssociation = true
                 local key = normalizedName(tag.name)
                 if not localTags[key] and not newTagNames[key] then
                     newTagNames[key] = true
                     plan.tagsAdded = plan.tagsAdded + 1
                 end
             end
-            if item.action == "reuse" and associationPlan.category then
-                local presentation = MacroStudio.MetadataRepository:GetPresentation(item.target)
-                if presentation.categoryId then
-                    local existing = MacroStudio.MetadataRepository:GetCategory(presentation.categoryId)
-                    if existing and normalizedName(existing.name) ~= normalizedName(associationPlan.category.name) then
-                        associationPlan.categoryConflict = true
-                        plan.categoryConflicts = plan.categoryConflicts + 1
-                    end
+            if item.action == "reuse" and associationPlan.category and presentation.categoryId then
+                local existing = MacroStudio.MetadataRepository:GetCategory(presentation.categoryId)
+                if existing and normalizedName(existing.name) ~= normalizedName(associationPlan.category.name) then
+                    associationPlan.categoryConflict = true
+                    plan.categoryConflicts = plan.categoryConflicts + 1
                 end
             end
             plan.associations[#plan.associations + 1] = associationPlan
@@ -889,11 +931,10 @@ function PortableImport:BuildPlan(model, options)
         plan.warnings[#plan.warnings + 1] = "Existing destination categories win when an exact macro already belongs to a different category."
     end
     for _, warning in ipairs(plan.offline.warnings) do plan.warnings[#plan.warnings + 1] = warning end
-    local stateText = MacroStudio.PortableExport:Generate()
-    plan.stateSignature = stateText
+    plan.stateSignature = MacroStudio.PortableExport:Generate()
+    MacroStudio.ImportPlanner:InitializePlan(plan, selection)
     return plan
 end
-
 function PortableImport:Preview(text, options)
     local model = self:ParseAndValidate(text)
     return self:BuildPlan(model, options)
@@ -954,7 +995,8 @@ end
 
 local function applyMetadata(plan, mapped, result)
     local categoryMap = {}
-    for _, source in ipairs(plan.model.organization.categories) do
+    for _, item in ipairs(plan.selected.categories) do
+        local source = item.source
         local category = findCategoryByName(source.name)
         if not category then
             category = MacroStudio.MetadataRepository:CreateCategory(source.name)
@@ -966,11 +1008,11 @@ local function applyMetadata(plan, mapped, result)
     for _, tag in ipairs(MacroStudio.MetadataRepository:GetAllTags()) do
         knownTags[normalizedName(tag)] = true
     end
-    for _, association in ipairs(plan.associations) do
+    for _, association in ipairs(plan.selected.associations) do
         local target = mapped[association.source.macroId]
         if target then
             local presentation = MacroStudio.MetadataRepository:GetPresentation(target)
-            if association.source.favorite and not presentation.favorite then
+            if association.favorite and not presentation.favorite then
                 MacroStudio.MetadataRepository:ToggleFavorite(target)
                 result.favoritesRestored = result.favoritesRestored + 1
             end
@@ -1006,29 +1048,32 @@ function PortableImport:Apply(plan)
 
     MacroStudio.MacroRepository:Refresh()
     MacroStudio.MetadataRepository:Reconcile(MacroStudio.MacroRepository:GetAll())
-    local refreshed = self:BuildPlan(plan.model, plan.options)
+    local refreshed = self:BuildPlan(plan.model, plan.options, plan.selection)
     if refreshed.stateSignature ~= plan.stateSignature then
         return false, nil, "Native macros or MacroStudio library data changed after Preview. Run Validate & Preview again."
     end
+    if refreshed.selectionSignature ~= plan.selectionSignature then
+        return false, nil, "The selected import plan could not be reconciled safely. Run Validate & Preview again."
+    end
     if not refreshed.applyOK then
-        return false, nil, table.concat(refreshed.warnings, " ")
+        return false, nil, refreshed.applyReason or table.concat(refreshed.warnings, " ")
     end
     plan = refreshed
     self.activePlan = plan
 
     local result = {
-        accountCreated = 0, accountPresent = plan.account.present,
-        characterCreated = 0, characterPresent = plan.character.present,
+        accountCreated = 0, accountPresent = plan.selected.account.present,
+        characterCreated = 0, characterPresent = plan.selected.character.present,
         ambiguousSkipped = plan.account.ambiguous + plan.character.ambiguous,
         categoriesAdded = 0, tagsAdded = 0, favoritesRestored = 0,
-        metadataConflicts = 0, metadataSkipped = 0, offlineAdded = 0, offlineUpdated = 0, offlineKept = plan.offline.kept,
+        metadataConflicts = 0, metadataSkipped = 0, offlineAdded = 0, offlineUpdated = 0, offlineKept = 0,
         partial = false, message = nil,
     }
     local mapped = {}
-    for _, item in ipairs(plan.account.items) do
+    for _, item in ipairs(plan.selected.account.items) do
         if item.action == "reuse" then mapped[item.source.id] = item.target end
     end
-    for _, item in ipairs(plan.character.items) do
+    for _, item in ipairs(plan.selected.character.items) do
         if item.action == "reuse" then mapped[item.source.id] = item.target end
     end
 
@@ -1047,8 +1092,8 @@ function PortableImport:Apply(plan)
         return true
     end
     local batchOK, created, failure = xpcall(function()
-        local completed, message = createItems(plan.account.items, "accountCreated")
-        if completed then completed, message = createItems(plan.character.items, "characterCreated") end
+        local completed, message = createItems(plan.selected.account.items, "accountCreated")
+        if completed then completed, message = createItems(plan.selected.character.items, "characterCreated") end
         return completed, message
     end, function(value) return tostring(value) end)
     finishMutationBatch()
@@ -1062,7 +1107,7 @@ function PortableImport:Apply(plan)
         result.message = string.format(
             "Import stopped after confirming %d of %d planned native macros. No existing macros were modified or deleted. %s Re-run Preview before retrying.",
             result.accountCreated + result.characterCreated,
-            plan.account.create + plan.character.create,
+            plan.selected.account.create + plan.selected.character.create,
             failure or ""
         )
         MacroStudio.MacroRepository:Refresh()
@@ -1076,10 +1121,13 @@ function PortableImport:Apply(plan)
 
     MacroStudio.MacroRepository:Refresh()
     MacroStudio.MetadataRepository:Reconcile(MacroStudio.MacroRepository:GetAll())
-    mapped, result.metadataSkipped = finalMappedMacros(plan)
+    mapped, result.metadataSkipped = finalMappedMacros({
+        account = plan.selected.account,
+        character = plan.selected.character,
+    })
     local mergeOK, mergeFailure = xpcall(function()
         applyMetadata(plan, mapped, result)
-        for _, item in ipairs(plan.offline.items) do
+        for _, item in ipairs(plan.selected.offline.items) do
             if item.action == "add" or item.action == "update" then
                 local ok = MacroStudio.CharacterMacroLibrary:ApplyPortableSnapshot(item)
                 if ok then

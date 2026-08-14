@@ -185,7 +185,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "1.3.0-r5"
+namespace.VERSION = "1.3.0-r6"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -214,6 +214,7 @@ load_addon_file("ActionBarRepository.lua", namespace)
 load_addon_file("MetadataRepository.lua", namespace)
 load_addon_file("PortableExport.lua", namespace)
 load_addon_file("PortableImport.lua", namespace)
+load_addon_file("ImportPlanner.lua", namespace)
 load_addon_file("Search.lua", namespace)
 load_addon_file("UI/MacroList.lua", namespace)
 load_addon_file("UI/MainFrame.lua", namespace)
@@ -1003,7 +1004,7 @@ export_text, unusual_body, maximum_body = export_fixture("MacroStudio", namespac
 portable = json.loads(export_text)
 assert portable["format"] == "MacroStudioPortableLibrary"
 assert portable["formatVersion"] == 1
-assert portable["addonVersion"] == "1.3.0-r5"
+assert portable["addonVersion"] == "1.3.0-r6"
 assert len(portable["accountMacros"]) == 120
 assert [macro["id"] for macro in portable["accountMacros"][:2]] == ["account-001", "account-002"]
 assert portable["accountMacros"][-1]["id"] == "account-120"
@@ -1094,6 +1095,7 @@ minimap_source = (ROOT / "MinimapButton.lua").read_text(encoding="utf-8")
 settings_source = (ROOT / "UI" / "Settings.lua").read_text(encoding="utf-8")
 export_source = (ROOT / "PortableExport.lua").read_text(encoding="utf-8")
 import_source = (ROOT / "PortableImport.lua").read_text(encoding="utf-8")
+planner_source = (ROOT / "ImportPlanner.lua").read_text(encoding="utf-8")
 import_dialog_source = (ROOT / "UI" / "ImportDialog.lua").read_text(encoding="utf-8")
 import_tests_source = (ROOT / "tests" / "import_tests.py").read_text(encoding="utf-8")
 export_dialog_source = (ROOT / "UI" / "ExportDialog.lua").read_text(encoding="utf-8")
@@ -1220,8 +1222,8 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120100" in toc_source
-assert "## Version: 1.3.0-r5" in toc_source
-assert 'MacroStudio.VERSION = "1.3.0-r5"' in core_source
+assert "## Version: 1.3.0-r6" in toc_source
+assert 'MacroStudio.VERSION = "1.3.0-r6"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -1235,7 +1237,8 @@ assert toc_source.index("UI\\ExportDialog.lua") < toc_source.index("UI\\Settings
 assert toc_source.index("UI\\Settings.lua") < toc_source.index("UI\\MainFrame.lua")
 assert toc_source.index("CharacterMacroLibrary.lua") < toc_source.index("ActionBarRepository.lua")
 assert toc_source.index("PortableExport.lua") < toc_source.index("PortableImport.lua")
-assert toc_source.index("PortableImport.lua") < toc_source.index("Search.lua")
+assert toc_source.index("PortableImport.lua") < toc_source.index("ImportPlanner.lua")
+assert toc_source.index("ImportPlanner.lua") < toc_source.index("Search.lua")
 assert toc_source.index("UI\\Dialogs.lua") < toc_source.index("UI\\ImportDialog.lua")
 assert toc_source.index("UI\\ImportDialog.lua") < toc_source.index("UI\\Settings.lua")
 assert 'SLASH_MACROSTUDIO1 = "/macrostudio"' in access_source
@@ -1284,6 +1287,15 @@ assert "ValidateMacroContent" not in import_source[:import_source.index("local f
 assert "MacroStudio.MacroRepository:ValidateMacroContent" in import_source
 assert "MacroStudio.MacroRepository:NormalizeMacroName" in import_source
 assert "plan.applyOK" in import_source and "plan.stateSignature" in import_source
+assert "function ImportPlanner:Recalculate(plan)" in planner_source
+assert "function ImportPlanner:SetSectionSelected(plan, section, selected)" in planner_source
+assert "function ImportPlanner:SetAllSelected(plan, selected)" in planner_source
+assert "function ImportPlanner:SetCharacterImportEnabled(plan, enabled)" in planner_source
+assert "Offline snapshots are selected atomically by character" in import_dialog_source
+assert "Apply Selected Import" in import_dialog_source
+assert "previewFilter" in import_dialog_source and '"changes"' in import_dialog_source
+assert "selectionSignature" in planner_source and "Nothing selected for import." in planner_source
+assert "plan.selected.associations" in import_source and "plan.selection" in import_source
 assert 'item.action = "blocked"' in import_source and "cannot be created:" in import_source
 assert "plan ~= self.activePlan" in import_source and "changed after Preview" in import_source
 assert "InCombatLockdown" in import_source and "Editor:IsDirty()" in import_source
@@ -1292,7 +1304,7 @@ assert "Indistinguishable duplicate exact matches" in import_source
 assert "No existing macros were modified or deleted" in import_source
 assert "ApplyPortableSnapshot" in library_source and "lastKnownIndex" not in import_source
 assert 'SetScript("OnUpdate"' not in import_source
-assert "Validate & Preview" in import_dialog_source and "Apply Import" in import_dialog_source
+assert "Validate & Preview" in import_dialog_source and "Apply Selected Import" in import_dialog_source
 assert "ShowConfirmImport" in import_dialog_source and "SetMaxLetters(0)" in import_dialog_source
 assert "Import source Character macros to this character" in import_dialog_source
 assert "partial failure" in import_tests_source and "repeat preview" in import_tests_source

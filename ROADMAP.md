@@ -64,7 +64,7 @@ The roadmap records shipped capabilities and likely future directions; unchecked
 - [x] Parse and validate portable exports without executing code.
 - [x] Preview incoming macros, metadata, and conflicts before any native writes.
 - [x] Import only after explicit confirmation with safe duplicate/conflict choices.
-- [ ] Add selective macro, metadata, and categories-only transfer after full-library Import is proven safe.
+- [x] Add player-controlled macro, metadata, and atomic offline-character snapshot selection to the safe Import Preview.
 - [x] Treat imported content as untrusted text and never execute it as Lua.
 - [ ] Snapshot/version history, backups, and recoverable deletion with sensible retention.
 

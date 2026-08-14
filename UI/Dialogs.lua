@@ -261,13 +261,7 @@ function Dialogs:ShowForgetCharacter(character, callback)
 end
 
 function Dialogs:ShowConfirmImport(plan, callback)
-    local account = plan and plan.account and plan.account.create or 0
-    local character = plan and plan.character and plan.character.create or 0
-    local summary = string.format(
-        "Import %d Account and %d Character native macros, then merge MacroStudio library data?",
-        account,
-        character
-    )
+    local summary = MacroStudio.ImportPlanner:GetConfirmationText(plan)
     local dialog = StaticPopup_Show(KEYS.CONFIRM_IMPORT, summary, nil, { callback = callback })
     return dialog ~= nil
 end

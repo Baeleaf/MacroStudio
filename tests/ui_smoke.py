@@ -408,6 +408,7 @@ def run_ui_smoke(root):
         "MetadataRepository.lua",
         "PortableExport.lua",
         "PortableImport.lua",
+        "ImportPlanner.lua",
         "Search.lua",
         "UI/Dialogs.lua",
         "UI/IconPicker.lua",
@@ -512,7 +513,7 @@ def run_ui_smoke(root):
                 and ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown(),
             "closing and repeating /ms export should reopen the same frame")
         assert(initialExportText:find('"formatVersion": 1', 1, true)
-                and initialExportText:find('"addonVersion": "1.3.0-r5"', 1, true)
+                and initialExportText:find('"addonVersion": "1.3.0-r6"', 1, true)
                 and initialExportText:find(savedExportBody, 1, true)
                 and not initialExportText:find("unsaved portable export draft", 1, true),
             "export should contain saved native data and exclude the dirty draft")
@@ -684,11 +685,25 @@ def run_ui_smoke(root):
         assert(replacements == 1, "native-blocker UI fixture should alter exactly one Account macro")
         ms.ImportDialog.inputEditBox:SetUserText(blockedImportText)
         ms.ImportDialog.validateButton:TriggerScript("OnClick")
-        assert(ms.ImportDialog.mode == "preview" and ms.ImportDialog.plan.account.blocked == 1
+        local blockedRow
+        for _, row in ipairs(ms.ImportDialog.visiblePreviewRows) do
+            if rawget(row, "item") and row.item.action == "blocked" then blockedRow = row end
+        end
+        assert(ms.ImportDialog.mode == "preview" and ms.ImportDialog.previewPanel:IsShown()
+                and not ms.ImportDialog.outputPanel:IsShown()
+                and ms.ImportDialog.previewFilter == "changes"
+                and ms.ImportDialog.plan.account.blocked == 1
                 and not ms.ImportDialog.plan.applyOK and not ms.ImportDialog.applyButton:IsEnabled()
-                and ms.ImportDialog.outputEditBox:GetText():find("Cannot create: 1", 1, true)
-                and ms.ImportDialog.outputEditBox:GetText():find("Macro names are limited to 16 characters", 1, true),
-            "Preview should display a native-content blocker and disable Apply without rejecting portable JSON")
+                and blockedRow and blockedRow.checkbox:IsShown() and not blockedRow.checkbox:IsEnabled()
+                and blockedRow.status:GetText() == "Cannot create",
+            "structured Preview should show native blockers as visible disabled rows")
+        blockedRow:TriggerScript("OnClick")
+        assert(ms.ImportDialog.detailsMetadata:GetText():find("Macro names are limited to 16 characters", 1, true),
+            "selecting a blocked row should explain its native constraint")
+        ms.ImportDialog.filterButtons.blocked:TriggerScript("OnClick")
+        assert(ms.ImportDialog.previewFilter == "blocked"
+                and ms.ImportDialog:FindVisiblePreviewRow("account", nil, "item"),
+            "Blocked should be a presentation-only filter over the same plan")
         ms.ImportDialog:BackToPaste()
 
         ms.ImportDialog.inputEditBox:SetUserText(initialExportText)
@@ -698,21 +713,83 @@ def run_ui_smoke(root):
         assert(ms.ImportDialog.mode == "preview" and ms.ImportDialog.plan
                 and ms.ImportDialog.plan.account.create == 0 and ms.ImportDialog.plan.account.present == 1
                 and ms.ImportDialog.plan.character.create == 0 and ms.ImportDialog.plan.character.present == 1
-                and ms.ImportDialog.applyButton:IsEnabled(),
-            "same-installation Preview should be read-only and recognize exact native macros")
-        assert(ms.ImportDialog.outputEditBox:GetText():find("Existing native macros will not be overwritten or deleted", 1, true)
-                and ms.ImportDialog.outputEditBox:GetText():find("Destination: Current - Test Realm", 1, true),
-            "Preview should expose native safety and the current-character destination")
+                and not ms.ImportDialog.plan.applyOK and not ms.ImportDialog.applyButton:IsEnabled()
+                and ms.ImportDialog.plan.applyReason == "Nothing selected for import.",
+            "same-installation Preview should recognize exact data and disable an empty actionable plan")
+        assert(ms.ImportDialog.previewDestination:GetText():find("Character: Current - Test Realm", 1, true)
+                and ms.ImportDialog.previewSummary:GetText():find("Capacity: Account", 1, true),
+            "structured Preview should expose destination and dynamic selected capacity")
+        ms.ImportDialog:SetPreviewFilter("all")
+        local offlineParent
+        for _, row in ipairs(ms.ImportDialog.visiblePreviewRows) do
+            if row.kind == "offline" and row.item.source.name == "Archived" then offlineParent = row end
+        end
+        assert(offlineParent, "All should expose imported offline character snapshots")
+        local offlineSourceId = offlineParent.item.source.sourceId
+        offlineParent:TriggerScript("OnClick")
+        local offlineChild = ms.ImportDialog:FindVisiblePreviewRow("offline", offlineSourceId, "offlineMacro")
+        assert(offlineChild and not offlineChild.checkbox:IsShown(),
+            "offline child macros should be inspectable without individual selection controls")
+        offlineChild:TriggerScript("OnClick")
+        assert(ms.ImportDialog.detailsBody:GetText():find("Offline Library Heal", 1, true)
+                and ms.ImportDialog.detailsMetadata:GetText():find("selection belongs to the complete character snapshot", 1, true),
+            "offline child details should remain read-only and explain atomic character selection")
+        ms.ImportDialog.previewCharacterCheckbox:SetChecked(false)
+        ms.ImportDialog.previewCharacterCheckbox:TriggerScript("OnClick")
+        assert(not ms.ImportDialog.plan.options.importCharacterMacros
+                and #ms.ImportDialog.plan.selected.character.items == 0,
+            "the Preview character master should disable all source-character native rows")
+        ms.ImportDialog:BackToPaste()
+
+        local actionableImportText, actionableReplacements = initialExportText:gsub(
+            '"name": "Account"', '"name": "Import Copy"', 1
+        )
+        assert(actionableReplacements == 1, "actionable selector fixture should rename exactly one Account macro")
+        ms.ImportDialog.inputEditBox:SetUserText(actionableImportText)
+        ms.ImportDialog.validateButton:TriggerScript("OnClick")
+        assert(ms.ImportDialog.plan.account.create == 1 and ms.ImportDialog.applyButton:IsEnabled()
+                and ms.ImportDialog.applyButton:GetText() == "Apply Selected Import",
+            "a safe changed row should default selected and enable Apply Selected Import")
+        local accountSection = ms.ImportDialog:FindVisiblePreviewRow("account", nil, "section")
+        assert(accountSection and accountSection.sectionAll:IsShown() and accountSection.sectionNone:IsShown(),
+            "native sections should expose independent All and None controls")
+        accountSection.sectionNone:TriggerScript("OnClick")
+        assert(not ms.ImportDialog.applyButton:IsEnabled(),
+            "Account section None should update the selected plan")
+        accountSection = ms.ImportDialog:FindVisiblePreviewRow("account", nil, "section")
+        accountSection.sectionAll:TriggerScript("OnClick")
+        assert(ms.ImportDialog.applyButton:IsEnabled(),
+            "Account section All should restore safe Account choices")
+        ms.ImportDialog.previewSelectNoneButton:TriggerScript("OnClick")
+        assert(not ms.ImportDialog.plan.applyOK and not ms.ImportDialog.applyButton:IsEnabled(),
+            "Select None should disable Apply for an empty actionable plan")
+        ms.ImportDialog.previewSelectAllButton:TriggerScript("OnClick")
+        local accountChoice
+        for _, row in ipairs(ms.ImportDialog.visiblePreviewRows) do
+            if row.section == "account" and rawget(row, "item") and row.item.source.name == "Import Copy" then accountChoice = row end
+        end
+        assert(accountChoice and accountChoice.checkbox:GetChecked() and ms.ImportDialog.applyButton:IsEnabled(),
+            "Select All should restore safe actionable rows")
+        accountChoice.checkbox:SetChecked(false)
+        accountChoice.checkbox:TriggerScript("OnClick")
+        assert(not ms.ImportDialog.applyButton:IsEnabled(),
+            "individual macro deselection should update Apply eligibility immediately")
+        accountChoice = nil
+        for _, row in ipairs(ms.ImportDialog.visiblePreviewRows) do
+            if row.section == "account" and rawget(row, "item") and row.item.source.name == "Import Copy" then accountChoice = row end
+        end
+        accountChoice.checkbox:SetChecked(true)
+        accountChoice.checkbox:TriggerScript("OnClick")
+        ms.ImportDialog.previewSearchBox:SetUserText("Import Copy")
+        assert(ms.ImportDialog:FindVisiblePreviewRow("account", nil, "item"),
+            "Preview search should narrow presentation without changing selection")
         ms.ImportDialog.applyButton:TriggerScript("OnClick")
         assert(lastStaticPopup and lastStaticPopup.key == "MACROSTUDIO_CONFIRM_PORTABLE_IMPORT"
-                and not createdAccountMacro and not createdCharacterMacro,
-            "Apply Import should require explicit confirmation before native mutation")
-        StaticPopupDialogs[lastStaticPopup.key].OnAccept(lastStaticPopup, lastStaticPopup.data)
-        assert(ms.ImportDialog.mode == "result"
-                and ms.ImportDialog.outputEditBox:GetText():find("IMPORT COMPLETE", 1, true)
+                and lastStaticPopup.text1:find("Apply selected import?", 1, true)
+                and lastStaticPopup.text1:find("Create 1 Account macros", 1, true)
                 and not createdAccountMacro and not createdCharacterMacro
                 and editCalls == importEditsBefore and deleteCalls == importDeletesBefore,
-            "confirmed same-installation Import should show Results without duplicate, edit, or delete writes")
+            "Apply Selected Import should confirm the selected subset before any native mutation")
         sharedImportFrame:Hide()
         SlashCmdList.MACROSTUDIO("import")
         assert(openImportCalls == 2 and lastOpenImportSource == "slash"

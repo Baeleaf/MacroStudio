@@ -89,10 +89,13 @@ parse JSON (no evaluation)
 validate complete format-v1 model and references
         |
         v
-build read-only local plan + capacity preflight
+build read-only local plan
         |
         v
-Preview -- explicit confirmation -- immediate revalidation
+select/search/filter/inspect in Import Planner
+        |
+        v
+selected-only confirmation -- immediate revalidation
         |
         v
 Account Create -> current-character Create -> exact reconciliation
@@ -113,9 +116,11 @@ Retail 12.1 Blizzard Macro UI and the established repository confirm that `GetNu
 
 Preview groups native macros by exact saved scope, name, body, and normalized icon identity. One exact destination match for one source record is reusable even when no creation is needed. A same-name macro with different body or icon is distinct; Import never calls `EditMacro`. Multiple indistinguishable exact destination matches are displayed as ambiguous and skipped rather than guessed or given metadata. Import never calls `DeleteMacro` and never frees capacity automatically.
 
-When an Account or enabled Character record needs creation, Preview applies `MacroRepository:ValidateMacroContent()` and exact name-normalization checks. An uncreatable record is shown as **Cannot create** with its scope/order and the current native reason; it is not truncated, rewritten, or silently skipped, and it blocks the full-batch Apply. The planner separately reads current `GetNumMacros` capacity through `MacroRepository` and requires room for the complete creatable batch. Source Character macros target the explicitly displayed logged-in character only when the default-on checkbox is enabled; their source GUID is context and is never installed as local native identity.
+When an Account or enabled Character record needs creation, Preview applies `MacroRepository:ValidateMacroContent()` and exact name-normalization checks. An uncreatable record is shown as **Cannot create** with its current native reason; ambiguous and unavailable records remain visible and inspectable with disabled checkboxes. They are never truncated, rewritten, guessed, or silently selected, while independent safe selections may still be applied.
 
-`UI/ImportDialog.lua` and `Access:OpenImport()` implement one singleton workflow used by `/ms import` and Settings: Paste, Validate, Preview, Confirm, Apply, Results. Paste and Preview work in combat and never mutate native state. Before Apply, `PortableImport` requires the exact active Preview object, blocks combat and dirty drafts, refreshes/reconciles the repository, rebuilds the plan, compares a deterministic portable state signature, and rechecks both native content and capacity. Any material external change cancels the write and requires a new Preview.
+`ImportPlanner.lua` owns the user's Preview choices independently from the parsed portable model. Safe Account/current-character rows, eligible offline character snapshots, categories, tags, and Restore Favorites default selected. Global and per-section All/None controls plus individual checkboxes update one effective plan. Search, status filters, detail inspection, and section expansion are presentation-only and cannot mutate that selection. Metadata dependencies are derived from selected native macros: deselecting a macro/category/tag or disabling Favorite restore removes only those imported associations and never creates orphan definitions. Capacity is computed from selected native creations, so a fitting subset remains possible without deletion or silent skipping.
+
+`UI/ImportDialog.lua` and `Access:OpenImport()` implement one singleton workflow used by `/ms import` and Settings: Paste, Validate, Preview, Confirm, Apply, Results. Paste and every Preview interaction work in combat and perform no repository or SavedVariables mutation. Before Apply, `PortableImport` requires the exact active Preview object, blocks combat and dirty drafts, refreshes/reconciles the repository, rebuilds the plan while preserving the exact selection map, compares deterministic portable-state and selection signatures, and rechecks selected metadata, offline reconciliation, native content, and capacity. Any material external change or unsafe reinterpretation cancels the write and requires a new Preview. The confirmation and Apply path consume only the effective selected plan.
 
 Native creation is deterministic: Account records first, then current-character records, exclusively through `MacroRepository:Create()`. Synchronous `UPDATE_MACROS` notifications remain behind the established native-mutation gate. After all creations and possible Account-induced Character index shifts settle, Import rebuilds exact final identity groups from the refreshed repository. Metadata is attached only when one source record and one destination record remain uniquely exact; no returned or previous index is trusted as permanent identity.
 
@@ -123,7 +128,11 @@ Native creation is deterministic: Account records first, then current-character 
 
 Organization merge is additive. Category and tag definitions are reused by the same case-insensitive semantic naming already used locally. Missing categories are created. Imported tags are unioned with destination tags, and imported Favorite state only turns Favorite on. If a reusable exact native macro already has a different category, Preview reports the conflict and Apply preserves the destination category. A skipped or ambiguous native identity receives no imported metadata.
 
-Foreign current-character context and exported offline records are planned as snapshot data independently from native Character creation. GUID is primary when present: different GUIDs never merge by Name-Realm, a newer source timestamp may replace the same GUID offline snapshot, and a newer/equal or incomparable local record is preserved. A no-GUID source reuses only one unique full snapshot match; otherwise it is kept as a separate uncertain record. Offline snapshot order, name, icon, and body are preserved without current native name/body limits or silent truncation; the applied record never gains native indices, action-bar state, metadata identity, or fake native handles. If the user later chooses **Copy to Current Character**, the existing native-copy validation applies at that operation without altering the stored snapshot.
+Foreign current-character context and exported offline records are planned as snapshot data independently from native Character creation. GUID is primary when present: different GUIDs never merge by Name-Realm, a newer source timestamp may replace the same GUID offline snapshot, and a newer/equal or incomparable local record is preserved. A no-GUID source reuses only one unique full snapshot match; otherwise it is kept as a separate uncertain record.
+
+Offline selection is intentionally atomic at the character-snapshot level. MacroStudio stores one complete synchronized snapshot per character GUID; child macros have only ordering inside that snapshot, and export-local macro IDs are not durable identities. Selecting children independently could delete unselected records during replacement, overwrite a reordered neighbor, append a hybrid library that never existed, or present a partial snapshot as complete. Each offline character therefore has one selection; its child macros remain expandable, read-only Preview details. A selected character applies the complete snapshot through the existing GUID/timestamp reconciliation, while a deselected character leaves local state untouched.
+
+Offline snapshot order, name, icon, and body are preserved without current native name/body limits or silent truncation; the applied record never gains native indices, action-bar state, metadata identity, or fake native handles. If the user later chooses **Copy to Current Character**, the existing native-copy validation applies at that operation without altering the stored snapshot.
 
 ### Partial failure and repeat behavior
 
@@ -176,6 +185,7 @@ Core.lua
 |-- MetadataRepository.lua
 |-- PortableExport.lua
 |-- PortableImport.lua
+|-- ImportPlanner.lua
 |-- Utils/Helpers.lua
 |-- Search.lua
 `-- UI/MainFrame.lua
@@ -197,7 +207,8 @@ Core.lua
 - `ActionBarRepository.lua` owns native action-slot inspection and builds a conservative, read-only exact macro snapshot to raw-slot lookup.
 - `MetadataRepository.lua` owns virtual organization records, preserves them through trusted native identity edits, and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `PortableExport.lua` builds portable format v1 and serializes only its fixed interchange schema in deterministic JSON.
-- `PortableImport.lua` parses and validates untrusted format-v1 JSON, builds read-only plans, and applies confirmed native/library merges through existing repositories.
+- `PortableImport.lua` parses and validates untrusted format-v1 JSON, builds read-only plans, and applies confirmed selected native/library merges through existing repositories.
+- `ImportPlanner.lua` owns Preview selection, dependency pruning, selection signatures, selected capacity, summaries, and selected-only confirmation text.
 - `UI/ExportDialog.lua` owns the singleton scrollable Export view, exact display verification, and visible size/truncation failures.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
 - `UI/ImportDialog.lua` owns the singleton Paste, Preview, confirmation, Apply, and Results workflow.

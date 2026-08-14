@@ -119,7 +119,10 @@ def run_import_tests(lua, namespace, large_export_text):
 
 
     capacity_model = copy.deepcopy(model)
-    capacity_model["accountMacros"] = [_macro("account-capacity", 1, "ACCOUNT", "Capacity New", "/say capacity", 401)]
+    capacity_model["accountMacros"] = [
+        _macro("account-capacity-1", 1, "ACCOUNT", "Capacity One", "/say capacity one", 401),
+        _macro("account-capacity-2", 2, "ACCOUNT", "Capacity Two", "/say capacity two", 402),
+    ]
     capacity_model["currentCharacter"]["macros"] = []
     capacity_model["offlineCharacters"] = []
     capacity_model["organization"] = {"categories": [], "tags": [], "associations": []}
@@ -258,18 +261,27 @@ def run_import_tests(lua, namespace, large_export_text):
         local nativeBlocked = ms.PortableImport:Preview(nativeInvalidText, { importCharacterMacros = true })
         assert(nativeBlocked.account.blocked == 1 and nativeBlocked.account.create == 0
                 and nativeBlocked.character.blocked == 1 and nativeBlocked.character.create == 0
-                and nativeBlocked.capacityOK and not nativeBlocked.nativeContentOK and not nativeBlocked.applyOK,
-            "portable native-target records should reach Preview and be classified as uncreatable")
+                and nativeBlocked.capacityOK and nativeBlocked.nativeContentOK and nativeBlocked.applyOK
+                and nativeBlocked.selected.offline.added == 1
+                and not nativeBlocked.selection.account["account-long-name"]
+                and not nativeBlocked.selection.character["character-long-body"],
+            "blocked native rows should stay disabled while independent safe snapshot work remains actionable")
         local blockedWarnings = table.concat(nativeBlocked.warnings, " ")
         assert(blockedWarnings:find("Account macro #1 cannot be created: Macro names are limited to 16 characters.", 1, true)
                 and blockedWarnings:find("Character macro #1 cannot be created: Macro bodies are limited to 255 characters.", 1, true),
             "Preview should identify each blocked native target and its current client constraint")
         local writesBeforeBlocked = createCalls
+        ms.ImportPlanner:SetAllSelected(nativeBlocked, false)
+        assert(not nativeBlocked.applyOK and nativeBlocked.applyReason == "Nothing selected for import.",
+            "an empty actionable selection must disable Apply")
+        local emptyRefresh = ms.PortableImport:BuildPlan(nativeBlocked.model, nativeBlocked.options, nativeBlocked.selection)
+        assert(emptyRefresh.selectionSignature == nativeBlocked.selectionSignature,
+            "explicit false selections must survive immediate plan rebuilding exactly")
         ms.PortableImport:SetActivePlan(nativeBlocked)
         local blockedOK, _, blockedMessage = ms.PortableImport:Apply(nativeBlocked)
-        assert(not blockedOK and blockedMessage:find("cannot be created", 1, true)
+        assert(not blockedOK and blockedMessage:find("Nothing selected", 1, true)
                 and createCalls == writesBeforeBlocked,
-            "Apply must reject a native-invalid full batch without silently skipping or writing")
+            "Apply must reject an empty selection without writing")
         local disabledModel = ms.PortableImport:ParseAndValidate(nativeInvalidText)
         disabledModel.accountMacros = {}
         local disabledCharacter = ms.PortableImport:BuildPlan(disabledModel, { importCharacterMacros = false })
@@ -290,6 +302,95 @@ def run_import_tests(lua, namespace, large_export_text):
             "offline planning should add foreign/zero records, update newer GUID data, and preserve newer local data")
         assert(plan.categoryConflicts == 1 and plan.categoriesAdded == 1 and plan.tagsAdded == 1,
             "preview should expose additive organization work and destination category conflicts")
+
+        local function findItem(items, sourceId)
+            for _, item in ipairs(items or {}) do
+                if (item.source.id or item.source.sourceId) == sourceId then return item end
+            end
+        end
+
+        assert(findItem(plan.account.items, "account-001").status == "existing"
+                and findItem(plan.account.items, "account-002").status == "new"
+                and findItem(plan.offline.items, "offline-update").status == "update"
+                and findItem(plan.offline.items, "offline-local-newer").status == "local_newer"
+                and findItem(plan.offline.items, "offline-same-name").status == "new",
+            "Preview should expose explicit native and offline reconciliation statuses")
+
+        local selectionPlan = ms.PortableImport:Preview(validText, { importCharacterMacros = true })
+        assert(selectionPlan.selected.account.create == 2 and selectionPlan.selected.account.present == 1
+                and selectionPlan.selected.character.create == 1
+                and selectionPlan.selected.offline.added == 3 and selectionPlan.selected.offline.updated == 1
+                and selectionPlan.selected.metadataExisting == 1,
+            "safe native, offline, and metadata rows should default selected")
+        ms.ImportPlanner:SetAllSelected(selectionPlan, false)
+        assert(not selectionPlan.applyOK and #selectionPlan.selected.associations == 0
+                and #selectionPlan.selected.categories == 0 and #selectionPlan.selected.tags == 0,
+            "Select None should produce an empty non-actionable plan")
+        ms.ImportPlanner:SetSectionSelected(selectionPlan, "account", true)
+        assert(#selectionPlan.selected.account.items == 3 and selectionPlan.selected.account.create == 2,
+            "Account Select All should select every safe Account row")
+        ms.ImportPlanner:SetSectionSelected(selectionPlan, "account", false)
+        assert(#selectionPlan.selected.account.items == 0,
+            "Account Select None should preserve other sections while clearing Account rows")
+        local sameNameItem = assert(findItem(selectionPlan.account.items, "account-002"))
+        assert(ms.ImportPlanner:SetItemSelected(selectionPlan, "account", sameNameItem, true))
+        assert(selectionPlan.selected.account.create == 1 and selectionPlan.applyOK
+                and #selectionPlan.selected.associations == 0,
+            "an individual native macro can form a safe import subset")
+        ms.ImportPlanner:SetItemSelected(selectionPlan, "categories", selectionPlan.categoryItems[1], true)
+        ms.ImportPlanner:SetItemSelected(selectionPlan, "tags", selectionPlan.tagItems[2], true)
+        ms.ImportPlanner:SetRestoreFavorites(selectionPlan, true)
+        assert(#selectionPlan.selected.associations == 1 and #selectionPlan.selected.categories == 1
+                and #selectionPlan.selected.tags == 1 and selectionPlan.selected.favorites == 1,
+            "selected macro metadata should follow category, tag, and Favorite choices")
+        ms.ImportPlanner:SetItemSelected(selectionPlan, "account", sameNameItem, false)
+        assert(#selectionPlan.selected.associations == 0 and #selectionPlan.selected.categories == 0
+                and #selectionPlan.selected.tags == 0 and selectionPlan.selected.favorites == 0,
+            "deselecting a macro must prune dependent metadata without orphan definitions")
+        ms.ImportPlanner:SetSectionSelected(selectionPlan, "offline", true)
+        assert(selectionPlan.selected.offline.added == 3 and selectionPlan.selected.offline.updated == 1,
+            "Offline Select All should select eligible complete character snapshots")
+        ms.ImportPlanner:SetSectionSelected(selectionPlan, "offline", false)
+        assert(#selectionPlan.selected.offline.items == 0,
+            "Offline Select None should leave every character snapshot untouched")
+        local offlineItem = assert(findItem(selectionPlan.offline.items, "offline-same-name"))
+        ms.ImportPlanner:SetItemSelected(selectionPlan, "offline", offlineItem, true)
+        assert(selectionPlan.selected.offline.added == 1
+                and selectionPlan.selection.offline["offline-same-name"] == true
+                and selectionPlan.selection.offline["offline-other-001"] == nil,
+            "offline selection must be atomic at character snapshot level, never per child macro")
+
+        local characterPlan = ms.PortableImport:Preview(validText, { importCharacterMacros = true })
+        ms.ImportPlanner:SetSectionSelected(characterPlan, "character", false)
+        assert(#characterPlan.selected.character.items == 0,
+            "Character Select None should clear enabled child rows")
+        ms.ImportPlanner:SetSectionSelected(characterPlan, "character", true)
+        assert(#characterPlan.selected.character.items == 2,
+            "Character Select All should restore every safe enabled child row")
+        local characterDisabled = ms.ImportPlanner:SetCharacterImportEnabled(characterPlan, false)
+        assert(characterDisabled.character.disabled == 2
+                and #characterDisabled.selected.character.items == 0,
+            "the source-character master toggle should disable all child native choices")
+        local characterRestored = ms.ImportPlanner:SetCharacterImportEnabled(characterDisabled, true)
+        assert(characterRestored.character.create == 1 and characterRestored.character.present == 1
+                and #characterRestored.selected.character.items == 2,
+            "re-enabling the source-character master should preserve its exact prior selection")
+
+        local subsetPlan = ms.PortableImport:Preview(validText, { importCharacterMacros = true })
+        ms.ImportPlanner:SetAllSelected(subsetPlan, false)
+        local updateSnapshot = assert(findItem(subsetPlan.offline.items, "offline-update"))
+        ms.ImportPlanner:SetItemSelected(subsetPlan, "offline", updateSnapshot, true)
+        local writesBeforeSubset = createCalls
+        ms.PortableImport:SetActivePlan(subsetPlan)
+        local subsetOK, subsetResult = ms.PortableImport:Apply(subsetPlan)
+        local subsetStore = ms.CharacterMacroLibrary:GetStore()
+        assert(subsetOK and subsetResult.offlineUpdated == 1 and subsetResult.offlineAdded == 0
+                and createCalls == writesBeforeSubset
+                and subsetStore.characters["guid:Player-OFF-UPDATE"].lastSynced == 200
+                and not subsetStore.characters["guid:Player-OFF-OTHER"],
+            "Apply must use only the selected snapshot plan and leave unselected snapshots untouched")
+        resetDestination()
+        plan = ms.PortableImport:Preview(validText, { importCharacterMacros = true })
 
         local createsBefore, editsBefore, deletesBefore = createCalls, editCalls, deleteCalls
         ms.PortableImport:SetActivePlan(plan)
@@ -343,10 +444,13 @@ def run_import_tests(lua, namespace, large_export_text):
         assert(repeatPlan.account.create == 0 and repeatPlan.account.present == 3
                 and repeatPlan.character.create == 0 and repeatPlan.character.present == 2,
             "repeat preview should reuse uniquely exact native macros instead of duplicating them")
+        assert(not repeatPlan.applyOK and repeatPlan.applyReason == "Nothing selected for import.",
+            "an idempotent repeat preview with no remaining metadata work should disable Apply")
         ms.PortableImport:SetActivePlan(repeatPlan)
-        local repeated, repeatResult = ms.PortableImport:Apply(repeatPlan)
-        assert(repeated and repeatResult and createCalls == createsBefore + 3,
-            "repeat apply should be idempotent for native creation")
+        local repeated, repeatResult, repeatMessage = ms.PortableImport:Apply(repeatPlan)
+        assert(not repeated and not repeatResult and repeatMessage:find("Nothing selected", 1, true)
+                and createCalls == createsBefore + 3,
+            "an empty repeat plan must not perform writes")
 
         local protectedPlan = ms.PortableImport:Preview(validText, { importCharacterMacros = true })
         ms.PortableImport:SetActivePlan(protectedPlan)
@@ -374,14 +478,19 @@ def run_import_tests(lua, namespace, large_export_text):
         ms.MacroRepository:Refresh()
 
         accountMacros = {}
-        for index = 1, 6 do
+        for index = 1, 5 do
             accountMacros[index] = { name = "Full " .. index, icon = 610 + index, selectedIcon = 610 + index, body = "/say full" }
         end
         characterMacros = {}
         ms.MacroRepository:Refresh()
         local capacityPlan = ms.PortableImport:Preview(capacityText, { importCharacterMacros = true })
-        assert(not capacityPlan.capacityOK and capacityPlan.account.create == 1 and capacityPlan.accountAvailable == 0,
-            "insufficient capacity must block the entire batch before mutation")
+        assert(not capacityPlan.capacityOK and capacityPlan.account.create == 2 and capacityPlan.accountAvailable == 1,
+            "selected native work beyond capacity must block Apply before mutation")
+        local capacityItem = assert(findItem(capacityPlan.account.items, "account-capacity-2"))
+        ms.ImportPlanner:SetItemSelected(capacityPlan, "account", capacityItem, false)
+        assert(capacityPlan.capacityOK and capacityPlan.applyOK
+                and capacityPlan.selected.account.create == 1,
+            "deselecting over-capacity native work should allow a fitting native subset")
 
         resetDestination()
         accountMacros = {
@@ -391,8 +500,10 @@ def run_import_tests(lua, namespace, large_export_text):
         characterMacros = {}
         ms.MacroRepository:Refresh()
         local ambiguity = ms.PortableImport:Preview(ambiguityText, { importCharacterMacros = true })
-        assert(ambiguity.account.ambiguous == 1 and ambiguity.account.create == 1,
-            "multiple exact destination matches must be skipped while same-name different content remains creatable")
+        assert(ambiguity.account.ambiguous == 1 and ambiguity.account.create == 1
+                and findItem(ambiguity.account.items, "account-ambiguous").status == "ambiguous"
+                and findItem(ambiguity.account.items, "account-distinct").status == "new",
+            "multiple exact destination matches must be explicit and disabled while same-name different content remains creatable")
 
         resetDestination()
         accountMacros, characterMacros = {}, {}
