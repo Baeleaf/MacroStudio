@@ -9,6 +9,7 @@ from pathlib import Path
 
 from lupa.lua51 import LuaRuntime
 
+from import_tests import run_import_tests
 
 from ui_smoke import run_ui_smoke
 
@@ -184,7 +185,7 @@ lua.execute(
 )
 
 namespace = lua.table()
-namespace.VERSION = "1.3.0-r3"
+namespace.VERSION = "1.3.0-r4"
 namespace.MAX_BODY_LENGTH = 255
 namespace.MAX_NAME_LENGTH = 16
 namespace.DEFAULT_ICON = 134400
@@ -212,6 +213,7 @@ load_addon_file("CharacterMacroLibrary.lua", namespace)
 load_addon_file("ActionBarRepository.lua", namespace)
 load_addon_file("MetadataRepository.lua", namespace)
 load_addon_file("PortableExport.lua", namespace)
+load_addon_file("PortableImport.lua", namespace)
 load_addon_file("Search.lua", namespace)
 load_addon_file("UI/MacroList.lua", namespace)
 load_addon_file("UI/MainFrame.lua", namespace)
@@ -996,7 +998,7 @@ export_text, unusual_body, maximum_body = export_fixture("MacroStudio", namespac
 portable = json.loads(export_text)
 assert portable["format"] == "MacroStudioPortableLibrary"
 assert portable["formatVersion"] == 1
-assert portable["addonVersion"] == "1.3.0-r3"
+assert portable["addonVersion"] == "1.3.0-r4"
 assert len(portable["accountMacros"]) == 120
 assert [macro["id"] for macro in portable["accountMacros"][:2]] == ["account-001", "account-002"]
 assert portable["accountMacros"][-1]["id"] == "account-120"
@@ -1065,6 +1067,8 @@ assert "must-not-export" not in export_text
 assert "120100" not in export_text
 assert len(export_text.encode("utf-8")) > 100_000
 
+run_import_tests(lua, namespace, export_text)
+
 macro_list_source = (ROOT / "UI" / "MacroList.lua").read_text(encoding="utf-8")
 sidebar_source = (ROOT / "UI" / "Sidebar.lua").read_text(encoding="utf-8")
 editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
@@ -1081,6 +1085,9 @@ access_source = (ROOT / "Access.lua").read_text(encoding="utf-8")
 minimap_source = (ROOT / "MinimapButton.lua").read_text(encoding="utf-8")
 settings_source = (ROOT / "UI" / "Settings.lua").read_text(encoding="utf-8")
 export_source = (ROOT / "PortableExport.lua").read_text(encoding="utf-8")
+import_source = (ROOT / "PortableImport.lua").read_text(encoding="utf-8")
+import_dialog_source = (ROOT / "UI" / "ImportDialog.lua").read_text(encoding="utf-8")
+import_tests_source = (ROOT / "tests" / "import_tests.py").read_text(encoding="utf-8")
 export_dialog_source = (ROOT / "UI" / "ExportDialog.lua").read_text(encoding="utf-8")
 library_source = (ROOT / "CharacterMacroLibrary.lua").read_text(encoding="utf-8")
 database_source = (ROOT / "Database.lua").read_text(encoding="utf-8")
@@ -1205,8 +1212,8 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120100" in toc_source
-assert "## Version: 1.3.0-r3" in toc_source
-assert 'MacroStudio.VERSION = "1.3.0-r3"' in core_source
+assert "## Version: 1.3.0-r4" in toc_source
+assert 'MacroStudio.VERSION = "1.3.0-r4"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -1219,6 +1226,10 @@ assert toc_source.index("PortableExport.lua") < toc_source.index("UI\\ExportDial
 assert toc_source.index("UI\\ExportDialog.lua") < toc_source.index("UI\\Settings.lua")
 assert toc_source.index("UI\\Settings.lua") < toc_source.index("UI\\MainFrame.lua")
 assert toc_source.index("CharacterMacroLibrary.lua") < toc_source.index("ActionBarRepository.lua")
+assert toc_source.index("PortableExport.lua") < toc_source.index("PortableImport.lua")
+assert toc_source.index("PortableImport.lua") < toc_source.index("Search.lua")
+assert toc_source.index("UI\\Dialogs.lua") < toc_source.index("UI\\ImportDialog.lua")
+assert toc_source.index("UI\\ImportDialog.lua") < toc_source.index("UI\\Settings.lua")
 assert 'SLASH_MACROSTUDIO1 = "/macrostudio"' in access_source
 assert 'SLASH_MACROSTUDIO2 = "/ms"' in access_source
 assert "self.nativeMacroHandler = SlashCmdList[commandKey]" in access_source
@@ -1234,6 +1245,11 @@ assert 'command == "settings"' in access_source
 assert 'function Access:OpenExport(source)' in access_source
 assert 'command == "export"' in access_source and 'self:OpenExport("slash")' in access_source
 assert 'MacroStudio:Debug("/ms export dispatch")' in access_source
+assert 'function Access:OpenImport(source)' in access_source
+assert 'command == "import"' in access_source and 'self:OpenImport("slash")' in access_source
+assert 'MacroStudio:Debug("/ms import dispatch")' in access_source
+assert "Import MacroStudio Library" in settings_source and 'Access:OpenImport("settings")' in settings_source
+assert "lastImportFailure" in access_source and "Import failed at " in access_source
 assert "Export MacroStudio Library" in settings_source and 'Access:OpenExport("settings")' in settings_source
 assert 'SetFontObject(ChatFontNormal)' in export_dialog_source
 assert 'SetFontObject("ChatFontNormal")' not in export_dialog_source
@@ -1250,6 +1266,24 @@ assert 'FORMAT_VERSION = 1' in export_source and 'FORMAT_NAME = "MacroStudioPort
 assert "loadstring" not in export_source and "load(" not in export_source
 assert "CreateMacro" not in export_source and "EditMacro" not in export_source and "DeleteMacro" not in export_source
 assert "lastKnownIndex" not in export_source and "ActionBarRepository" not in export_source
+assert "function PortableImport:ParseJSON(text)" in import_source
+assert "function PortableImport:BuildModel(raw)" in import_source and "checkKeys" in import_source
+assert "loadstring" not in import_source and "load(" not in import_source
+assert "CreateMacro" not in import_source and "EditMacro" not in import_source and "DeleteMacro" not in import_source
+assert "MacroStudio.MacroRepository:Create(item.request)" in import_source
+assert "plan.capacityOK" in import_source and "plan.stateSignature" in import_source
+assert "plan ~= self.activePlan" in import_source and "changed after Preview" in import_source
+assert "InCombatLockdown" in import_source and "Editor:IsDirty()" in import_source
+assert "finalMappedMacros" in import_source and "sourceCounts[key] == 1 and #matches == 1" in import_source
+assert "Indistinguishable duplicate exact matches" in import_source
+assert "No existing macros were modified or deleted" in import_source
+assert "ApplyPortableSnapshot" in library_source and "lastKnownIndex" not in import_source
+assert 'SetScript("OnUpdate"' not in import_source
+assert "Validate & Preview" in import_dialog_source and "Apply Import" in import_dialog_source
+assert "ShowConfirmImport" in import_dialog_source and "SetMaxLetters(0)" in import_dialog_source
+assert "Import source Character macros to this character" in import_dialog_source
+assert "partial failure" in import_tests_source and "repeat preview" in import_tests_source
+assert "same-name different-content macros must coexist" in import_tests_source
 assert "MAX_DISPLAY_BYTES" in export_dialog_source
 assert "self.editBox:GetText() ~= text" in export_dialog_source
 assert "No partial export was shown" in export_dialog_source

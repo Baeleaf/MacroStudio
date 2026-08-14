@@ -20,6 +20,94 @@ The Milestone 8 harness additionally covers default slash takeover, exact native
 
 The Milestone 9.1 harness parses synthetic portable JSON and covers deterministic ordering, both native scopes, 20 offline characters with 600 ordered snapshots, duplicate-name metadata identity, categories, tags, Favorites, numeric/path icons, multiline/quoted/backslash/Unicode/empty/maximum bodies, dirty-draft exclusion, combat, zero native writes, both entry points, singleton open/close, exact large-text display, and visible oversize failure. Headless checks cannot prove live WoW keyboard selection, Ctrl+C, clipboard behavior, EditBox rendering performance, taint, or the maintainer's real library size; complete the live phases below.
 
+The Milestone 9.2 harness adds a dedicated synthetic Import suite plus full-TOC UI smoke coverage. It exercises non-executable JSON parsing, malformed/truncated/unsupported input, duplicate keys/IDs/references, Unicode and escapes, the large MS9.1 format-v1 fixture, exact reuse, same-name safety, ambiguity, Account/Character capacity, explicit current-character mapping, confirmation-before-write, synchronous `UPDATE_MACROS`, final identity reconciliation, additive metadata, GUID/timestamp offline rules, repeat Import, combat/dirty/stale guards, and partial native failure/retry. It asserts that Import never calls `EditMacro` or `DeleteMacro`. Headless checks cannot prove live paste performance, protected API behavior, taint, or cross-account/region persistence; complete the phases below.
+
+## Milestone 9.2: Safe Portable Import
+
+Milestone 9.2 remains under **Unreleased** until these live-client phases pass. Use synthetic data or a reviewed backup; do not use a sole irreplaceable library copy.
+
+### Phase 1 - Build and access
+
+- [ ] Confirm WoW reports `1.3.0-r4` with Interface `120100`.
+- [ ] Run `/ms import`, then use **Settings -> Import MacroStudio Library**; confirm both open the same Import window.
+- [ ] Confirm `/ms export` still opens the tested format-v1 Export window.
+
+### Phase 2 - Validation
+
+- [ ] Paste a valid MS9.1 export and reach Preview without any native mutation.
+- [ ] Paste malformed and truncated JSON; confirm both remain on Paste with a useful body-safe error.
+- [ ] Change `formatVersion` to `2`; confirm MacroStudio reports that only format version 1 is supported.
+
+### Phase 3 - Round-trip preview
+
+- [ ] Generate a fresh Export on this installation and paste it into Import.
+- [ ] Preview only; confirm existing native macros are mostly **Already present**, with no plan to recreate the entire library.
+- [ ] Confirm source version/counts and organization/offline counts are plausible.
+
+### Phase 4 - Safe new macro import
+
+- [ ] Use a small synthetic export with one new Account macro, one new Character macro, one category, one tag, and one Favorite.
+- [ ] Confirm Preview counts, click **Apply Import**, accept the confirmation, and verify the Results counts.
+- [ ] Verify both native macros and their exact metadata.
+
+### Phase 5 - Same-name safety
+
+- [ ] Keep an existing `Import Test` macro with body A and import `Import Test` with body B.
+- [ ] Confirm body A is untouched, body B is created separately, and imported metadata attaches only to body B.
+
+### Phase 6 - Exact existing detection
+
+- [ ] Import a uniquely exact existing macro; confirm Preview reports **Already present** and Apply creates no duplicate.
+- [ ] With multiple indistinguishable exact destination macros, confirm Preview reports ambiguity and Import skips rather than guesses.
+
+### Phase 7 - Capacity
+
+- [ ] Near Account capacity, confirm an over-capacity full batch disables **Apply Import** before any write.
+- [ ] Repeat near Character capacity. Confirm no macro is deleted automatically in either scope.
+
+### Phase 8 - Current-character mapping
+
+- [ ] Confirm Preview explicitly names the logged-in `Character - Realm` destination.
+- [ ] With the checkbox enabled, verify source Character macros become native macros for the logged-in character.
+- [ ] Disable the checkbox and confirm no native Character macros are planned, while foreign source context remains available as an offline snapshot.
+- [ ] Confirm the foreign/source GUID never replaces the current local identity.
+
+### Phase 9 - Cross-character library
+
+- [ ] Import at least two different-GUID offline records, including same-name or same-realm examples; confirm they remain distinct.
+- [ ] Confirm a newer source timestamp updates the same GUID, while a newer local snapshot is preserved.
+- [ ] Confirm a zero-macro character remains browseable and offline records contain no native/action-bar state.
+
+### Phase 10 - Dirty draft
+
+- [ ] Create a dirty name/icon/body draft, then Paste and Preview an Import.
+- [ ] Attempt Apply; confirm it is blocked with the Finish-or-Revert message, the draft is untouched, and no native write occurs.
+- [ ] Save or Revert manually, rerun Preview, and apply manually.
+
+### Phase 11 - Combat
+
+- [ ] In combat, confirm Paste and Preview still work.
+- [ ] Confirm Apply is blocked, nothing queues for combat end, and no native write occurs.
+- [ ] Leave combat and confirm Import runs only after a new manual Apply/confirmation.
+
+### Phase 12 - Stale preview
+
+- [ ] Preview an Import, then create/edit/delete a macro through Blizzard Macro UI.
+- [ ] Attempt Apply; confirm MacroStudio cancels the stale plan and requires Validate & Preview again without targeting a shifted neighbor.
+
+### Phase 13 - Repeat Import
+
+- [ ] Import the same small fixture again.
+- [ ] Confirm uniquely exact native macros are reused, tags/Favorites do not duplicate, category conflicts preserve destination state, and offline snapshots remain sane.
+- [ ] If practical, simulate one native failure mid-batch and confirm retry recognizes the earlier confirmed creations instead of recreating them.
+
+### Phase 14 - Regression
+
+- [ ] Spot-check `/m`, `/macro`, `/ms settings`, minimap, AddOn Compartment, and `/ms export`.
+- [ ] Spot-check edit name/icon/body, Save/Revert, action-bar drag and **On Bar**, offline browsing, Forget Character, and Copy to Current Character.
+- [ ] Confirm no Lua, taint, blocked-action, or protected-action errors.
+
+
 ## MS9.1 Export Live Fix - 1.3.0-r3
 
 The r3 harness expands the portable fixture to 21 offline characters, including missing optional identity fields, a legacy zero-macro character, stale metadata, CRLF, tabs, links, and invalid UTF-8 validation. Retail error capture identified the failed stage as Export-window construction: `ScrollingEditBoxTemplate` returns an EditBox without `SetWordWrap`, while the earlier headless frame stub incorrectly supplied that method to every frame type. The harness now models that Retail API boundary and verifies stage-specific protected failures.

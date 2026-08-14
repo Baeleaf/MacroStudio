@@ -407,6 +407,7 @@ def run_ui_smoke(root):
         "ActionBarRepository.lua",
         "MetadataRepository.lua",
         "PortableExport.lua",
+        "PortableImport.lua",
         "Search.lua",
         "UI/Dialogs.lua",
         "UI/IconPicker.lua",
@@ -415,6 +416,7 @@ def run_ui_smoke(root):
         "UI/MacroList.lua",
         "UI/Sidebar.lua",
         "UI/ExportDialog.lua",
+        "UI/ImportDialog.lua",
         "UI/Settings.lua",
         "UI/MainFrame.lua",
     ]
@@ -510,7 +512,7 @@ def run_ui_smoke(root):
                 and ms.ExportDialog.frame == sharedExportFrame and sharedExportFrame:IsShown(),
             "closing and repeating /ms export should reopen the same frame")
         assert(initialExportText:find('"formatVersion": 1', 1, true)
-                and initialExportText:find('"addonVersion": "1.3.0-r3"', 1, true)
+                and initialExportText:find('"addonVersion": "1.3.0-r4"', 1, true)
                 and initialExportText:find(savedExportBody, 1, true)
                 and not initialExportText:find("unsaved portable export draft", 1, true),
             "export should contain saved native data and exclude the dirty draft")
@@ -570,7 +572,8 @@ def run_ui_smoke(root):
                 and sharedSettingsOpenCalls == 1 and sharedSettingsFrame:IsShown()
                 and ms.frame:IsShown() and ms:IsMainWindowModalBlocked(),
             "title mouse-down should defer through the shared controller and open Settings")
-        assert(ms.Settings.takeoverCheckbox:IsEnabled() and ms.Settings.minimapCheckbox:IsEnabled() and ms.Settings.exportButton:IsEnabled()
+        assert(ms.Settings.takeoverCheckbox:IsEnabled() and ms.Settings.minimapCheckbox:IsEnabled()
+                and ms.Settings.exportButton:IsEnabled() and ms.Settings.importButton:IsEnabled()
                 and ms.Settings.statusText:GetWidth() == 420,
             "Settings controls should remain interactive in the minimum-size-safe layout")
         ms.settingsButton:TriggerScript("OnMouseDown", "LeftButton")
@@ -646,6 +649,71 @@ def run_ui_smoke(root):
         assert(sharedExportFrame:IsShown() and ms.Access.lastExportFailure == nil,
             "Export should recover and reopen normally after a contained failure")
         sharedExportFrame:Hide()
+        local sharedOpenImport = ms.Access.OpenImport
+        local openImportCalls = 0
+        local lastOpenImportSource
+        ms.Access.OpenImport = function(access, source, ...)
+            openImportCalls = openImportCalls + 1
+            lastOpenImportSource = source
+            return sharedOpenImport(access, source, ...)
+        end
+        combat = true
+        SlashCmdList.MACROSTUDIO("import")
+        combat = false
+        local sharedImportFrame = ms.ImportDialog.frame
+        assert(openImportCalls == 1 and lastOpenImportSource == "slash"
+                and sharedImportFrame and sharedImportFrame:IsShown()
+                and ms.ImportDialog.mode == "paste" and ms:IsMainWindowModalBlocked(),
+            "/ms import should open the shared standalone Paste UI during combat")
+        assert(ms.ImportDialog.inputEditBox.fontObject == ChatFontNormal
+                and ms.ImportDialog.inputEditBox.maxLetters == 0,
+            "Import should use the native scrolling EditBox without a silent character limit")
+        local largePaste = string.rep("z", 500000)
+        ms.ImportDialog.inputEditBox:SetUserText(largePaste)
+        assert(ms.ImportDialog.inputEditBox:GetText() == largePaste,
+            "realistic large Import text should remain complete")
+        ms.ImportDialog.inputEditBox:SetUserText("{")
+        ms.ImportDialog.validateButton:TriggerScript("OnClick")
+        assert(ms.ImportDialog.mode == "paste"
+                and ms.ImportDialog.statusText:GetText():find("JSON byte", 1, true),
+            "malformed Import text should fail visibly before Preview")
+        local importEditsBefore, importDeletesBefore = editCalls, deleteCalls
+        ms.ImportDialog.inputEditBox:SetUserText(initialExportText)
+        combat = true
+        ms.ImportDialog.validateButton:TriggerScript("OnClick")
+        combat = false
+        assert(ms.ImportDialog.mode == "preview" and ms.ImportDialog.plan
+                and ms.ImportDialog.plan.account.create == 0 and ms.ImportDialog.plan.account.present == 1
+                and ms.ImportDialog.plan.character.create == 0 and ms.ImportDialog.plan.character.present == 1
+                and ms.ImportDialog.applyButton:IsEnabled(),
+            "same-installation Preview should be read-only and recognize exact native macros")
+        assert(ms.ImportDialog.outputEditBox:GetText():find("Existing native macros will not be overwritten or deleted", 1, true)
+                and ms.ImportDialog.outputEditBox:GetText():find("Destination: Current - Test Realm", 1, true),
+            "Preview should expose native safety and the current-character destination")
+        ms.ImportDialog.applyButton:TriggerScript("OnClick")
+        assert(lastStaticPopup and lastStaticPopup.key == "MACROSTUDIO_CONFIRM_PORTABLE_IMPORT"
+                and not createdAccountMacro and not createdCharacterMacro,
+            "Apply Import should require explicit confirmation before native mutation")
+        StaticPopupDialogs[lastStaticPopup.key].OnAccept(lastStaticPopup, lastStaticPopup.data)
+        assert(ms.ImportDialog.mode == "result"
+                and ms.ImportDialog.outputEditBox:GetText():find("IMPORT COMPLETE", 1, true)
+                and not createdAccountMacro and not createdCharacterMacro
+                and editCalls == importEditsBefore and deleteCalls == importDeletesBefore,
+            "confirmed same-installation Import should show Results without duplicate, edit, or delete writes")
+        sharedImportFrame:Hide()
+        SlashCmdList.MACROSTUDIO("import")
+        assert(openImportCalls == 2 and lastOpenImportSource == "slash"
+                and ms.ImportDialog.frame == sharedImportFrame and sharedImportFrame:IsShown(),
+            "repeated /ms import should reuse the singleton Import frame")
+        sharedImportFrame:Hide()
+        sharedSettingsFrame:Show()
+        ms.Settings.importButton:TriggerScript("OnClick")
+        assert(openImportCalls == 3 and lastOpenImportSource == "settings"
+                and ms.ImportDialog.frame == sharedImportFrame and sharedImportFrame:IsShown()
+                and not sharedSettingsFrame:IsShown(),
+            "Settings Import should use the same controller and singleton Import UI")
+        sharedImportFrame:Hide()
+
 
         sharedSettingsFrame:Show()
         sharedSettingsFrame:Hide()

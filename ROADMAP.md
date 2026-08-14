@@ -61,11 +61,11 @@ The roadmap records shipped capabilities and likely future directions; unchecked
 - [x] Define portable format v1 independently from the SavedVariables schema and addon version.
 - [x] Export saved Account/current-character macros, offline snapshots, categories, tags, Favorites, and exact associations.
 - [x] Provide `/ms export` and Settings access to a selectable, copyable, read-only export view.
-- [ ] Parse and validate portable exports without executing code.
-- [ ] Preview incoming macros, metadata, and conflicts before any native writes.
-- [ ] Import only after explicit confirmation with safe duplicate/conflict choices.
+- [x] Parse and validate portable exports without executing code.
+- [x] Preview incoming macros, metadata, and conflicts before any native writes.
+- [x] Import only after explicit confirmation with safe duplicate/conflict choices.
 - [ ] Add selective macro, metadata, and categories-only transfer after full-library Import is proven safe.
-- [ ] Treat imported content as untrusted text and never execute it as Lua.
+- [x] Treat imported content as untrusted text and never execute it as Lua.
 - [ ] Snapshot/version history, backups, and recoverable deletion with sensible retention.
 
 ## Editing assistance

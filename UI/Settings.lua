@@ -63,7 +63,7 @@ function Settings:Create()
     dataHeading:SetTextColor(0.35, 0.75, 1)
 
     local export = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    export:SetSize(210, 26)
+    export:SetSize(202, 26)
     export:SetPoint("TOPLEFT", dataHeading, "BOTTOMLEFT", 0, -9)
     export:SetText("Export MacroStudio Library")
     export:SetScript("OnClick", function()
@@ -72,6 +72,17 @@ function Settings:Create()
     end)
     MacroStudio.Helpers:SetButtonTooltip(export, "Portable Export", "Open a selectable, copyable export of saved macro-library content.")
     self.exportButton = export
+
+    local import = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    import:SetSize(202, 26)
+    import:SetPoint("LEFT", export, "RIGHT", 8, 0)
+    import:SetText("Import MacroStudio Library")
+    import:SetScript("OnClick", function()
+        MacroStudio:Debug("Settings Import button invoked")
+        MacroStudio.Access:OpenImport("settings")
+    end)
+    MacroStudio.Helpers:SetButtonTooltip(import, "Portable Import", "Paste, validate, preview, and safely import portable macro-library content.")
+    self.importButton = import
 
     local done = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     done:SetSize(90, 26)
@@ -108,12 +119,16 @@ function Settings:Refresh()
     end
 end
 
-function Settings:ShowExportError(message)
+function Settings:ShowDataError(message)
     if not self.frame or not self.frame:IsShown() then
         return
     end
-    self.statusText:SetText(message or "MacroStudio Export failed.")
+    self.statusText:SetText(message or "MacroStudio data operation failed.")
     self.statusText:SetTextColor(1, 0.4, 0.35)
+end
+
+function Settings:ShowExportError(message)
+    self:ShowDataError(message or "MacroStudio Export failed.")
 end
 
 function Settings:Open()

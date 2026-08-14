@@ -388,6 +388,66 @@ function CharacterMacroLibrary:ForgetCharacter(characterId)
     return true, record
 end
 
+function CharacterMacroLibrary:ApplyPortableSnapshot(item)
+    if type(item) ~= "table" or (item.action ~= "add" and item.action ~= "update") then
+        return false, "Portable snapshot action is invalid."
+    end
+    local source = item.source
+    local store = self:GetStore()
+    if type(source) ~= "table" or not store then
+        return false, "Portable snapshot data is unavailable."
+    end
+
+    local record
+    if item.action == "update" then
+        record = type(item.targetId) == "string" and store.characters[item.targetId] or nil
+        if not record or self:IsCurrentCharacter(record.id) then
+            return false, "The offline snapshot target is no longer safe."
+        end
+        if not source.guid or record.guid ~= source.guid then
+            return false, "The offline snapshot GUID no longer matches."
+        end
+        local sourceTime = tonumber(source.lastSynced)
+        local localTime = tonumber(record.lastSynced)
+        if not sourceTime or not localTime or sourceTime <= localTime then
+            return false, "The local offline snapshot is not older."
+        end
+    else
+        local recordId
+        if source.guid then
+            recordId = "guid:" .. source.guid
+            if store.characters[recordId] then
+                return false, "That character snapshot already exists."
+            end
+        else
+            recordId = self:AllocateUnknownIdentity(source.name, source.realm)
+        end
+        record = { id = recordId, macros = {} }
+        store.characters[recordId] = record
+        store.order[#store.order + 1] = recordId
+    end
+
+    local macros = {}
+    for index, macro in ipairs(source.macros or {}) do
+        macros[index] = {
+            order = index,
+            name = type(macro.name) == "string" and macro.name or "",
+            icon = macro.icon or MacroStudio.DEFAULT_ICON,
+            body = type(macro.body) == "string" and macro.body or "",
+        }
+    end
+    record.guid = source.guid
+    record.name = source.name
+    record.realm = source.realm
+    record.displayName = (source.name or "Unknown Character") .. " - " .. (source.realm or "Unknown Realm")
+    record.normalizedDisplay = record.displayName:lower()
+    record.identityCertain = source.guid ~= nil and source.identityCertain == true
+    record.lastSynced = tonumber(source.lastSynced) or 0
+    record.macros = macros
+    MacroStudio:Debug("portable character snapshot applied", item.action, record.displayName, #macros)
+    return true, record
+end
+
 function CharacterMacroLibrary:FormatLastSynced(timestamp)
     timestamp = tonumber(timestamp)
     if not timestamp or timestamp <= 0 or type(date) ~= "function" then

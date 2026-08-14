@@ -248,6 +248,26 @@ function Access:OpenExport(source)
     return false
 end
 
+function Access:OpenImport(source)
+    MacroStudio:Debug("Import controller invoked", source or "unknown")
+    self.lastImportFailure = nil
+    local ok, result = xpcall(function()
+        return MacroStudio.ImportDialog:Open(source)
+    end, conciseExportError)
+    if ok then return result end
+
+    local stage = MacroStudio.ImportDialog:GetStage() or "opening import"
+    local message = "Import failed at " .. stage .. ": " .. result
+    self.lastImportFailure = { stage = stage, message = result }
+    MacroStudio.ImportDialog:HandleFailure()
+    MacroStudio:Print(message)
+    if MacroStudio.Settings then
+        MacroStudio.Settings:ShowDataError(message)
+    end
+    MacroStudio:Debug("Import failure contained", stage, result)
+    return false
+end
+
 function Access:OpenSettings(source)
     MacroStudio:Debug("settings open invoked", source or "unknown")
     local opened = MacroStudio.Settings:Open()
@@ -295,12 +315,16 @@ function Access:HandleSlashCommand(message)
     elseif command == "export" then
         MacroStudio:Debug("/ms export dispatch")
         self:OpenExport("slash")
+    elseif command == "import" then
+        MacroStudio:Debug("/ms import dispatch")
+        self:OpenImport("slash")
     elseif command == "settings" then
         self:OpenSettings("slash")
     elseif command == "help" then
         MacroStudio:Print("/macrostudio or /ms - toggle MacroStudio")
         MacroStudio:Print("/ms settings - open MacroStudio settings")
         MacroStudio:Print("/ms export - export the portable MacroStudio library")
+        MacroStudio:Print("/ms import - safely import a portable MacroStudio library")
         MacroStudio:Print("/ms blizzard - open Blizzard's Macro UI")
         MacroStudio:Print("/ms refresh - force a fallback macro refresh")
         MacroStudio:Print("/ms debug [on|off] - control debug logging")

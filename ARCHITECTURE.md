@@ -75,17 +75,57 @@ The shared `Access:OpenExport()` controller narrowly contains Export errors with
 
 `UI/ExportDialog.lua` presents the complete string in one native scrolling EditBox with unlimited configured letters. After assignment it compares the EditBox text byte-for-byte with the generated export. A 4 MiB safety ceiling is far above the tested near-full native and multi-character libraries; exceeding it or any client truncation produces a visible failure and no partial backup text. Addons cannot write to the operating-system clipboard, so the user explicitly selects the text and presses Ctrl+C.
 
-### MS9.2 Import contract
+### Milestone 9.2 safe portable import
 
-Import is intentionally absent from MS9.1. A future importer must treat all text as untrusted data and follow this sequence:
+`PortableImport.lua` consumes the unchanged format-v1 contract through a narrow JSON parser. The parser implements only JSON objects, arrays, strings and escapes, finite numbers, booleans, and null; enforces depth, value-count, record-count, and 4 MiB input ceilings; rejects duplicate object keys and malformed Unicode escapes; and never calls `load`, `loadstring`, or executable deserialization. The fully parsed model then passes exact field/type checks plus the existing format-v1 validator before Preview is possible. `formatVersion` is the compatibility authority; `addonVersion` is displayed only as source context.
 
-1. Parse JSON without executing code.
-2. Require the known format name/version and validate every type, length, required field, reference, and count within conservative limits.
-3. Resolve all category, tag, character, icon, and macro-ID references before proposing changes.
-4. Present a preview of creations, metadata associations, unsupported content, and duplicate/conflict choices.
-5. Never treat a native index, macro name alone, or foreign GUID as current native identity.
-6. Perform no native write until the user explicitly confirms the validated plan.
-7. Revalidate capacity, combat state, and exact native targets immediately before each authorized write, and fail safely without overwriting existing macros.
+```text
+Paste portable JSON
+        |
+        v
+parse JSON (no evaluation)
+        |
+        v
+validate complete format-v1 model and references
+        |
+        v
+build read-only local plan + capacity preflight
+        |
+        v
+Preview -- explicit confirmation -- immediate revalidation
+        |
+        v
+Account Create -> current-character Create -> exact reconciliation
+        |
+        v
+additive metadata -> offline snapshots -> Results
+```
+
+Validation requires every expected section, ordered macro record, export-local ID, scope, native-recreatable name/body/icon, character identity field, category, tag, Favorite flag, and association reference. Unknown fields, duplicate structural keys, duplicate IDs/GUID records, unsupported versions/types/scopes, broken references, and values that MacroStudio would have to normalize silently are rejected with a field path. Errors never echo macro bodies into chat.
+
+### Native planning and write safety
+
+Retail 12.1 Blizzard Macro UI and the established repository confirm that `GetNumMacros()` supplies live Account/current-character counts, capacity comes from current `Constants.MacroConsts` values, and `CreateMacro(name, icon, body, perCharacter)` accepts duplicate names and returns a global index that can move as the repository changes. `UPDATE_MACROS` is synchronous. Import therefore uses `MacroRepository:Create()` plus a settled refresh instead of trusting the return permanently; `EditMacro` and `DeleteMacro` have no Import role.
+
+Preview groups native macros by exact saved scope, name, body, and normalized icon identity. One exact destination match for one source record is reusable. A same-name macro with different body or icon is a distinct creation; Import never calls `EditMacro`. Multiple indistinguishable exact destination matches are displayed as ambiguous and skipped rather than guessed or given metadata. Import never calls `DeleteMacro` and never frees capacity automatically.
+
+The planner reads current `GetNumMacros` capacity through `MacroRepository` and requires room for the complete Account and enabled Character creation batch. Apply stays disabled when either scope cannot fit. Source Character macros target the explicitly displayed logged-in character only when the default-on checkbox is enabled; their source GUID is context and is never installed as local native identity.
+
+`UI/ImportDialog.lua` and `Access:OpenImport()` implement one singleton workflow used by `/ms import` and Settings: Paste, Validate, Preview, Confirm, Apply, Results. Paste and Preview work in combat and never mutate native state. Before Apply, `PortableImport` requires the exact active Preview object, blocks combat and dirty drafts, refreshes/reconciles the repository, rebuilds the plan, compares a deterministic portable state signature, and rechecks capacity. Any material external change cancels the write and requires a new Preview.
+
+Native creation is deterministic: Account records first, then current-character records, exclusively through `MacroRepository:Create()`. Synchronous `UPDATE_MACROS` notifications remain behind the established native-mutation gate. After all creations and possible Account-induced Character index shifts settle, Import rebuilds exact final identity groups from the refreshed repository. Metadata is attached only when one source record and one destination record remain uniquely exact; no returned or previous index is trusted as permanent identity.
+
+### Metadata and offline snapshot merge
+
+Organization merge is additive. Category and tag definitions are reused by the same case-insensitive semantic naming already used locally. Missing categories are created. Imported tags are unioned with destination tags, and imported Favorite state only turns Favorite on. If a reusable exact native macro already has a different category, Preview reports the conflict and Apply preserves the destination category. A skipped or ambiguous native identity receives no imported metadata.
+
+Foreign current-character context and exported offline records are planned as snapshot data independently from native Character creation. GUID is primary when present: different GUIDs never merge by Name-Realm, a newer source timestamp may replace the same GUID offline snapshot, and a newer/equal or incomparable local record is preserved. A no-GUID source reuses only one unique full snapshot match; otherwise it is kept as a separate uncertain record. The applied snapshot contains only order, name, icon, and body, never native indices, action-bar state, metadata identity, or fake native handles.
+
+### Partial failure and repeat behavior
+
+WoW provides no batch transaction. If native creation fails after confirmed earlier creations, Import stops immediately, performs no rollback or deletion, attaches no later metadata/offline data, reports confirmed versus planned creations, and clears the active plan. A retry rebuilds from live content and normally recognizes those uniquely exact creations as already present. Unexpected metadata/offline merge errors are also contained as partial results without modifying or deleting existing native macros.
+
+No permanent import ledger or hidden fingerprint is stored. Repeat behavior is derived from current exact content, GUID/timestamp snapshot reconciliation, and additive metadata. Importing the same backup again therefore creates no new uniquely identical native macros, duplicates no tags/Favorites, and preserves safe offline state. This content-based design supports cross-account and cross-region transfer without `macros-cache.txt` or source-native indexes.
 
 ## Milestone 8 Retail and 12.1 access research
 
@@ -130,6 +170,8 @@ Core.lua
 |-- CharacterMacroLibrary.lua
 |-- ActionBarRepository.lua
 |-- MetadataRepository.lua
+|-- PortableExport.lua
+|-- PortableImport.lua
 |-- Utils/Helpers.lua
 |-- Search.lua
 `-- UI/MainFrame.lua
@@ -138,25 +180,29 @@ Core.lua
     |-- UI/MacroDialog.lua
     |-- UI/Sidebar.lua
     |-- UI/MacroList.lua
+    |-- UI/ExportDialog.lua
+    |-- UI/ImportDialog.lua
     |-- UI/Settings.lua
     `-- UI/Editor.lua
 ```
 
-- `Access.lua` owns dedicated slash commands, conservative native-handler capture/restore, native fallback access, the shared Settings controller, and supported AddOn Compartment callbacks.
+- `Access.lua` owns dedicated slash commands, conservative native-handler capture/restore, native fallback access, shared Settings/Export/Import controllers, and supported AddOn Compartment callbacks.
 - `MinimapButton.lua` owns the optional native minimap launcher and persisted radial placement.
 - `MacroRepository.lua` is the only layer that calls `GetNumMacros`, `GetMacroInfo`, `EditMacro`, `CreateMacro`, `DeleteMacro`, or `PickupMacro`.
-- `CharacterMacroLibrary.lua` resolves conservative character identity, replaces the current character snapshot from saved live repository data, builds cross-character views, and forgets offline snapshots.
+- `CharacterMacroLibrary.lua` resolves conservative character identity, replaces the current character snapshot from saved live repository data, builds cross-character views, applies confirmed GUID-aware portable snapshots, and forgets offline snapshots.
 - `ActionBarRepository.lua` owns native action-slot inspection and builds a conservative, read-only exact macro snapshot to raw-slot lookup.
 - `MetadataRepository.lua` owns virtual organization records, preserves them through trusted native identity edits, and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `PortableExport.lua` builds portable format v1 and serializes only its fixed interchange schema in deterministic JSON.
+- `PortableImport.lua` parses and validates untrusted format-v1 JSON, builds read-only plans, and applies confirmed native/library merges through existing repositories.
 - `UI/ExportDialog.lua` owns the singleton scrollable Export view, exact display verification, and visible size/truncation failures.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
+- `UI/ImportDialog.lua` owns the singleton Paste, Preview, confirmation, Apply, and Results workflow.
 - `Search.lua` performs read-only matching against native macro fields and attached metadata.
 - `UI/Editor.lua` owns the unified name/icon/body draft, derives Save/Delete state, reuses the icon picker, and owns the editor's complete four-edge focus treatment.
 - `UI/MacroDialog.lua` derives Create state and owns the movable dialog and modal lifecycle.
 - `UI/IconPicker.lua` uses Blizzard's icon provider when available and compatible API fallbacks otherwise.
 - `UI/MacroList.lua` decides which scope headers are meaningful for the active filter and starts native left-button row drags.
-- `UI/Settings.lua` owns the compact General settings presentation and immediate checkbox state.
+- `UI/Settings.lua` owns compact General settings plus the shared portable Export and Import entry points.
 - `UI/MainFrame.lua` coordinates selection, native mutations and pickup notices, organization refresh, dialogs, and the interaction-blocking modal overlay.
 
 UI modules never call raw native macro mutation or pickup APIs.

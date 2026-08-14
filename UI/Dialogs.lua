@@ -8,6 +8,7 @@ local KEYS = {
     DELETE_CATEGORY = "MACROSTUDIO_DELETE_CATEGORY",
     DELETE_MACRO = "MACROSTUDIO_DELETE_NATIVE_MACRO",
     FORGET_CHARACTER = "MACROSTUDIO_FORGET_CHARACTER",
+    CONFIRM_IMPORT = "MACROSTUDIO_CONFIRM_PORTABLE_IMPORT",
 }
 
 local function getData(dialog, data)
@@ -68,6 +69,23 @@ if StaticPopupDialogs then
     StaticPopupDialogs[KEYS.FORGET_CHARACTER] = {
         text = "Forget %s?\n\nThis removes only MacroStudio's saved macro snapshot for this character. It does not delete any WoW macros.",
         button1 = "Forget Character",
+        button2 = CANCEL,
+        OnAccept = function(dialog, data)
+            data = getData(dialog, data)
+            if data and data.callback then
+                data.callback()
+            end
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        showAlert = true,
+        preferredIndex = 3,
+    }
+
+    StaticPopupDialogs[KEYS.CONFIRM_IMPORT] = {
+        text = "%s\n\nExisting native macros will not be overwritten or deleted.",
+        button1 = "Import",
         button2 = CANCEL,
         OnAccept = function(dialog, data)
             data = getData(dialog, data)
@@ -240,4 +258,16 @@ end
 
 function Dialogs:ShowForgetCharacter(character, callback)
     StaticPopup_Show(KEYS.FORGET_CHARACTER, character.displayName or "this character", nil, { callback = callback })
+end
+
+function Dialogs:ShowConfirmImport(plan, callback)
+    local account = plan and plan.account and plan.account.create or 0
+    local character = plan and plan.character and plan.character.create or 0
+    local summary = string.format(
+        "Import %d Account and %d Character native macros, then merge MacroStudio library data?",
+        account,
+        character
+    )
+    local dialog = StaticPopup_Show(KEYS.CONFIRM_IMPORT, summary, nil, { callback = callback })
+    return dialog ~= nil
 end
