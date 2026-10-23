@@ -2,6 +2,25 @@
 
 Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 
+## v1.3.0 release validation
+
+**Live smoke status: PASS, owner sign-off on 2026-10-23.** The exact packaged
+build was installed for the owner's testing; the development copy is restored.
+The original tested ZIP is unchanged. See `RELEASE-1.3.0.md` for the signed-off
+checklist, evidence attribution and artifact checksum.
+
+Run the complete existing suite with `py .\tests\preflight.py`; this also runs
+`tests/ui_smoke.py` against the full TOC load path in **both Warcraft and Legacy**
+appearances. This includes default preference migration, legacy persistence,
+pending/canceled appearance changes, explicit reload and draft/form protection.
+The current compatibility target is Retail 12.1.5 / Interface `120105`. Build with
+`.\scripts\package.ps1 -Version 1.3.0`, then verify the exact distributable with
+`py .\tests\release_artifact.py 1.3.0`.
+
+The packaged-addon live smoke checklist and measured release results are in
+`RELEASE-1.3.0.md`. Historical milestone/version checks below remain records of
+their original scope; they are not the current release version.
+
 ## Automated preflight
 
 With Python 3 and `lupa` installed, run from the addon root:

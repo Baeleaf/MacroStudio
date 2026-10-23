@@ -33,11 +33,11 @@ The roadmap records shipped capabilities and likely future directions; unchecked
 
 - [x] Public-facing README, changelog, contributing guide, and issue forms.
 - [x] Runtime-only release packaging script and local 1.0.0 release candidate.
-- [ ] Choose and add a project license.
+- [x] MIT license present and included in the v1.3.0 distribution.
 - [ ] Add privacy-reviewed screenshots.
-- [ ] Complete final live-client regression checks using the packaged addon.
-- [ ] Review commit-author metadata and repository settings.
-- [ ] Make the repository public, create the v1.0.0 tag/release, and publish packages only after owner approval.
+- [x] Final v1.3.0 packaged-addon smoke tests passed by owner sign-off on 2026-10-23; see `RELEASE-1.3.0.md`.
+- [x] Reviewed commit-author identity (public GitHub noreply address), public repository, default branch and existing CurseForge webhook for v1.3.0.
+- [x] Public GitHub repository and earlier version tags/releases are established; owner authorized v1.3.0 publication on 2026-10-23.
 
 ## High priority: native action-bar workflows
 

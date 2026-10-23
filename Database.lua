@@ -62,6 +62,9 @@ function Database:Initialize()
     if type(MacroStudioDB.settings) ~= "table" then
         MacroStudioDB.settings = {}
     end
+    if MacroStudioDB.settings.appearance ~= "legacy" and MacroStudioDB.settings.appearance ~= "warcraft" then
+        MacroStudioDB.settings.appearance = "warcraft"
+    end
     if type(MacroStudioDB.settings.useMacroStudioSlashCommands) ~= "boolean" then
         MacroStudioDB.settings.useMacroStudioSlashCommands = true
     end

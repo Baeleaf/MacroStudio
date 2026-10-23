@@ -8,16 +8,15 @@ local Sidebar = {
 }
 MacroStudio.Sidebar = Sidebar
 
-local BUTTON_HEIGHT = 25
+local BUTTON_HEIGHT = MacroStudio.Theme.spacing.navigation
 local DEFAULT_EXPANDED_CHARACTER_LIMIT = 5
 local COLLAPSED_CHARACTER_ICON = "Interface\\Buttons\\UI-PlusButton-UP"
 local EXPANDED_CHARACTER_ICON = "Interface\\Buttons\\UI-MinusButton-UP"
 
 local function createFilterButton(parent, label, onClick, atlas)
-    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    local button = MacroStudio.Theme:CreateRowFrame(parent)
     button:SetHeight(BUTTON_HEIGHT)
-    button:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    button:SetBackdropColor(0.065, 0.08, 0.105, 1)
+    MacroStudio.Theme:Row(button)
 
     local icon
     if atlas then
@@ -34,15 +33,16 @@ local function createFilterButton(parent, label, onClick, atlas)
     text:SetJustifyH("LEFT")
     text:SetWordWrap(false)
     button.Text = text
+    MacroStudio.Theme:RowState(button)
 
     button:SetScript("OnEnter", function(row)
         if not row.selected then
-            row:SetBackdropColor(0.1, 0.13, 0.18, 1)
+            MacroStudio.Theme:RowState(row, true)
         end
     end)
     button:SetScript("OnLeave", function(row)
         if not row.selected then
-            row:SetBackdropColor(0.065, 0.08, 0.105, 1)
+            MacroStudio.Theme:RowState(row)
         end
     end)
     button:SetScript("OnClick", onClick)
@@ -50,11 +50,13 @@ local function createFilterButton(parent, label, onClick, atlas)
 end
 
 function Sidebar:Create(parent)
-    local panel = MacroStudio.Helpers:CreatePanel(parent)
+    BUTTON_HEIGHT = MacroStudio.Theme.spacing.navigation
+    local panel = MacroStudio.Helpers:CreateRegion(parent)
     self.panel = panel
 
-    local heading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "NAVIGATION")
-    heading:SetPoint("TOPLEFT", 14, -14)
+    local heading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormal", "LIBRARY")
+    heading:SetPoint("TOPLEFT", 10, -10)
+    MacroStudio.Theme:Section(panel, heading)
 
     local navigation = {
         { kind = "favorites", text = "Favorites", atlas = "PetJournal-FavoritesIcon" },
@@ -73,16 +75,16 @@ function Sidebar:Create(parent)
         button:SetPoint("LEFT", 10, 0)
         button:SetPoint("RIGHT", -10, 0)
         if previous then
-            button:SetPoint("TOP", previous, "BOTTOM", 0, -3)
+            button:SetPoint("TOP", previous, "BOTTOM", 0, -1)
         else
-            button:SetPoint("TOP", panel, "TOP", 0, -42)
+            button:SetPoint("TOP", panel, "TOP", 0, -34)
         end
         self.navigationButtons[#self.navigationButtons + 1] = button
         previous = button
     end
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -164)
+    local scrollFrame = MacroStudio.Helpers:CreateScrollFrame(panel)
+    scrollFrame:SetPoint("TOPLEFT", 10, -143)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 76)
     self.scrollFrame = scrollFrame
 
@@ -94,8 +96,8 @@ function Sidebar:Create(parent)
         scrollChild:SetWidth(math.max(1, frame:GetWidth()))
         scrollChild:SetHeight(math.max(frame:GetHeight(), self.contentHeight or 1))
     end)
-    local libraryHeading = MacroStudio.Helpers:CreateLabel(scrollChild, "GameFontNormalSmall", "LIBRARY")
-    libraryHeading:SetTextColor(0.45, 0.72, 1)
+    local libraryHeading = MacroStudio.Helpers:CreateLabel(scrollChild, "GameFontNormalSmall", "CHARACTERS")
+    libraryHeading:SetTextColor(unpack(MacroStudio.Theme.palette.gold))
     self.libraryHeading = libraryHeading
 
     local allCharactersButton = createFilterButton(scrollChild, "All Characters", function()
@@ -117,11 +119,11 @@ function Sidebar:Create(parent)
     self.characterToggleIcon = characterToggleIcon
 
     local categoriesHeading = MacroStudio.Helpers:CreateLabel(scrollChild, "GameFontNormalSmall", "CATEGORIES")
-    categoriesHeading:SetTextColor(0.45, 0.72, 1)
+    categoriesHeading:SetTextColor(unpack(MacroStudio.Theme.palette.gold))
     self.categoriesHeading = categoriesHeading
 
 
-    local newButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local newButton = MacroStudio.Helpers:CreateButton(panel)
     newButton:SetHeight(23)
     newButton:SetPoint("BOTTOMLEFT", 10, 43)
     newButton:SetPoint("BOTTOMRIGHT", -10, 43)
@@ -131,7 +133,7 @@ function Sidebar:Create(parent)
     end)
     self.newButton = newButton
 
-    local renameButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local renameButton = MacroStudio.Helpers:CreateButton(panel)
     renameButton:SetHeight(22)
     renameButton:SetPoint("BOTTOMLEFT", 10, 14)
     renameButton:SetPoint("BOTTOMRIGHT", panel, "BOTTOM", -3, 14)
@@ -141,7 +143,7 @@ function Sidebar:Create(parent)
     end)
     self.renameButton = renameButton
 
-    local deleteButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local deleteButton = MacroStudio.Helpers:CreateButton(panel)
     deleteButton:SetHeight(22)
     deleteButton:SetPoint("BOTTOMLEFT", panel, "BOTTOM", 3, 14)
     deleteButton:SetPoint("BOTTOMRIGHT", -10, 14)
@@ -244,7 +246,7 @@ function Sidebar:Rebuild(activeFilter)
         button.selected = activeFilter
             and activeFilter.kind == "category"
             and activeFilter.categoryId == category.id
-        button:SetBackdropColor(button.selected and 0.12 or 0.065, button.selected and 0.32 or 0.08, button.selected and 0.5 or 0.105, 1)
+        MacroStudio.Theme:RowState(button)
         self.visibleCategoryButtons[#self.visibleCategoryButtons + 1] = button
         yOffset = yOffset + BUTTON_HEIGHT + 3
     end
@@ -273,12 +275,7 @@ function Sidebar:Rebuild(activeFilter)
     self.allCharactersButton:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT", 0, -yOffset)
     self.allCharactersButton:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", 0, -yOffset)
     self.allCharactersButton.selected = activeFilter and activeFilter.kind == "characters"
-    self.allCharactersButton:SetBackdropColor(
-        self.allCharactersButton.selected and 0.12 or 0.065,
-        self.allCharactersButton.selected and 0.32 or 0.08,
-        self.allCharactersButton.selected and 0.5 or 0.105,
-        1
-    )
+    MacroStudio.Theme:RowState(self.allCharactersButton)
     yOffset = yOffset + BUTTON_HEIGHT + 3
 
     local characters = MacroStudio.CharacterMacroLibrary:GetCharacters()
@@ -292,7 +289,7 @@ function Sidebar:Rebuild(activeFilter)
         self.charactersExpanded and EXPANDED_CHARACTER_ICON or COLLAPSED_CHARACTER_ICON
     )
     self.characterToggleButton.selected = false
-    self.characterToggleButton:SetBackdropColor(0.065, 0.08, 0.105, 1)
+    MacroStudio.Theme:RowState(self.characterToggleButton)
     yOffset = yOffset + BUTTON_HEIGHT + 3
 
     if self.charactersExpanded then
@@ -306,12 +303,7 @@ function Sidebar:Rebuild(activeFilter)
             button.selected = activeFilter
                 and activeFilter.kind == "libraryCharacter"
                 and activeFilter.characterId == character.id
-            button:SetBackdropColor(
-                button.selected and 0.12 or 0.065,
-                button.selected and 0.32 or 0.08,
-                button.selected and 0.5 or 0.105,
-                1
-            )
+            MacroStudio.Theme:RowState(button)
             local detail = character.isCurrent
                 and "Current character - live native macros."
                 or ("Read-only snapshot. Last synced: "
@@ -327,7 +319,7 @@ function Sidebar:Rebuild(activeFilter)
 
     for _, button in ipairs(self.navigationButtons) do
         button.selected = activeFilter and activeFilter.kind == button.filterKind
-        button:SetBackdropColor(button.selected and 0.12 or 0.065, button.selected and 0.32 or 0.08, button.selected and 0.5 or 0.105, 1)
+        MacroStudio.Theme:RowState(button)
     end
 
     local categorySelected = activeFilter

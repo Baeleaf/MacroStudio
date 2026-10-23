@@ -20,6 +20,7 @@ Blizzard's macro window is tiny. MacroStudio gives you more room to edit, search
 - **Flexible slash commands:** Optionally use MacroStudio for `/m` and `/macro`, with `/ms blizzard` always available for Blizzard's original window.
 - **Quick launchers:** Open MacroStudio from its minimap button or WoW's AddOn Compartment.
 - **Persistent Settings:** Control slash-command takeover and minimap visibility from one compact panel.
+- **Appearance choice:** The Warcraft-native design is the default. Choose **Settings → Appearance → Legacy**, then **Reload UI**, to restore the original blue/gray look. Your macros and organization data are kept.
 - **Combat-safe editing:** Drafts stay intact while protected macro changes remain blocked in combat.
 
 ## Find Macros Fast
@@ -49,6 +50,8 @@ Open MacroStudio with `/ms` or `/macrostudio`.
 With slash-command takeover enabled, `/m` and `/macro` also open MacroStudio. Use `/ms blizzard` for Blizzard's original macro window and `/ms settings` for Settings.
 
 ## Installation
+
+For World of Warcraft Retail 12.1.5 (Interface `120105`).
 
 1. Download the latest ZIP from [GitHub Releases](https://github.com/Baeleaf/MacroStudio/releases).
 2. Extract `MacroStudio` into `World of Warcraft\_retail_\Interface\AddOns\`.

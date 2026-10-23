@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Original illustrated medal, solid shapes and cast shadows. No gradients. -->
+  <circle cx="64" cy="64" r="60" fill="#171410" stroke="#33291b" stroke-width="4"/>
+  <circle cx="64" cy="64" r="55" fill="#242019" stroke="#af8545" stroke-width="5"/>
+  <circle cx="64" cy="64" r="49" fill="#181713" stroke="#55422b" stroke-width="2"/>
+  <path d="M22 36A51 51 0 0 1 83 17" fill="none" stroke="#d0ae69" stroke-width="2"/>
+  <path d="M105 90A51 51 0 0 1 44 112" fill="none" stroke="#614725" stroke-width="3"/>
+  <!-- Offset cut shadow and rolled parchment remain readable at minimap size. -->
+  <path d="M38 31H79Q88 31 87 42L80 85Q79 92 85 96H42Q32 96 34 86L41 43Q32 44 32 37Q32 31 38 31Z" transform="translate(3 4)" fill="#0b0a08"/>
+  <path d="M38 31H79Q88 31 87 42L80 85Q79 92 85 96H42Q32 96 34 86L41 43Q32 44 32 37Q32 31 38 31Z" fill="#c9ac72" stroke="#665032" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M38 32H79Q70 32 72 42H40Q45 32 38 32Z" fill="#e5cf98"/>
+  <path d="M44 45H73L68 81H38Z" fill="#deca97"/>
+  <path d="M41 83H80Q72 83 75 92H41Q36 92 37 88Q37 83 41 83Z" fill="#a18451"/>
+  <path d="M45 53H63M44 63H59M42 73H53" fill="none" stroke="#756044" stroke-width="4" stroke-linecap="round"/>
+  <!-- Ivory quill with a single brass shaft, no magic sparkle. -->
+  <path d="M99 25Q103 49 77 66L68 73L72 53Q79 30 99 25Z" transform="translate(2 3)" fill="#0b0a08"/>
+  <path d="M99 25Q103 49 77 66L68 73L72 53Q79 30 99 25Z" fill="#e8dfbd" stroke="#74684a" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M98 29L77 62Q99 49 98 29Z" fill="#bcb28c"/>
+  <path d="M94 33L66 78" fill="none" stroke="#b39456" stroke-width="3" stroke-linecap="round"/>
+  <path d="M81 42L88 41M78 50L84 48M76 56L79 56" fill="none" stroke="#aa9c75" stroke-width="2"/>
+  <path d="M66 77L61 87L69 82Z" fill="#e5cc8d"/>
+</svg>

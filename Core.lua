@@ -1,7 +1,7 @@
 local addonName, MacroStudio = ...
 
 MacroStudio.ADDON_NAME = addonName
-MacroStudio.VERSION = "1.2.0"
+MacroStudio.VERSION = "1.3.0"
 MacroStudio.MAX_BODY_LENGTH = 255
 MacroStudio.MAX_NAME_LENGTH = tonumber(MAX_MACRO_NAME_LENGTH) or 16
 MacroStudio.BODY_WARNING_LENGTH = 230
@@ -22,12 +22,12 @@ local function joinArguments(...)
 end
 
 function MacroStudio:Print(...)
-    print("|cff59b8ffMacroStudio|r:", joinArguments(...))
+    print("|cffd4ad62MacroStudio|r:", joinArguments(...))
 end
 
 function MacroStudio:Debug(...)
     if self.debug then
-        print("|cff8bd0ffMacroStudio Debug|r:", joinArguments(...))
+        print("|cffb7a88aMacroStudio Debug|r:", joinArguments(...))
     end
 end
 
@@ -39,6 +39,9 @@ end
 function MacroStudio:OnAddonLoaded()
     if self.Database then
         self.Database:Initialize()
+    end
+    if self.Theme then
+        self.Theme:Initialize()
     end
     self.inCombat = InCombatLockdown() and true or false
     self:Debug("ADDON_LOADED")

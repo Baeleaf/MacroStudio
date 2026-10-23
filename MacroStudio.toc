@@ -1,15 +1,17 @@
-## Interface: 120100
+## Interface: 120105
 ## Title: MacroStudio
-## Notes: A modern macro editor and organizer for World of Warcraft.
+## Notes: An in-game macro workbench and organizer for World of Warcraft.
 ## IconTexture: Interface\AddOns\MacroStudio\Media\MacroStudioIcon.tga
 ## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick
 ## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter
 ## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave
 ## Author: Baeleaf
-## Version: 1.2.0
+## Version: 1.3.0
 ## SavedVariables: MacroStudioDB
 
 Core.lua
+UI\WarcraftTheme.lua
+UI\LegacyTheme.lua
 Utils\Helpers.lua
 Database.lua
 Access.lua

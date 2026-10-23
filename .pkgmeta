@@ -12,3 +12,5 @@ ignore:
   - TESTING.md
   - ROADMAP.md
   - CONTRIBUTING.md
+  - UI-THEME.md
+  - RELEASE-1.3.0.md

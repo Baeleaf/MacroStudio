@@ -70,7 +70,8 @@ function MacroStudio:IsMainWindowModalBlocked()
 end
 
 function MacroStudio:CreateMainFrame()
-    local frame = CreateFrame("Frame", "MacroStudioMainFrame", UIParent, "BackdropTemplate")
+    local legacy = self.Theme:IsLegacy()
+    local frame = self.Theme:CreateWindow("MacroStudioMainFrame", UIParent, true)
     frame:Hide()
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
@@ -78,13 +79,6 @@ function MacroStudio:CreateMainFrame()
     frame:SetResizable(true)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true)
-    frame:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    frame:SetBackdropColor(0.025, 0.03, 0.045, 0.99)
-    frame:SetBackdropBorderColor(0.25, 0.3, 0.38, 1)
 
     if frame.SetResizeBounds then
         frame:SetResizeBounds(self.MIN_WIDTH, self.MIN_HEIGHT)
@@ -96,10 +90,9 @@ function MacroStudio:CreateMainFrame()
     self:RestoreWindowGeometry(frame)
     self.restoringGeometry = false
 
-    local titleBar = CreateFrame("Frame", nil, frame)
-    titleBar:SetPoint("TOPLEFT", 1, -1)
-    titleBar:SetPoint("TOPRIGHT", -1, -1)
-    titleBar:SetHeight(42)
+    local titleBar = frame.TitleContainer
+    titleBar.TitleText:Hide()
+    titleBar:SetHeight(self.Theme.spacing.title)
     titleBar:EnableMouse(true)
     titleBar:RegisterForDrag("LeftButton")
     titleBar:SetScript("OnDragStart", function()
@@ -110,19 +103,28 @@ function MacroStudio:CreateMainFrame()
         self:SaveWindowGeometry(frame)
     end)
 
-    local title = self.Helpers:CreateLabel(titleBar, "GameFontNormalHuge", "MacroStudio")
-    title:SetPoint("LEFT", 15, 0)
-    title:SetTextColor(0.35, 0.75, 1)
+    local title = self.Helpers:CreateLabel(titleBar, legacy and "GameFontNormalHuge" or "GameFontNormalLarge", "MacroStudio")
+    title:SetPoint("LEFT", legacy and 15 or 2, 0)
+    local titleFont, titleSize, titleFlags = title:GetFont()
+    if not legacy and titleFont and titleSize then title:SetFont(titleFont, titleSize + 1, titleFlags) end
+    if legacy then title:SetTextColor(0.35, 0.75, 1, 1) else title:SetTextColor(1, 0.86, 0.45, 1) end
+    title:SetShadowColor(0, 0, 0, 1)
+    title:SetShadowOffset(1, -1)
 
     local version = self.Helpers:CreateLabel(titleBar, "GameFontDisableSmall", "v" .. self.VERSION)
     version:SetPoint("LEFT", title, "RIGHT", 10, -2)
+    version:SetTextColor(unpack(self.Theme.palette.version))
 
-    local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    closeButton:SetPoint("TOPRIGHT", -3, -3)
+    local closeButton = frame.CloseButton
+    closeButton:SetFrameLevel(frame:GetFrameLevel() + 10)
 
-    local settingsButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    settingsButton:SetSize(78, 24)
-    settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -3, 0)
+    local settingsButton = self.Helpers:CreateButton(frame)
+    settingsButton:SetSize(84, 24)
+    if legacy then
+        settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -3, 0)
+    else
+        settingsButton:SetPoint("BOTTOMLEFT", 16, 8)
+    end
     settingsButton:SetText("Settings")
     settingsButton:RegisterForClicks("LeftButtonUp")
     settingsButton:HookScript("OnMouseDown", function(_, button)
@@ -148,19 +150,34 @@ function MacroStudio:CreateMainFrame()
     self.Helpers:SetButtonTooltip(settingsButton, "Settings", "Configure MacroStudio access and launcher options.")
     self.settingsButton = settingsButton
 
-    local sidebarPanel = self.Sidebar:Create(frame)
-    sidebarPanel:SetPoint("TOPLEFT", 14, -48)
-    sidebarPanel:SetPoint("BOTTOMLEFT", 14, 14)
-    sidebarPanel:SetWidth(180)
+    local content = legacy and CreateFrame("Frame", nil, frame) or self.Helpers:CreatePanel(frame)
+    content:SetPoint("TOPLEFT", legacy and 14 or 12, legacy and -48 or -40)
+    content:SetPoint("BOTTOMRIGHT", legacy and -14 or -12, legacy and 14 or 40)
+    self.Theme:WorkbenchSurface(content)
+    self.contentInset = content
 
-    local listPanel = self.MacroList:Create(frame)
-    listPanel:SetPoint("TOPLEFT", sidebarPanel, "TOPRIGHT", 12, 0)
-    listPanel:SetPoint("BOTTOMLEFT", sidebarPanel, "BOTTOMRIGHT", 12, 0)
-    listPanel:SetWidth(280)
+    local sidebarPanel = self.Sidebar:Create(content)
+    local inset = legacy and 0 or 4
+    sidebarPanel:SetPoint("TOPLEFT", inset, -inset)
+    sidebarPanel:SetPoint("BOTTOMLEFT", inset, inset)
+    sidebarPanel:SetWidth(legacy and 180 or 166)
 
-    local editorPanel = self.Editor:Create(frame)
-    editorPanel:SetPoint("TOPLEFT", listPanel, "TOPRIGHT", 12, 0)
-    editorPanel:SetPoint("BOTTOMRIGHT", -14, 14)
+    local listPanel = self.MacroList:Create(content)
+    listPanel:SetPoint("TOPLEFT", sidebarPanel, "TOPRIGHT", self.Theme.spacing.gap, 0)
+    listPanel:SetPoint("BOTTOMLEFT", sidebarPanel, "BOTTOMRIGHT", self.Theme.spacing.gap, 0)
+    listPanel:SetWidth(legacy and 280 or 264)
+
+    local editorPanel = self.Editor:Create(content)
+    editorPanel:SetPoint("TOPLEFT", listPanel, "TOPRIGHT", self.Theme.spacing.gap, 0)
+    editorPanel:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -inset, inset)
+    self.Theme:Divider(content, sidebarPanel)
+    self.Theme:Divider(content, listPanel)
+
+    local capacityText = self.Helpers:CreateLabel(frame, "GameFontHighlightSmall", "")
+    capacityText:SetPoint("BOTTOMRIGHT", -28, 14)
+    self.Theme:SecondaryText(capacityText)
+    self.capacityText = capacityText
+    if legacy then capacityText:Hide() end
 
     local resizeGrip = CreateFrame("Button", nil, frame)
     resizeGrip:SetSize(18, 18)
@@ -232,6 +249,7 @@ function MacroStudio:Initialize()
     if not self.db and self.Database then
         self.Database:Initialize()
     end
+    self.Theme:Initialize()
     if self.CharacterMacroLibrary then
         self.CharacterMacroLibrary:Initialize()
     end
@@ -289,6 +307,10 @@ function MacroStudio:UpdateActionControls()
 
     local accountCount, accountLimit = self.MacroRepository:GetCapacity("ACCOUNT")
     local characterCount, characterLimit = self.MacroRepository:GetCapacity("CHARACTER")
+    if self.capacityText then
+        self.capacityText:SetText(string.format("Account: %d / %d     Character: %d / %d",
+            accountCount, accountLimit, characterCount, characterLimit))
+    end
     local hasCapacity = accountCount < accountLimit or characterCount < characterLimit
     local dirty = self.Editor and self.Editor:IsDirty()
     local enabled = not self.inCombat and hasCapacity and not dirty

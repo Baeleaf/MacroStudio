@@ -113,7 +113,7 @@ function IconPicker:CreateIconButton(parent, index)
     local selected = button:CreateTexture(nil, "BACKGROUND")
     selected:SetPoint("TOPLEFT", -2, 2)
     selected:SetPoint("BOTTOMRIGHT", 2, -2)
-    selected:SetColorTexture(1, 0.78, 0.12, 0.95)
+    selected:SetColorTexture(unpack(MacroStudio.Theme.palette.gold))
     selected:Hide()
     button.Selected = selected
 
@@ -121,6 +121,7 @@ function IconPicker:CreateIconButton(parent, index)
     icon:SetAllPoints()
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     button.Icon = icon
+    MacroStudio.Theme:IconBorder(button, icon)
 
     local highlight = button:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetAllPoints()
@@ -152,7 +153,7 @@ function IconPicker:Create()
         return self.frame
     end
 
-    local frame = MacroStudio.Helpers:CreatePanel(UIParent)
+    local frame = MacroStudio.Helpers:CreateWindow(UIParent)
     frame:SetSize(WINDOW_WIDTH, WINDOW_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -173,6 +174,7 @@ function IconPicker:Create()
 
     local title = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormalLarge", "Choose Macro Icon")
     title:SetPoint("TOPLEFT", 15, -14)
+    MacroStudio.Theme:Dialog(frame, title)
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -3, -3)
@@ -187,34 +189,27 @@ function IconPicker:Create()
         self.buttons[index] = self:CreateIconButton(grid, index)
     end
 
-    local scrollBar = CreateFrame("Slider", nil, frame, "BackdropTemplate")
-    scrollBar:SetWidth(12)
-    scrollBar:SetPoint("TOPLEFT", grid, "TOPRIGHT", 9, 0)
-    scrollBar:SetPoint("BOTTOMLEFT", grid, "BOTTOMRIGHT", 9, 0)
-    scrollBar:SetOrientation("VERTICAL")
-    scrollBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    scrollBar:SetBackdropColor(0.08, 0.09, 0.12, 0.9)
-    scrollBar:SetValueStep(1)
-    scrollBar:SetObeyStepOnDrag(true)
-
-    local thumb = scrollBar:CreateTexture(nil, "OVERLAY")
-    thumb:SetColorTexture(0.45, 0.65, 0.85, 0.95)
-    thumb:SetSize(12, 36)
-    scrollBar:SetThumbTexture(thumb)
-    scrollBar:SetScript("OnValueChanged", function(_, value)
-        self:SetTopRow(value)
-    end)
+    local scrollBar = CreateFrame("EventFrame", nil, frame, MacroStudio.Theme.resources.scrollBar)
+    scrollBar:SetWidth(25)
+    scrollBar:SetPoint("TOPLEFT", grid, "TOPRIGHT", 4, 0)
+    scrollBar:SetPoint("BOTTOMLEFT", grid, "BOTTOMRIGHT", 4, 0)
+    scrollBar:RegisterCallback(ScrollBarMixin.Event.OnScroll, function(_, percentage)
+        self:SetTopRow(percentage * self:GetMaximumTopRow())
+    end, self)
+    MacroStudio.Theme:ScrollBar(scrollBar)
     self.scrollBar = scrollBar
 
     grid:SetScript("OnMouseWheel", function(_, delta)
-        scrollBar:SetValue(self.topRow - (delta * 3))
+        local maximum = self:GetMaximumTopRow()
+        self:SetTopRow(self.topRow - (delta * 3))
+        scrollBar:SetScrollPercentage(maximum > 0 and self.topRow / maximum or 0, true)
     end)
 
     local countText = MacroStudio.Helpers:CreateLabel(frame, "GameFontDisableSmall", "")
     countText:SetPoint("BOTTOMLEFT", 15, 17)
     self.countText = countText
 
-    local cancel = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local cancel = MacroStudio.Helpers:CreateButton(frame)
     cancel:SetSize(86, 24)
     cancel:SetPoint("BOTTOMRIGHT", -15, 12)
     cancel:SetText("Cancel")
@@ -244,8 +239,10 @@ function IconPicker:Open(currentIcon, callback, options)
     end
 
     local selectedRow = math.floor((selectedIndex - 1) / COLUMNS)
-    self.scrollBar:SetMinMaxValues(0, self:GetMaximumTopRow())
-    self.scrollBar:SetValue(math.min(selectedRow, self:GetMaximumTopRow()))
+    local maximum = self:GetMaximumTopRow()
+    local totalRows = math.ceil(#icons / COLUMNS)
+    self.scrollBar:Init(math.min(1, VISIBLE_ROWS / math.max(1, totalRows)), maximum > 0 and 1 / maximum or 0)
+    self.scrollBar:SetScrollPercentage(maximum > 0 and math.min(selectedRow, maximum) / maximum or 0, true)
     self:SetTopRow(selectedRow)
     frame:Show()
     frame:Raise()

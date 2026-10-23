@@ -2,6 +2,26 @@
 
 Notable user-facing changes to MacroStudio are documented here.
 
+## 1.3.0
+
+### Added
+
+- Choose Warcraft (default) or the original blue/gray Legacy appearance in Settings. The choice is saved; Reload UI applies it without resetting macros or organization data.
+
+### Changed
+
+- Redesigned MacroStudio as a Warcraft-native workbench with a sculpted metal frame, textured charcoal interior and recessed editor.
+- Integrated an original scroll-and-quill medallion into the title frame and matching launchers.
+- Unified Library, Macros and Macro Editor inside one shared inset with subtle engraved column separation.
+- Applied native button states, inset search fields, physical scope tabs and full scrollbars with track, thumb and arrows.
+- Matched secondary dialogs to the main window and integrated Settings into the bottom frame.
+- Refined title emphasis, secondary-text readability and editor depth while preserving the existing macro workflows and saved-data format.
+- Updated Retail compatibility to WoW 12.1.5 (Interface `120105`).
+
+### Distribution
+
+- Package only the addon runtime and original emblem, with the MIT license included. Development tools, tests, screenshots and editable artwork are excluded.
+
 ## 1.2.0
 
 ### Added

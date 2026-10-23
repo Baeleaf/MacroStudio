@@ -86,8 +86,8 @@ function Helpers:CreateNativeScrollingEditBox(parent, inset)
 
     inset = tonumber(inset) or 5
     local host = CreateFrame("Frame", nil, parent, "ScrollingEditBoxTemplate")
-    local scrollBar = CreateFrame("EventFrame", nil, parent, "MinimalScrollBar")
-    scrollBar:SetWidth(12)
+    local scrollBar = CreateFrame("EventFrame", nil, parent, MacroStudio.Theme.resources.scrollBar)
+    scrollBar:SetWidth(25)
     scrollBar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -inset, -inset)
     scrollBar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -inset, inset)
     scrollBar:SetHideIfUnscrollable(true)
@@ -99,6 +99,7 @@ function Helpers:CreateNativeScrollingEditBox(parent, inset)
     local scrollBox = host:GetScrollBox()
     ScrollUtil.RegisterScrollBoxWithScrollBar(scrollBox, scrollBar)
     scrollBar:SetFrameLevel(host:GetFrameLevel() + 10)
+    MacroStudio.Theme:ScrollBar(scrollBar)
 
     self:ConfigureEditBox(editBox)
     editBox:SetMultiLine(true)
@@ -195,19 +196,54 @@ function Helpers:CopyMacro(macro)
 end
 
 function Helpers:CreatePanel(parent)
-    local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    panel:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    panel:SetBackdropColor(0.045, 0.055, 0.075, 0.98)
-    panel:SetBackdropBorderColor(0.18, 0.22, 0.28, 1)
-    return panel
+    return MacroStudio.Theme:CreateInset(parent)
+end
+
+function Helpers:CreateRegion(parent)
+    return MacroStudio.Theme:CreateRegion(parent)
+end
+
+function Helpers:CreateWindow(parent)
+    return MacroStudio.Theme:CreateWindow(nil, parent)
+end
+
+function Helpers:CreateEditorInset(parent)
+    return MacroStudio.Theme:CreateInset(parent, true)
+end
+
+function Helpers:CreateButton(parent, name, role)
+    local button = CreateFrame("Button", name, parent, MacroStudio.Theme.resources.button)
+    MacroStudio.Theme:Button(button, role)
+    return button
+end
+
+function Helpers:CreateInput(parent)
+    local box = CreateFrame("EditBox", nil, parent, MacroStudio.Theme.resources.input)
+    MacroStudio.Theme:Input(box)
+    return box
+end
+
+function Helpers:CreateTab(parent)
+    return CreateFrame("Button", nil, parent, MacroStudio.Theme.resources.tab)
+end
+
+function Helpers:CreateScrollFrame(parent)
+    local frame = CreateFrame("ScrollFrame", nil, parent)
+    frame:EnableMouseWheel(true)
+    local bar = CreateFrame("EventFrame", nil, frame, MacroStudio.Theme.resources.scrollBar)
+    bar:SetWidth(25)
+    bar:SetPoint("TOPLEFT", frame, "TOPRIGHT", 2, 0)
+    bar:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", 2, 0)
+    bar:SetHideIfUnscrollable(false)
+    frame.ScrollBar = bar
+    ScrollUtil.InitScrollFrameWithScrollBar(frame, bar)
+    MacroStudio.Theme:ScrollBar(bar)
+    return frame
 end
 
 function Helpers:CreateLabel(parent, fontObject, text)
     local label = parent:CreateFontString(nil, "OVERLAY", fontObject or "GameFontNormal")
+    MacroStudio.Theme:Label(label, fontObject)
     label:SetText(text or "")
     return label
 end
@@ -222,7 +258,8 @@ function Helpers:ShowTooltip(owner, title, text)
         GameTooltip:SetText(title, 1, 0.82, 0, 1, true)
     end
     if text and text ~= "" then
-        GameTooltip:AddLine(text, 0.82, 0.86, 0.92, true)
+        local color = MacroStudio.Theme.palette.text
+        GameTooltip:AddLine(text, color[1], color[2], color[3], true)
     end
     GameTooltip:Show()
 end
@@ -265,7 +302,5 @@ function Helpers:SetButtonEnabled(button, enabled)
     enabled = enabled and true or false
     button:SetEnabled(enabled)
     button:SetAlpha(enabled and 1 or 0.45)
-    if button.Text then
-        button.Text:SetTextColor(enabled and 1 or 0.5, enabled and 0.82 or 0.5, enabled and 0 or 0.5)
-    end
+    MacroStudio.Theme:SetButtonState(button, enabled)
 end

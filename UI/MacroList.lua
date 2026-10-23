@@ -7,10 +7,10 @@ local MacroList = {
 }
 MacroStudio.MacroList = MacroList
 
-local ROW_HEIGHT = 48
-local HEADER_HEIGHT = 27
+local ROW_HEIGHT = MacroStudio.Theme.spacing.row
+local HEADER_HEIGHT = 23
 local EMPTY_HEIGHT = 28
-local CONTENT_GAP = 4
+local CONTENT_GAP = 1
 
 local function formatSlots(slots)
     local labels = {}
@@ -35,15 +35,17 @@ local function acquireFontString(pool, parent, fontObject)
 end
 
 function MacroList:Create(parent)
-    local panel = MacroStudio.Helpers:CreatePanel(parent)
+    ROW_HEIGHT = MacroStudio.Theme.spacing.row
+    local panel = MacroStudio.Helpers:CreateRegion(parent)
     self.panel = panel
 
-    local heading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "MACROS")
-    heading:SetPoint("TOPLEFT", 14, -14)
+    local heading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormal", "Macros")
+    heading:SetPoint("TOPLEFT", 10, -10)
+    MacroStudio.Theme:Section(panel, heading)
 
-    local newMacroButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    newMacroButton:SetSize(104, 22)
-    newMacroButton:SetPoint("TOPRIGHT", -12, -10)
+    local newMacroButton = MacroStudio.Helpers:CreateButton(panel)
+    newMacroButton:SetSize(98, 22)
+    newMacroButton:SetPoint("TOPRIGHT", -8, -5)
     newMacroButton:SetText("+ New Macro")
     newMacroButton:SetScript("OnClick", function()
         MacroStudio:ShowNewMacroDialog()
@@ -52,13 +54,13 @@ function MacroList:Create(parent)
 
     local clearSearchButton = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
     clearSearchButton:SetSize(22, 22)
-    clearSearchButton:SetPoint("TOPRIGHT", -10, -42)
+    clearSearchButton:SetPoint("TOPRIGHT", -7, -36)
     clearSearchButton:Hide()
     self.clearSearchButton = clearSearchButton
 
-    local searchBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-    searchBox:SetHeight(24)
-    searchBox:SetPoint("TOPLEFT", 14, -42)
+    local searchBox = MacroStudio.Helpers:CreateInput(panel)
+    searchBox:SetHeight(22)
+    searchBox:SetPoint("TOPLEFT", 10, -36)
     searchBox:SetPoint("TOPRIGHT", clearSearchButton, "TOPLEFT", -4, 0)
     searchBox:SetMaxLetters(120)
     MacroStudio.Helpers:ConfigureEditBox(searchBox)
@@ -66,7 +68,7 @@ function MacroList:Create(parent)
 
     local searchPlaceholder = MacroStudio.Helpers:CreateLabel(searchBox, "GameFontDisableSmall", "Search macros...")
     searchPlaceholder:SetPoint("LEFT", 7, 0)
-    searchPlaceholder:SetTextColor(0.48, 0.54, 0.62)
+    searchPlaceholder:SetTextColor(unpack(MacroStudio.Theme.palette.muted))
     self.searchPlaceholder = searchPlaceholder
 
     local function updateSearchPresentation()
@@ -101,8 +103,8 @@ function MacroList:Create(parent)
     MacroStudio.Helpers:SetButtonTooltip(clearSearchButton, "Clear Search", "Keep the current navigation filter and show all of its macros.")
     updateSearchPresentation()
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -73)
+    local scrollFrame = MacroStudio.Helpers:CreateScrollFrame(panel)
+    scrollFrame:SetPoint("TOPLEFT", 7, -66)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)
     self.scrollFrame = scrollFrame
 
@@ -147,7 +149,7 @@ end
 
 function MacroList:AcquireHeader()
     local header = acquireFontString(self.headerPool, self.scrollChild, "GameFontNormalSmall")
-    header:SetTextColor(0.45, 0.72, 1)
+    header:SetTextColor(unpack(MacroStudio.Theme.palette.gold))
     header:SetJustifyH("LEFT")
     return header
 end
@@ -167,16 +169,17 @@ function MacroList:AcquireRow()
         return button
     end
 
-    button = CreateFrame("Button", nil, self.scrollChild, "BackdropTemplate")
+    button = MacroStudio.Theme:CreateRowFrame(self.scrollChild)
     button:SetHeight(ROW_HEIGHT)
-    button:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    MacroStudio.Theme:Row(button)
     button:RegisterForDrag("LeftButton")
 
     local icon = button:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(34, 34)
+    icon:SetSize(32, 32)
     icon:SetPoint("LEFT", 7, 0)
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     button.icon = icon
+    MacroStudio.Theme:IconBorder(button, icon)
 
     local favorite = button:CreateTexture(nil, "OVERLAY")
     favorite:SetSize(16, 16)
@@ -189,7 +192,7 @@ function MacroList:AcquireRow()
     usageText:SetPoint("TOPRIGHT", button, "TOPRIGHT", -7, -8)
     usageText:SetWidth(48)
     usageText:SetJustifyH("RIGHT")
-    usageText:SetTextColor(0.35, 0.75, 1)
+    usageText:SetTextColor(unpack(MacroStudio.Theme.palette.gold))
     usageText:Hide()
     button.usageText = usageText
 
@@ -205,18 +208,18 @@ function MacroList:AcquireRow()
     detailText:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -7, 8)
     detailText:SetJustifyH("LEFT")
     detailText:SetWordWrap(false)
-    detailText:SetTextColor(0.58, 0.64, 0.72)
+    MacroStudio.Theme:SecondaryText(detailText)
     button.detailText = detailText
 
     button:SetScript("OnEnter", function(row)
         self:UpdateRowUsageTooltip(row)
         if not row.selected then
-            row:SetBackdropColor(0.1, 0.13, 0.18, 1)
+            MacroStudio.Theme:RowState(row, true)
         end
     end)
     button:SetScript("OnLeave", function(row)
         if not row.selected then
-            row:SetBackdropColor(0.065, 0.08, 0.105, 1)
+            MacroStudio.Theme:RowState(row)
         end
     end)
     button:SetScript("OnClick", function(row)
@@ -463,10 +466,6 @@ function MacroList:SetSelected(selectedMacro)
     for _, row in ipairs(self.visibleRows or {}) do
         local selected = MacroStudio:MacroRecordsEqual(row.macro, selectedMacro)
         row.selected = selected
-        if selected then
-            row:SetBackdropColor(0.12, 0.32, 0.5, 1)
-        else
-            row:SetBackdropColor(0.065, 0.08, 0.105, 1)
-        end
+        MacroStudio.Theme:RowState(row)
     end
 end

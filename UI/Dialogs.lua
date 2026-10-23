@@ -88,7 +88,7 @@ function Dialogs:CreateInputDialog()
         return self.inputFrame
     end
 
-    local frame = MacroStudio.Helpers:CreatePanel(UIParent)
+    local frame = MacroStudio.Helpers:CreateWindow(UIParent)
     frame:SetSize(440, 205)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -100,6 +100,7 @@ function Dialogs:CreateInputDialog()
 
     local title = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormalLarge", "MacroStudio")
     title:SetPoint("TOPLEFT", 16, -15)
+    MacroStudio.Theme:Dialog(frame, title)
     self.inputTitle = title
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -111,7 +112,7 @@ function Dialogs:CreateInputDialog()
     prompt:SetJustifyH("LEFT")
     self.inputPrompt = prompt
 
-    local editBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    local editBox = MacroStudio.Helpers:CreateInput(frame)
     editBox:SetPoint("TOPLEFT", 18, -79)
     editBox:SetPoint("TOPRIGHT", -18, -79)
     editBox:SetHeight(28)
@@ -121,12 +122,12 @@ function Dialogs:CreateInputDialog()
     local errorText = MacroStudio.Helpers:CreateLabel(frame, "GameFontHighlightSmall", "")
     errorText:SetPoint("TOPLEFT", editBox, "BOTTOMLEFT", 0, -10)
     errorText:SetPoint("TOPRIGHT", editBox, "BOTTOMRIGHT", 0, -10)
-    errorText:SetTextColor(1, 0.3, 0.3)
+    errorText:SetTextColor(unpack(MacroStudio.Theme.palette.error))
     errorText:SetJustifyH("LEFT")
     errorText:SetWordWrap(false)
     self.inputError = errorText
 
-    local submit = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local submit = MacroStudio.Helpers:CreateButton(frame)
     submit:SetSize(92, 26)
     submit:SetPoint("BOTTOMRIGHT", -18, 14)
     submit:SetText("Save")
@@ -135,7 +136,7 @@ function Dialogs:CreateInputDialog()
     end)
     self.inputSubmit = submit
 
-    local cancel = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local cancel = MacroStudio.Helpers:CreateButton(frame)
     cancel:SetSize(82, 26)
     cancel:SetPoint("RIGHT", submit, "LEFT", -8, 0)
     cancel:SetText("Cancel")

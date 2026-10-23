@@ -2,6 +2,10 @@
 
 ## Release scope
 
+Version 1.3.0 targets Retail 12.1.5 (Interface 120105) and introduces the accepted Warcraft-native UI as the default, with an optional Legacy appearance. It preserves the macro workflows and schema 4 saved data. Current release preparation and live smoke-test status are recorded in `RELEASE-1.3.0.md`.
+
+`settings.appearance` is account-wide and defaults to `warcraft` for new and existing installs without an explicit choice. `UI/LegacyTheme.lua` chooses the active presentation after saved-data initialization, before constructing frames. Both presentations share the same UI controllers and macro repositories; no feature implementation is forked. Palette arrays are updated in place so existing editor status/focus references remain valid. A changed preference stays pending until reload. Settings offers an explicit Reload UI action and blocks that action while a macro draft or creation form is open. The appearance preference is an additive schema 4 setting; no database reset or schema bump is needed.
+
 Version 1.0.0 is the initial public release. It edits, creates, deletes, organizes, and searches Blizzard-native macros. Search uses simple case-insensitive substring matching; advanced query syntax, history/Trash, scope changes, duplication, import/export, and launchers remain unimplemented.
 
 Version 1.1.0 hands native macros to WoW's normal cursor system so players can drag saved macros onto action bars.
@@ -269,9 +273,9 @@ canSave, saveReason, canRevert, canDelete, deleteReason
 
 Save requires a selected dirty live target, a valid nonempty name and saved icon, at most 255 body characters, no combat, no external conflict, and an exact current snapshot. Delete additionally requires the complete form to be clean. Create is disabled while combat-locked, at capacity, or while automatic selection would discard a dirty draft. Repository methods repeat the important validation defensively.
 
-The main editor and creation dialog use Blizzard's `ScrollingEditBoxTemplate` with a registered `MinimalScrollBar`. The template owns caret rendering, mouse drag selection, multiline keyboard navigation, and cursor scrolling; MacroStudio hooks its scripts without replacing that native behavior.
+The main editor and creation dialog use Blizzard's `ScrollingEditBoxTemplate` with a registered `WowTrimScrollBar`. The template owns caret rendering, mouse drag selection, multiline keyboard navigation, and cursor scrolling; MacroStudio hooks its scripts without replacing that native behavior. Lists use intrinsic scroll frames connected through `ScrollUtil.InitScrollFrameWithScrollBar`.
 
-The one-pixel Backdrop border sits below child frames, so the main editor also uses four exact edge textures on a non-interactive frame above its scrolling controls. Focus and blur recolor all four edges together; the overlay shares the editor border's anchors and therefore remains aligned during resize and scroll.
+The editor's eight-piece native inset border sits below child controls. Four exact edge textures on a non-interactive frame above its scrolling controls provide a focus cue. Focus and blur recolor all four edges together; the overlay shares the editor border's anchors and therefore remains aligned during resize and scroll. See `UI-THEME.md` for the native frame resource audit and live visual acceptance status.
 
 Programmatic loads suppress name/body change handling, load the saved icon draft, then recompute once. Revert restores all three saved fields. External refresh never overwrites a dirty name, icon, or body draft.
 

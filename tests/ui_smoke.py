@@ -3,7 +3,7 @@
 from lupa.lua51 import LuaRuntime
 
 
-def run_ui_smoke(root):
+def run_ui_smoke(root, appearance="warcraft"):
     lua = LuaRuntime(unpack_returned_tuples=True)
     load = lua.eval("loadstring")
     lua.execute(
@@ -31,6 +31,8 @@ def run_ui_smoke(root):
         UISpecialFrames = {}
         StaticPopupDialogs = {}
         MacroStudioDB = nil
+        reloadCalls = 0
+        function ReloadUI() reloadCalls = reloadCalls + 1 end
         combat = false
         enumerationCalls = 0
         shiftDown = false
@@ -55,7 +57,9 @@ def run_ui_smoke(root):
         local Frame = {}
         local focusedFrame = nil
         Frame.__index = function(_, key)
-            return Frame[key] or function() end
+            -- Missing instance fields are nil, as in WoW; only unmodeled API
+            -- methods get a no-op. Otherwise optional theme state looks truthy.
+            return Frame[key] or (key:match("^[A-Z]") and function() end or nil)
         end
 
         local function RunHandlers(frame, event, ...)
@@ -85,7 +89,8 @@ def run_ui_smoke(root):
             self.registeredEvents = registeredEvents
         end
         function Frame:StartMoving() self.moving = true end
-        function Frame:ClearAllPoints() self.clearedPoints = true end
+        function Frame:ClearAllPoints() self.clearedPoints = true; self.points = {} end
+        function Frame:SetPoint(...) self.points = self.points or {}; table.insert(self.points, { ... }) end
         function Frame:StopMovingOrSizing() self.moving = false end
         function Frame:GetWidth() return rawget(self, "width") or 500 end
         function Frame:GetHeight() return rawget(self, "height") or 300 end
@@ -106,6 +111,7 @@ def run_ui_smoke(root):
                 text = text:sub(1, self.maxLetters)
             end
             self.text = text
+            if rawget(self, "fontString") then self.fontString.text = text end
             RunHandlers(self, "OnTextChanged", false)
         end
         function Frame:SetUserText(value)
@@ -183,6 +189,37 @@ def run_ui_smoke(root):
             self.color = { red, green, blue, alpha }
         end
         function Frame:SetTexture(texture) self.texture = texture end
+        function Frame:SetAtlas(atlas) self.atlas = atlas end
+        function Frame:SetVertexColor(...) self.vertexColor = { ... } end
+        function Frame:SetBorderColor(...) self.borderColor = { ... } end
+        function Frame:SetBackdrop(backdrop) self.backdrop = backdrop end
+        function Frame:SetBackdropColor(...) self.backdropColor = { ... } end
+        function Frame:SetBackdropBorderColor(...) self.backdropBorderColor = { ... } end
+        function Frame:SetParent(parent) self.parent = parent end
+        function Frame:GetFontString() return rawget(self, "fontString") end
+        function Frame:SetFontString(label) self.fontString = label end
+        function Frame:SetButtonState(state, locked) self.buttonState, self.locked = state, locked end
+        function Frame:GetNormalTexture() return rawget(self, "normalTexture") end
+        function Frame:GetPushedTexture() return rawget(self, "pushedTexture") end
+        function Frame:GetDisabledTexture() return rawget(self, "disabledTexture") end
+        function Frame:GetHighlightTexture() return rawget(self, "highlightTexture") end
+        function Frame:Enable() self:SetEnabled(true) end
+        function Frame:Disable() self:SetEnabled(false) end
+        function Frame:RegisterCallback(event, callback, owner)
+            self.callbacks = self.callbacks or {}
+            self.callbacks[event] = { callback = callback, owner = owner }
+        end
+        function Frame:SetScrollPercentage(percentage)
+            self.scrollPercentage = math.max(0, math.min(1, percentage))
+            local callback = self.callbacks and self.callbacks.OnScroll
+            if callback then callback.callback(callback.owner, self.scrollPercentage) end
+        end
+        function Frame:Init(visibleExtent, panExtent)
+            self.visibleExtent, self.panExtent = visibleExtent, panExtent
+        end
+        function Frame:ScrollStepInDirection(direction)
+            self:SetScrollPercentage((self.scrollPercentage or 0) + direction * (self.panExtent or 0.1))
+        end
         function Frame:TriggerScript(event, ...) RunHandlers(self, event, ...) end
         function Frame:CreateFontString()
             return setmetatable({ scripts = {}, hooks = {}, shown = true, text = "" }, Frame)
@@ -200,6 +237,46 @@ def run_ui_smoke(root):
                 text = "",
             }, Frame)
             frame.Text = frame:CreateFontString()
+            if template == "PortraitFrameTemplate" or template == "DefaultPanelTemplate" then
+                frame.NineSlice = CreateFrame("Frame", nil, frame)
+                frame.Bg = frame:CreateTexture()
+                frame.TopTileStreaks = frame:CreateTexture()
+                frame.TitleContainer = CreateFrame("Frame", nil, frame)
+                frame.TitleContainer.TitleText = frame.TitleContainer:CreateFontString()
+                if template == "PortraitFrameTemplate" then
+                    frame.PortraitContainer = CreateFrame("Frame", nil, frame)
+                    frame.PortraitContainer.portrait = frame.PortraitContainer:CreateTexture()
+                    frame.CloseButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+                end
+            elseif template == "InsetFrameTemplate" then
+                frame.NineSlice = CreateFrame("Frame", nil, frame)
+                frame.Bg = frame:CreateTexture()
+            elseif template == "InsetFrameTemplate3" then
+                frame.Bg = frame:CreateTexture()
+                for _, key in ipairs({ "BorderTopRight", "BorderBottomRight", "BorderRightMiddle", "BorderTopLeft",
+                    "BorderBottomLeft", "BorderLeftMiddle", "BorderTopMiddle", "BorderBottomMiddle" }) do
+                    frame[key] = frame:CreateTexture()
+                end
+            elseif template == "UIPanelButtonGrayTemplate" then
+                frame.Text = nil
+                frame.normalTexture = frame:CreateTexture()
+                frame.pushedTexture = frame:CreateTexture()
+                frame.disabledTexture = frame:CreateTexture()
+                frame.highlightTexture = frame:CreateTexture()
+            elseif template == "InputBoxTemplate" then
+                for _, key in ipairs({ "Left", "Middle", "Right" }) do frame[key] = frame:CreateTexture() end
+            elseif template == "PanelTopTabButtonTemplate" then
+                for _, key in ipairs({ "Left", "Middle", "Right", "LeftActive", "MiddleActive", "RightActive" }) do
+                    frame[key] = frame:CreateTexture()
+                end
+            elseif template == "WowTrimScrollBar" then
+                frame.Background = CreateFrame("Frame", nil, frame)
+                for _, key in ipairs({ "Begin", "Middle", "End" }) do frame.Background[key] = frame:CreateTexture() end
+                frame.Track = CreateFrame("Frame", nil, frame)
+                frame.Track.Thumb = CreateFrame("Button", nil, frame.Track)
+                frame.Back = CreateFrame("Button", nil, frame)
+                frame.Forward = CreateFrame("Button", nil, frame)
+            end
             if template == "ScrollingEditBoxTemplate" then
                 local editBox = CreateFrame("EditBox", nil, frame)
                 local scrollBox = CreateFrame("Frame", nil, frame)
@@ -229,7 +306,22 @@ def run_ui_smoke(root):
 
         ScrollUtil = {
             RegisterScrollBoxWithScrollBar = function() end,
+            InitScrollFrameWithScrollBar = function(frame, bar)
+                frame.connectedScrollBar = bar
+                frame:SetScript("OnMouseWheel", function(_, delta) bar:ScrollStepInDirection(-delta) end)
+            end,
         }
+        ScrollBarMixin = { Event = { OnScroll = "OnScroll" } }
+        function PanelTemplates_SelectTab(tab)
+            tab:Disable()
+            for _, key in ipairs({ "Left", "Middle", "Right" }) do tab[key]:Hide() end
+            for _, key in ipairs({ "LeftActive", "MiddleActive", "RightActive" }) do tab[key]:Show() end
+        end
+        function PanelTemplates_DeselectTab(tab)
+            tab:Enable()
+            for _, key in ipairs({ "Left", "Middle", "Right" }) do tab[key]:Show() end
+            for _, key in ipairs({ "LeftActive", "MiddleActive", "RightActive" }) do tab[key]:Hide() end
+        end
 
         UIParent = CreateFrame("Frame", "UIParent")
         UIParent:SetSize(1920, 1080)
@@ -380,26 +472,12 @@ def run_ui_smoke(root):
         """
     )
 
+    lua.globals().requestedAppearance = appearance
     namespace = lua.table()
     toc_order = [
-        "Core.lua",
-        "Utils/Helpers.lua",
-        "Database.lua",
-        "Access.lua",
-        "MinimapButton.lua",
-        "MacroRepository.lua",
-        "CharacterMacroLibrary.lua",
-        "ActionBarRepository.lua",
-        "MetadataRepository.lua",
-        "Search.lua",
-        "UI/Dialogs.lua",
-        "UI/IconPicker.lua",
-        "UI/MacroDialog.lua",
-        "UI/Editor.lua",
-        "UI/MacroList.lua",
-        "UI/Sidebar.lua",
-        "UI/Settings.lua",
-        "UI/MainFrame.lua",
+        line.strip().replace("\\", "/")
+        for line in (root / "MacroStudio.toc").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
     ]
     for relative_path in toc_order:
         source = (root / relative_path).read_text(encoding="utf-8")
@@ -411,6 +489,9 @@ def run_ui_smoke(root):
     smoke = load(
         r"""
         local _, ms = ...
+        if requestedAppearance == "legacy" then
+            MacroStudioDB = { settings = { appearance = "legacy" } }
+        end
         ms:OnAddonLoaded()
         local libraryStore = MacroStudioDB.characterLibrary
         libraryStore.characters["guid:Player-1-OFFLINE"] = {
@@ -432,6 +513,44 @@ def run_ui_smoke(root):
         assert(ms.initialized, "full UI should initialize")
         assert(ms.frame and not ms.frame:IsShown(), "main window should remain hidden on login")
         assert(ms.selectedMacro and ms.selectedMacro.name == "Account", "initial refresh should select a macro")
+        assert(ms.Theme.activeAppearance == requestedAppearance,
+            "startup should apply the saved appearance after database initialization")
+        if requestedAppearance == "legacy" then
+            assert(ms.frame.template == "BackdropTemplate" and ms.frame.backdropColor[3] == 0.045,
+                "legacy should restore the original dark blue/gray window")
+            for _, region in ipairs({ ms.Sidebar.panel, ms.MacroList.panel, ms.Editor.panel }) do
+                assert(region.template == "BackdropTemplate" and region.backdropBorderColor[3] == 0.28,
+                    "legacy should restore the three separate panel frames")
+            end
+            assert(ms.Sidebar.panel:GetWidth() == 180 and ms.MacroList.panel:GetWidth() == 280
+                    and ms.settingsButton.template == "UIPanelButtonTemplate"
+                    and ms.settingsButton.points[1][1] == "RIGHT"
+                    and ms.Editor.editBorder.template == "BackdropTemplate"
+                    and ms.Editor.scrollBar.template == "WowTrimScrollBar",
+                "legacy should use original panel widths, title Settings and current supported scrolling")
+        else
+        assert(ms.frame.template == "PortraitFrameTemplate"
+                and ms.contentInset.template == "InsetFrameTemplate",
+            "the main window should use a sculpted native perimeter and shared content inset")
+        for _, region in ipairs({ ms.Sidebar.panel, ms.MacroList.panel, ms.Editor.panel }) do
+            assert(region.parent == ms.contentInset and region.template == nil,
+                "all three functional regions should share the inset without separate frame templates")
+        end
+        assert(ms.frame.macroStudioEmblem:GetWidth() == 46
+                and ms.frame.macroStudioEmblem == ms.frame.PortraitContainer.portrait
+                and ms.frame.macroStudioEmblem.texture == ms.Theme.icon,
+            "the native portrait slot should carry the larger 46-pixel emblem")
+        assert(ms.Editor.editBorder.template == "InsetFrameTemplate3"
+                and ms.Editor.scrollBar.template == "WowTrimScrollBar"
+                and ms.MacroList.scrollFrame.ScrollBar.template == "WowTrimScrollBar"
+                and ms.Sidebar.scrollFrame.connectedScrollBar == ms.Sidebar.scrollFrame.ScrollBar,
+            "editor and lists should use current native insets and connected full scrollbars")
+        assert(ms.settingsButton.template == "UIPanelButtonGrayTemplate"
+                and ms.settingsButton.points[1][1] == "BOTTOMLEFT"
+                and ms.settingsButton.Text == ms.settingsButton:GetFontString()
+                and ms.settingsButton.Text:GetText() == "Settings",
+            "the footer should contain a physical Settings button with an actual engine label")
+        end
         assert(MacroStudioDB.schemaVersion == 4
                 and MacroStudioDB.settings.useMacroStudioSlashCommands
                 and MacroStudioDB.settings.showMinimapButton
@@ -1148,14 +1267,18 @@ def run_ui_smoke(root):
         assert(ms.Editor.editorFocusBorderActive,
             "editor focus should activate the complete border")
         for _, edge in ipairs(ms.Editor.editorFocusBorderEdges) do
-            assert(edge.color[1] == 0.25 and edge.color[2] == 0.62 and edge.color[3] == 1,
+            assert(edge.color[1] == ms.Theme.palette.focus[1]
+                and edge.color[2] == ms.Theme.palette.focus[2]
+                and edge.color[3] == ms.Theme.palette.focus[3],
                 "every editor edge should receive the focused color")
         end
         ms.Editor.editBox:ClearFocus()
         assert(not ms.Editor.editorFocusBorderActive,
             "editor blur should restore the normal border")
         for _, edge in ipairs(ms.Editor.editorFocusBorderEdges) do
-            assert(edge.color[1] == 0.18 and edge.color[2] == 0.22 and edge.color[3] == 0.28,
+            assert(edge.color[1] == ms.Theme.palette.border[1]
+                and edge.color[2] == ms.Theme.palette.border[2]
+                and edge.color[3] == ms.Theme.palette.border[3],
                 "every editor edge should receive the normal color")
         end
 
@@ -1331,6 +1454,29 @@ def run_ui_smoke(root):
             "icon picker should retain native icons while canonicalizing question-mark aliases")
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
         assert(ms.IconPicker.frame:IsShown(), "icon picker should construct and open")
+        local savedPickerIcons = ms.IconPicker.icons
+        local manyIcons = {}
+        for index = 1, 160 do manyIcons[index] = 200000 + index end
+        ms.IconPicker.icons = manyIcons
+        ms.IconPicker:Open(manyIcons[160], function() end)
+        assert(ms.IconPicker.topRow == 15 and ms.IconPicker.buttons[40].iconValue == manyIcons[160],
+            "opening a last-page icon should show its row and synchronize the native thumb")
+        ms.IconPicker.scrollBar:SetScrollPercentage(0)
+        assert(ms.IconPicker.topRow == 0 and ms.IconPicker.buttons[1].iconValue == manyIcons[1],
+            "dragging the thumb to the beginning should repaint the first grid page")
+        ms.IconPicker.scrollBar:ScrollStepInDirection(1)
+        assert(ms.IconPicker.topRow == 1 and ms.IconPicker.buttons[1].iconValue == manyIcons[9],
+            "a native arrow step should move exactly one icon row")
+        ms.IconPicker.grid:TriggerScript("OnMouseWheel", -1)
+        assert(ms.IconPicker.topRow == 4,
+            "wheel scrolling after an arrow step should advance three rows")
+        ms.IconPicker.grid:TriggerScript("OnMouseWheel", -100)
+        assert(ms.IconPicker.topRow == 15,
+            "wheel scrolling should stop at the final page")
+        ms.IconPicker.icons = savedPickerIcons
+        ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
+        assert(ms.IconPicker.topRow == 0 and ms.IconPicker.scrollBar.scrollPercentage == 0,
+            "reopening a short icon list should reset a previously scrolled thumb")
         ms.MacroDialog:Close()
         assert(ms:GetSearchQuery() == "account" and searchBox:GetText() == "account",
             "closing the modal should restore interaction without clearing search")
@@ -1380,7 +1526,46 @@ def run_ui_smoke(root):
         SlashCmdList.MACROSTUDIO("")
         assert(SlashCmdList.MACROSTUDIO ~= nil,
             "a takeover collision must leave the dedicated /ms command operational")
+
+        -- Appearance changes are pending until reload and must not discard data.
+        ms.Editor:SetEditorText(ms.Editor.savedBody)
+        local originalAppearance = ms.Theme.activeAppearance
+        local otherAppearance = originalAppearance == "legacy" and "warcraft" or "legacy"
+        local dataBeforeAppearance = { ms.db.metadata, ms.db.categories, ms.db.characterLibrary, ms.db.settings.window }
+        assert(not ms.Theme:HasPendingAppearance() and not ms.Settings.reloadButton:IsShown(),
+            "the saved startup appearance should not require a reload")
+        assert(not ms.Settings:SetAppearance("unknown") and ms.db.settings.appearance == originalAppearance,
+            "unsupported appearance values should not overwrite preferences")
+        ms.Settings[otherAppearance .. "Button"]:TriggerScript("OnClick")
+        assert(ms.db.settings.appearance == otherAppearance and ms.Theme.activeAppearance == originalAppearance
+                and ms.Theme:HasPendingAppearance() and ms.Settings.reloadButton:IsShown()
+                and reloadCalls == 0,
+            "choosing an appearance should persist it without an automatic reload or changing live frames")
+        ms.Editor.editBox:SetUserText("/say unsaved appearance test")
+        ms.Settings:Refresh()
+        assert(not ms.Settings.reloadButton:IsEnabled() and not ms.Settings:ApplyAppearance()
+                and reloadCalls == 0 and ms.Editor:GetBody() == "/say unsaved appearance test",
+            "appearance reload must not discard an unsaved editor draft")
+        ms.Editor:SetEditorText(ms.Editor.savedBody)
+        ms.MacroDialog:Open({ scope = "ACCOUNT", name = "Appearance", body = "/say keep this form" })
+        ms.Settings:Refresh()
+        assert(not ms.Settings.reloadButton:IsEnabled() and not ms.Settings:ApplyAppearance()
+                and reloadCalls == 0 and ms.MacroDialog.bodyBox:GetText() == "/say keep this form",
+            "appearance reload must preserve an open macro creation form")
+        ms.MacroDialog:Close()
+        ms.Settings:Refresh()
+        assert(ms.Settings.reloadButton:IsEnabled() and ms.Settings:ApplyAppearance() and reloadCalls == 1,
+            "a clean draft should allow the explicit reload action")
+        ms.Database:Initialize()
+        assert(ms.db.settings.appearance == otherAppearance and ms.db.metadata == dataBeforeAppearance[1]
+                and ms.db.categories == dataBeforeAppearance[2] and ms.db.characterLibrary == dataBeforeAppearance[3]
+                and ms.db.settings.window == dataBeforeAppearance[4],
+            "appearance selection must preserve macro metadata, categories, snapshots and window settings")
+        ms.Settings[originalAppearance .. "Button"]:TriggerScript("OnClick")
+        assert(not ms.Theme:HasPendingAppearance() and not ms.Settings.reloadButton:IsShown(),
+            "selecting the active appearance again should cancel the pending change")
         """,
         "@ui-smoke",
     )
     smoke("MacroStudio", namespace)
+    print(f"PASS full UI behavior suite ({appearance} appearance)")

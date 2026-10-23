@@ -7,12 +7,12 @@ local Editor = {
 }
 MacroStudio.Editor = Editor
 
-local NORMAL_COLOR = { 0.82, 0.86, 0.92 }
-local WARNING_COLOR = { 1, 0.68, 0.2 }
-local ERROR_COLOR = { 1, 0.3, 0.3 }
-local SUCCESS_COLOR = { 0.35, 0.9, 0.45 }
-local EDITOR_BORDER_NORMAL = { 0.18, 0.22, 0.28, 1 }
-local EDITOR_BORDER_FOCUSED = { 0.25, 0.62, 1, 1 }
+local NORMAL_COLOR = MacroStudio.Theme.palette.text
+local WARNING_COLOR = MacroStudio.Theme.palette.warning
+local ERROR_COLOR = MacroStudio.Theme.palette.error
+local SUCCESS_COLOR = MacroStudio.Theme.palette.success
+local EDITOR_BORDER_NORMAL = MacroStudio.Theme.palette.border
+local EDITOR_BORDER_FOCUSED = MacroStudio.Theme.palette.focus
 
 local function formatSlots(slots)
     local labels = {}
@@ -35,10 +35,9 @@ local function createPopupMenu(parent, width)
 end
 
 local function createMenuRow(menu)
-    local row = CreateFrame("Button", nil, menu, "BackdropTemplate")
+    local row = MacroStudio.Theme:CreateRowFrame(menu)
     row:SetHeight(23)
-    row:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    row:SetBackdropColor(0.065, 0.08, 0.105, 1)
+    MacroStudio.Theme:Row(row)
 
     local text = MacroStudio.Helpers:CreateLabel(row, "GameFontNormalSmall", "")
     text:SetPoint("LEFT", 7, 0)
@@ -48,10 +47,10 @@ local function createMenuRow(menu)
     row.Text = text
 
     row:SetScript("OnEnter", function(button)
-        button:SetBackdropColor(0.12, 0.24, 0.34, 1)
+        MacroStudio.Theme:RowState(button, true)
     end)
     row:SetScript("OnLeave", function(button)
-        button:SetBackdropColor(0.065, 0.08, 0.105, 1)
+        MacroStudio.Theme:RowState(button)
     end)
     return row
 end
@@ -63,20 +62,15 @@ function Editor:SetEditorFocusBorder(focused)
 
     self.editorFocusBorderActive = focused and true or false
     local color = self.editorFocusBorderActive and EDITOR_BORDER_FOCUSED or EDITOR_BORDER_NORMAL
-    self.editBorder:SetBackdropBorderColor(unpack(color))
     MacroStudio.Helpers:SetOverlayBorderColor(self.editorFocusBorderEdges, unpack(color))
 end
 
 
 function Editor:CreateFavoriteButton(parent)
-    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    button:SetSize(120, 26)
-    button:SetPoint("TOPRIGHT", -14, -42)
-    button:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
+    local button = MacroStudio.Theme:IsLegacy() and MacroStudio.Theme:CreateFavoriteButton(parent)
+        or MacroStudio.Helpers:CreateButton(parent)
+    button:SetSize(98, 22)
+    button:SetPoint("TOPRIGHT", -10, -37)
 
     local icon = button:CreateTexture(nil, "ARTWORK")
     icon:SetSize(17, 17)
@@ -98,15 +92,16 @@ function Editor:CreateFavoriteButton(parent)
 end
 
 function Editor:Create(parent)
-    local panel = MacroStudio.Helpers:CreatePanel(parent)
+    local panel = MacroStudio.Helpers:CreateRegion(parent)
     self.panel = panel
 
-    local heading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "EDITOR")
-    heading:SetPoint("TOPLEFT", 14, -14)
+    local heading = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormal", "Macro Editor")
+    heading:SetPoint("TOPLEFT", 10, -10)
+    MacroStudio.Theme:Section(panel, heading)
 
     local dirtyText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormal", "")
     dirtyText:SetPoint("LEFT", heading, "RIGHT", 12, 0)
-    dirtyText:SetTextColor(1, 0.68, 0.2)
+    dirtyText:SetTextColor(unpack(MacroStudio.Theme.palette.warning))
     self.dirtyText = dirtyText
 
     local usageButton = CreateFrame("Button", nil, panel)
@@ -115,7 +110,7 @@ function Editor:Create(parent)
     local usageText = MacroStudio.Helpers:CreateLabel(usageButton, "GameFontNormalSmall", "")
     usageText:SetAllPoints(usageButton)
     usageText:SetJustifyH("RIGHT")
-    usageText:SetTextColor(0.35, 0.75, 1)
+    usageText:SetTextColor(unpack(MacroStudio.Theme.palette.gold))
     usageButton.Text = usageText
     usageButton:Hide()
     MacroStudio.Helpers:SetButtonTooltip(usageButton)
@@ -125,8 +120,8 @@ function Editor:Create(parent)
     self.usageButton = usageButton
 
     local iconButton = CreateFrame("Button", nil, panel)
-    iconButton:SetSize(46, 46)
-    iconButton:SetPoint("TOPLEFT", 14, -43)
+    iconButton:SetSize(38, 38)
+    iconButton:SetPoint("TOPLEFT", 10, -38)
     local icon = iconButton:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints(iconButton)
     icon:SetTexture(MacroStudio.DEFAULT_ICON)
@@ -135,6 +130,7 @@ function Editor:Create(parent)
     iconHighlight:SetAllPoints(iconButton)
     iconHighlight:SetColorTexture(1, 1, 1, 0.2)
     iconButton.Icon = icon
+    MacroStudio.Theme:IconBorder(iconButton, icon)
     iconButton:SetScript("OnClick", function()
         self:ChooseIcon()
     end)
@@ -143,8 +139,8 @@ function Editor:Create(parent)
     self.icon = icon
 
     local offlineIcon = panel:CreateTexture(nil, "ARTWORK")
-    offlineIcon:SetSize(46, 46)
-    offlineIcon:SetPoint("TOPLEFT", 14, -43)
+    offlineIcon:SetSize(38, 38)
+    offlineIcon:SetPoint("TOPLEFT", 10, -38)
     offlineIcon:SetTexture(MacroStudio.DEFAULT_ICON)
     offlineIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     offlineIcon:Hide()
@@ -153,21 +149,22 @@ function Editor:Create(parent)
     local favoriteButton = self:CreateFavoriteButton(panel)
     self.favoriteButton = favoriteButton
 
-    local deleteButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    deleteButton:SetSize(110, 21)
-    deleteButton:SetPoint("TOPRIGHT", -14, -73)
+    local deleteButton = MacroStudio.Helpers:CreateButton(panel)
+    deleteButton:SetSize(98, 21)
+    deleteButton:SetPoint("TOPRIGHT", -10, -63)
+    deleteButton.macroStudioRole = "danger"
     deleteButton:SetText("Delete Macro")
     deleteButton:SetScript("OnClick", function()
         MacroStudio:RequestDeleteSelectedMacro()
     end)
     self.deleteButton = deleteButton
 
-    local nameBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    local nameBox = MacroStudio.Helpers:CreateInput(panel)
     nameBox:SetHeight(24)
-    nameBox:SetPoint("TOPLEFT", 72, -40)
+    nameBox:SetPoint("TOPLEFT", 58, -36)
     nameBox:SetPoint("TOPRIGHT", favoriteButton, "TOPLEFT", -10, 0)
     nameBox:SetAutoFocus(false)
-    nameBox:SetFontObject(GameFontNormalLarge)
+    nameBox:SetFontObject(GameFontHighlight)
     nameBox:SetMaxLetters(MacroStudio.MAX_NAME_LENGTH)
     nameBox:SetText("No macro selected")
     nameBox:SetScript("OnEscapePressed", function(box)
@@ -179,7 +176,7 @@ function Editor:Create(parent)
     self.nameBox = nameBox
 
     local offlineNameText = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalLarge", "")
-    offlineNameText:SetPoint("TOPLEFT", 72, -43)
+    offlineNameText:SetPoint("TOPLEFT", 58, -38)
     offlineNameText:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -14, -43)
     offlineNameText:SetJustifyH("LEFT")
     offlineNameText:SetWordWrap(false)
@@ -189,15 +186,15 @@ function Editor:Create(parent)
     local scopeText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "Select a macro from the list.")
     scopeText:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", 0, -3)
     scopeText:SetPoint("RIGHT", deleteButton, "LEFT", -8, 0)
-    scopeText:SetTextColor(0.6, 0.68, 0.78)
+    MacroStudio.Theme:SecondaryText(scopeText)
     scopeText:SetWordWrap(false)
     self.scopeText = scopeText
 
     local categoryLabel = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "Category:")
-    categoryLabel:SetPoint("TOPLEFT", 14, -101)
+    categoryLabel:SetPoint("TOPLEFT", 10, -94)
     self.categoryLabel = categoryLabel
 
-    local categoryButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local categoryButton = MacroStudio.Helpers:CreateButton(panel)
     categoryButton:SetSize(170, 22)
     categoryButton:SetPoint("LEFT", categoryLabel, "RIGHT", 8, 0)
     categoryButton:SetText("Uncategorized")
@@ -207,19 +204,19 @@ function Editor:Create(parent)
     self.categoryButton = categoryButton
 
     local tagsLabel = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "Tags:")
-    tagsLabel:SetPoint("TOPLEFT", 14, -132)
+    tagsLabel:SetPoint("TOPLEFT", 10, -120)
     self.tagsLabel = tagsLabel
 
-    local addTagButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local addTagButton = MacroStudio.Helpers:CreateButton(panel)
     addTagButton:SetSize(66, 22)
-    addTagButton:SetPoint("TOPRIGHT", -14, -124)
+    addTagButton:SetPoint("TOPRIGHT", -10, -113)
     addTagButton:SetText("+ Add")
     addTagButton:SetScript("OnClick", function()
         self:ToggleAddTagMenu()
     end)
     self.addTagButton = addTagButton
 
-    local removeTagButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local removeTagButton = MacroStudio.Helpers:CreateButton(panel)
     removeTagButton:SetSize(76, 22)
     removeTagButton:SetPoint("RIGHT", addTagButton, "LEFT", -6, 0)
     removeTagButton:SetText("Remove")
@@ -233,21 +230,20 @@ function Editor:Create(parent)
     tagsText:SetPoint("RIGHT", removeTagButton, "LEFT", -8, 0)
     tagsText:SetJustifyH("LEFT")
     tagsText:SetWordWrap(false)
-    tagsText:SetTextColor(0.68, 0.76, 0.86)
+    tagsText:SetTextColor(unpack(MacroStudio.Theme.palette.text))
     self.tagsText = tagsText
 
     local duplicateText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "")
-    duplicateText:SetPoint("TOPLEFT", 14, -158)
-    duplicateText:SetPoint("TOPRIGHT", -14, -158)
+    duplicateText:SetPoint("TOPLEFT", 10, -143)
+    duplicateText:SetPoint("TOPRIGHT", -10, -143)
     duplicateText:SetJustifyH("LEFT")
     duplicateText:SetWordWrap(false)
     duplicateText:SetTextColor(unpack(WARNING_COLOR))
     self.duplicateText = duplicateText
 
-    local editBorder = MacroStudio.Helpers:CreatePanel(panel)
-    editBorder:SetPoint("TOPLEFT", 14, -181)
-    editBorder:SetPoint("BOTTOMRIGHT", -14, 70)
-    editBorder:SetBackdropColor(0.018, 0.024, 0.035, 1)
+    local editBorder = MacroStudio.Helpers:CreateEditorInset(panel)
+    editBorder:SetPoint("TOPLEFT", 10, -164)
+    editBorder:SetPoint("BOTTOMRIGHT", -10, 65)
     self.editBorder = editBorder
 
     local editorHost, editBox, scrollBox, scrollBar = MacroStudio.Helpers:CreateNativeScrollingEditBox(editBorder, 5)
@@ -257,7 +253,7 @@ function Editor:Create(parent)
     self.editBox = editBox
 
     editBox:SetFontObject(ChatFontNormal)
-    editBox:SetTextColor(0.9, 0.92, 0.96)
+    editBox:SetTextColor(unpack(MacroStudio.Theme.palette.text))
     editBox:SetTextInsets(6, 6, 6, 6)
     editBox:SetJustifyH("LEFT")
     editBox:SetJustifyV("TOP")
@@ -328,14 +324,16 @@ function Editor:Create(parent)
     countText:SetPoint("BOTTOMLEFT", 14, 43)
     self.countText = countText
 
-    local stateText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "No macro selected.")
+    local stateText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlight", "No macro selected.")
     stateText:SetPoint("BOTTOMLEFT", 14, 19)
     stateText:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -190, 19)
     stateText:SetJustifyH("LEFT")
     stateText:SetWordWrap(false)
+    stateText:SetShadowColor(0, 0, 0, 0.9)
+    stateText:SetShadowOffset(1, -1)
     self.stateText = stateText
 
-    local saveButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local saveButton = MacroStudio.Helpers:CreateButton(panel)
     saveButton:SetSize(82, 24)
     saveButton:SetPoint("BOTTOMRIGHT", -14, 16)
     saveButton:SetText("Save")
@@ -344,7 +342,7 @@ function Editor:Create(parent)
     end)
     self.saveButton = saveButton
 
-    local revertButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local revertButton = MacroStudio.Helpers:CreateButton(panel)
     revertButton:SetSize(82, 24)
     revertButton:SetPoint("RIGHT", saveButton, "LEFT", -8, 0)
     revertButton:SetText("Revert")
@@ -352,7 +350,7 @@ function Editor:Create(parent)
         MacroStudio:RevertSelectedMacro()
     end)
     self.revertButton = revertButton
-    local copyButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local copyButton = MacroStudio.Helpers:CreateButton(panel)
     copyButton:SetSize(190, 24)
     copyButton:SetPoint("TOPRIGHT", -14, -9)
     copyButton:SetText("Copy to Current Character")
@@ -431,8 +429,8 @@ function Editor:SetMacro(macro)
 
     self.scopeText:ClearAllPoints()
     if offline then
-        self.scopeText:SetPoint("TOPLEFT", self.panel, "TOPLEFT", 72, -66)
-        self.scopeText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -14, -66)
+        self.scopeText:SetPoint("TOPLEFT", self.panel, "TOPLEFT", 58, -62)
+        self.scopeText:SetPoint("TOPRIGHT", self.panel, "TOPRIGHT", -10, -62)
         self.scopeText:SetWordWrap(true)
     else
         self.scopeText:SetPoint("TOPLEFT", self.nameBox, "BOTTOMLEFT", 0, -3)
@@ -852,8 +850,7 @@ function Editor:RefreshMetadata()
     self.favoriteButton.Icon:SetDesaturated(not presentation.favorite)
     self.favoriteButton.Icon:SetAlpha(presentation.favorite and 1 or 0.45)
     self.favoriteButton.Text:SetText(presentation.favorite and "Favorited" or "Favorite")
-    self.favoriteButton:SetBackdropColor(presentation.favorite and 0.22 or 0.06, presentation.favorite and 0.16 or 0.08, 0.05, 1)
-    self.favoriteButton:SetBackdropBorderColor(presentation.favorite and 1 or 0.24, presentation.favorite and 0.65 or 0.28, 0.12, 1)
+    MacroStudio.Theme:ToggleButton(self.favoriteButton, presentation.favorite)
     self.categoryButton:SetText(presentation.categoryName)
     self.tagsText:SetText(#presentation.tags > 0 and table.concat(presentation.tags, ", ") or "None")
 

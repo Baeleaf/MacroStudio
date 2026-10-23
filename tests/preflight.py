@@ -29,7 +29,8 @@ def load_addon_file(relative_path: str, namespace):
 
 
 for lua_path in sorted(ROOT.rglob("*.lua")):
-    compile_lua(lua_path)
+    if ".artifacts" not in lua_path.parts:
+        compile_lua(lua_path)
 
 lua.execute(
     r"""
@@ -202,6 +203,8 @@ namespace.Print = lua.eval("function() end")
 globals_.MacroStudioDB = None
 
 load_addon_file("Utils/Helpers.lua", namespace)
+load_addon_file("UI/WarcraftTheme.lua", namespace)
+load_addon_file("UI/LegacyTheme.lua", namespace)
 load_addon_file("Database.lua", namespace)
 load_addon_file("MacroRepository.lua", namespace)
 load_addon_file("CharacterMacroLibrary.lua", namespace)
@@ -248,6 +251,16 @@ library_tests = load(
     assert(type(MacroStudioDB.characterLibrary.characters) == "table"
             and type(MacroStudioDB.characterLibrary.order) == "table",
         "migration should create the character library store")
+    assert(MacroStudioDB.settings.appearance == "warcraft",
+        "existing data without an appearance choice should default to the accepted design")
+    MacroStudioDB.settings.appearance = "legacy"
+    ms.Database:Initialize()
+    assert(MacroStudioDB.settings.appearance == "legacy" and MacroStudioDB.settings.window.x == 27,
+        "initialization should preserve an explicit legacy preference and existing settings")
+    MacroStudioDB.settings.appearance = "invalid"
+    ms.Database:Initialize()
+    assert(MacroStudioDB.settings.appearance == "warcraft",
+        "an invalid appearance should safely fall back to the default")
     local migratedLibrary = MacroStudioDB.characterLibrary
     ms.Database:Initialize()
     assert(MacroStudioDB.characterLibrary == migratedLibrary
@@ -763,6 +776,26 @@ tests = load(
     ms.activeFilter = { kind = "all" }
     ms.searchQuery = ""
 
+    local editsBeforeCategoryChanges = editCalls
+    local nativeBodyBeforeCategoryChanges = accountMacros[1].body
+    local renamedCategory, renameResult = metadata:RenameCategory(category.id, "Raid Plans")
+    assert(renamedCategory and renameResult.id == category.id
+            and metadata:GetPresentation(first).categoryId == category.id
+            and search:Matches(first, "raid plans") and not search:Matches(first, "mythic+"),
+        "category rename should retain assignments and update search without changing identity")
+    local otherCategory = metadata:CreateCategory("Other")
+    local duplicateRename = metadata:RenameCategory(category.id, "other")
+    assert(not duplicateRename and metadata:GetCategory(category.id).name == "Raid Plans",
+        "duplicate category rename should fail without changing the existing name")
+    assert(metadata:DeleteCategory(category.id), "release category delete")
+    local afterCategoryDelete = metadata:GetPresentation(first)
+    assert(afterCategoryDelete.categoryId == nil and afterCategoryDelete.favorite
+            and afterCategoryDelete.tags[1] == "Raid"
+            and metadata:GetCategory(otherCategory.id) ~= nil
+            and editsBeforeCategoryChanges == editCalls
+            and accountMacros[1].body == nativeBodyBeforeCategoryChanges,
+        "category deletion should remove only its assignment and preserve macros, Favorites and tags")
+
     local _, firstRecordId = metadata:GetRecordForMacro(first)
     metadata:OnMacroDeleted(first, firstRecordId)
     assert(metadata:GetRecords()[firstRecordId] == nil, "deleted macro metadata should be removed")
@@ -840,11 +873,20 @@ assert icon_relative.startswith(icon_prefix)
 runtime_icon = ROOT / icon_relative[len(icon_prefix):].replace("\\", "/")
 assert runtime_icon.is_file()
 icon_bytes = runtime_icon.read_bytes()
-assert len(icon_bytes) == 18 + (64 * 64 * 3)
-assert icon_bytes[2] == 2 and icon_bytes[16] == 24 and icon_bytes[17] & 0x20
+assert len(icon_bytes) == 18 + (64 * 64 * 4)
+assert icon_bytes[2] == 2 and icon_bytes[16] == 32 and icon_bytes[17] == 0x28
 assert int.from_bytes(icon_bytes[12:14], "little") == 64
 assert int.from_bytes(icon_bytes[14:16], "little") == 64
-source_logo = ROOT / "assets" / "logo-simple.png"
+assert icon_bytes[21] == 0, "the circular emblem's corner must be transparent"
+theme_source = (ROOT / "UI" / "WarcraftTheme.lua").read_text(encoding="utf-8")
+assert 'window = "PortraitFrameTemplate"' in theme_source
+assert 'dialog = "DefaultPanelTemplate"' in theme_source
+assert 'scrollBar = "WowTrimScrollBar"' in theme_source
+assert "InitScrollFrameWithScrollBar" in helpers_source
+assert "UIPanelScrollFrameTemplate" not in helpers_source
+assert "UIPanelScrollBarTemplate" not in icon_picker_source
+assert "Charcoal.tga" not in theme_source and "Button.tga" not in theme_source
+source_logo = ROOT / "assets" / "MacroStudioEmblem-256.png"
 source_logo_bytes = source_logo.read_bytes()
 assert source_logo_bytes[:8] == b"\x89PNG\r\n\x1a\n"
 assert source_logo_bytes[12:16] == b"IHDR"
@@ -878,7 +920,7 @@ assert 'self.emptyText:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -5, -y
 category_section_index = sidebar_source.index("self.categoriesHeading:ClearAllPoints()")
 library_section_index = sidebar_source.index("self.libraryHeading:ClearAllPoints()")
 assert '"ORGANIZATION"' not in sidebar_source
-assert 'scrollFrame:SetPoint("TOPLEFT", 10, -164)' in sidebar_source
+assert 'scrollFrame:SetPoint("TOPLEFT", 10, -143)' in sidebar_source
 assert category_section_index < library_section_index
 assert "characterLibraryExpanded" in sidebar_source
 assert "characterLibraryExpanded" not in library_source
@@ -948,9 +990,9 @@ assert 'settingsButton:HookScript("OnMouseUp"' in main_frame_source
 assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
-assert "## Interface: 120100" in toc_source
-assert "## Version: 1.2.0" in toc_source
-assert 'MacroStudio.VERSION = "1.2.0"' in core_source
+assert "## Interface: 120105" in toc_source
+assert "## Version: 1.3.0" in toc_source
+assert 'MacroStudio.VERSION = "1.3.0"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
@@ -988,5 +1030,6 @@ assert 'scope = "CHARACTER"' in main_frame_source and "CopySelectedSnapshotToCur
 assert "Offline character snapshots cannot be placed on action bars." in main_frame_source
 assert "does not delete any WoW macros" in dialogs_source
 assert "ActionBarRepository:GetUsage" not in snapshot_copy_source
-run_ui_smoke(ROOT)
+run_ui_smoke(ROOT, "warcraft")
+run_ui_smoke(ROOT, "legacy")
 print("PASS MacroStudio development preflight")

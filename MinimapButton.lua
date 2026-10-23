@@ -76,16 +76,11 @@ function MinimapButton:Create()
     button:RegisterForDrag("LeftButton")
 
     local icon = button:CreateTexture(nil, "BACKGROUND")
-    icon:SetSize(20, 20)
+    icon:SetSize(26, 26)
     icon:SetPoint("CENTER")
     icon:SetTexture(ICON)
-    icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
+    icon:SetTexCoord(0, 1, 0, 1)
     self.icon = icon
-
-    local border = button:CreateTexture(nil, "OVERLAY")
-    border:SetSize(54, 54)
-    border:SetPoint("TOPLEFT")
-    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
     button:SetScript("OnClick", function(_, buttonName)

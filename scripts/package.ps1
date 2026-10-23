@@ -59,6 +59,10 @@ try {
     if ($tocVersion -ne $Version) {
         throw "Requested package version '$Version' does not match MacroStudio.toc version '$tocVersion'."
     }
+    $coreVersionMatch = [regex]::Match((Get-Content -LiteralPath (Join-Path $repositoryRoot 'Core.lua') -Raw), 'MacroStudio\.VERSION\s*=\s*"([^"]+)"')
+    if (-not $coreVersionMatch.Success -or $coreVersionMatch.Groups[1].Value -ne $tocVersion) {
+        throw 'Core.lua displayed version must match the TOC and requested package version.'
+    }
     if ($null -eq $tocIconTexture) {
         throw 'MacroStudio.toc does not declare a ## IconTexture value.'
     }
@@ -67,6 +71,9 @@ try {
     $seenPaths = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
     [void]$runtimePaths.Add('MacroStudio.toc')
     [void]$seenPaths.Add('MacroStudio.toc')
+    # Preserve the MIT copyright and permission notice in every distribution.
+    [void]$runtimePaths.Add('LICENSE')
+    [void]$seenPaths.Add('LICENSE')
 
     $normalizedIconTexture = $tocIconTexture.Replace('/', '\')
     $iconPrefix = 'Interface\AddOns\MacroStudio\'
@@ -162,7 +169,7 @@ try {
     }
     Move-Item -LiteralPath $temporaryZipPath -Destination $zipPath
 
-    Write-Host "Packaged $($runtimePaths.Count) runtime files." -ForegroundColor Green
+    Write-Host "Packaged $($runtimePaths.Count) files (addon runtime and license)." -ForegroundColor Green
     Write-Output $zipPath
 }
 finally {
@@ -173,6 +180,11 @@ finally {
         Remove-Item -LiteralPath $temporaryZipPath -Force
     }
     if (Test-Path -LiteralPath $stagingRoot) {
-        Remove-Item -LiteralPath $stagingRoot -Recurse -Force
+        $resolvedStagingRoot = (Resolve-Path -LiteralPath $stagingRoot).Path
+        $expectedStagingRoot = [System.IO.Path]::GetFullPath((Join-Path ([System.IO.Path]::GetTempPath()) "MacroStudio-package-$packageId"))
+        if ($resolvedStagingRoot -ne $expectedStagingRoot) {
+            throw "Refusing to remove unexpected staging directory: $resolvedStagingRoot"
+        }
+        Remove-Item -LiteralPath $resolvedStagingRoot -Recurse -Force
     }
 }

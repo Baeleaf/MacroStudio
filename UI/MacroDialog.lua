@@ -6,14 +6,16 @@ local MacroDialog = {
 }
 MacroStudio.MacroDialog = MacroDialog
 
-local NORMAL_COLOR = { 0.82, 0.86, 0.92 }
-local WARNING_COLOR = { 1, 0.68, 0.2 }
-local ERROR_COLOR = { 1, 0.3, 0.3 }
+local NORMAL_COLOR = MacroStudio.Theme.palette.text
+local WARNING_COLOR = MacroStudio.Theme.palette.warning
+local ERROR_COLOR = MacroStudio.Theme.palette.error
 
 function MacroDialog:SetScope(scope)
     self.scope = scope == "CHARACTER" and "CHARACTER" or "ACCOUNT"
-    self.accountButton:SetText(self.scope == "ACCOUNT" and "Account (selected)" or "Account")
-    self.characterButton:SetText(self.scope == "CHARACTER" and "Character (selected)" or "Character")
+    self.accountButton:SetText("Account")
+    self.characterButton:SetText("Character")
+    MacroStudio.Theme:Tab(self.accountButton, self.scope == "ACCOUNT")
+    MacroStudio.Theme:Tab(self.characterButton, self.scope == "CHARACTER")
     self:UpdateState()
 end
 
@@ -108,8 +110,8 @@ function MacroDialog:Create()
         return self.frame
     end
 
-    local frame = MacroStudio.Helpers:CreatePanel(UIParent)
-    frame:SetSize(570, 555)
+    local frame = MacroStudio.Helpers:CreateWindow(UIParent)
+    frame:SetSize(550, 460)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetToplevel(true)
@@ -119,10 +121,9 @@ function MacroDialog:Create()
     frame:Hide()
     self.frame = frame
 
-    local titleBar = CreateFrame("Frame", nil, frame)
-    titleBar:SetPoint("TOPLEFT", 1, -1)
-    titleBar:SetPoint("TOPRIGHT", -1, -1)
-    titleBar:SetHeight(42)
+    local titleBar = frame.TitleContainer
+    titleBar.TitleText:Hide()
+    titleBar:SetHeight(MacroStudio.Theme.spacing.title)
     titleBar:EnableMouse(true)
     titleBar:RegisterForDrag("LeftButton")
     titleBar:SetScript("OnDragStart", function()
@@ -133,36 +134,36 @@ function MacroDialog:Create()
     end)
     self.titleBar = titleBar
 
-    local title = MacroStudio.Helpers:CreateLabel(titleBar, "GameFontNormalLarge", "Create New Native Macro")
+    local title = MacroStudio.Helpers:CreateLabel(titleBar, "GameFontNormalLarge", "Create Macro")
     title:SetPoint("LEFT", 15, 0)
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -3, -3)
 
     local nameLabel = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "Name")
-    nameLabel:SetPoint("TOPLEFT", 18, -53)
+    nameLabel:SetPoint("TOPLEFT", 14, -46)
 
-    local nameBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    nameBox:SetSize(310, 28)
-    nameBox:SetPoint("TOPLEFT", 18, -72)
+    local nameBox = MacroStudio.Helpers:CreateInput(frame)
+    nameBox:SetSize(310, 24)
+    nameBox:SetPoint("TOPLEFT", 14, -64)
     nameBox:SetMaxLetters(0)
     MacroStudio.Helpers:ConfigureEditBox(nameBox)
     self.nameBox = nameBox
 
     local scopeLabel = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "Scope")
-    scopeLabel:SetPoint("TOPLEFT", 18, -114)
+    scopeLabel:SetPoint("TOPLEFT", 14, -103)
 
-    local accountButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    accountButton:SetSize(160, 24)
-    accountButton:SetPoint("TOPLEFT", 18, -134)
+    local accountButton = MacroStudio.Helpers:CreateTab(frame)
+    accountButton:SetSize(MacroStudio.Theme:IsLegacy() and 160 or 120, 24)
+    accountButton:SetPoint("TOPLEFT", 14, -123)
     accountButton:SetScript("OnClick", function()
         self:SetScope("ACCOUNT")
     end)
     self.accountButton = accountButton
 
-    local characterButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    characterButton:SetSize(160, 24)
-    characterButton:SetPoint("LEFT", accountButton, "RIGHT", 8, 0)
+    local characterButton = MacroStudio.Helpers:CreateTab(frame)
+    characterButton:SetSize(MacroStudio.Theme:IsLegacy() and 160 or 120, 24)
+    characterButton:SetPoint("LEFT", accountButton, "RIGHT", 10, 0)
     characterButton:SetScript("OnClick", function()
         self:SetScope("CHARACTER")
     end)
@@ -173,24 +174,18 @@ function MacroDialog:Create()
     self.capacityText = capacityText
 
     local iconLabel = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "Icon")
-    iconLabel:SetPoint("TOPLEFT", 18, -176)
+    iconLabel:SetPoint("TOPLEFT", 350, -46)
 
-    local iconButton = CreateFrame("Button", nil, frame, "BackdropTemplate")
-    iconButton:SetSize(50, 50)
-    iconButton:SetPoint("TOPLEFT", 18, -196)
-    iconButton:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    iconButton:SetBackdropColor(0.04, 0.05, 0.07, 1)
-    iconButton:SetBackdropBorderColor(0.3, 0.55, 0.8, 1)
+    local iconButton = CreateFrame("Button", nil, frame)
+    iconButton:SetSize(38, 38)
+    iconButton:SetPoint("TOPLEFT", 350, -64)
 
     local iconTexture = iconButton:CreateTexture(nil, "ARTWORK")
     iconTexture:SetPoint("TOPLEFT", 4, -4)
     iconTexture:SetPoint("BOTTOMRIGHT", -4, 4)
     iconTexture:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     self.iconTexture = iconTexture
+    MacroStudio.Theme:IconBorder(iconButton, iconTexture)
 
     iconButton:SetScript("OnClick", function()
         MacroStudio.IconPicker:Open(self.selectedIcon, function(icon)
@@ -203,7 +198,7 @@ function MacroDialog:Create()
         "The question-mark icon supports normal #showtooltip behavior."
     )
 
-    local chooseIcon = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local chooseIcon = MacroStudio.Helpers:CreateButton(frame)
     chooseIcon:SetSize(126, 24)
     chooseIcon:SetPoint("LEFT", iconButton, "RIGHT", 10, 0)
     chooseIcon:SetText("Choose Icon")
@@ -212,12 +207,11 @@ function MacroDialog:Create()
     end)
 
     local bodyLabel = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "Body")
-    bodyLabel:SetPoint("TOPLEFT", 18, -266)
+    bodyLabel:SetPoint("TOPLEFT", 14, -157)
 
-    local bodyBorder = MacroStudio.Helpers:CreatePanel(frame)
-    bodyBorder:SetPoint("TOPLEFT", 18, -287)
-    bodyBorder:SetPoint("BOTTOMRIGHT", -18, 90)
-    bodyBorder:SetBackdropColor(0.018, 0.024, 0.035, 1)
+    local bodyBorder = MacroStudio.Helpers:CreateEditorInset(frame)
+    bodyBorder:SetPoint("TOPLEFT", 14, -177)
+    bodyBorder:SetPoint("BOTTOMRIGHT", -14, 76)
 
     local bodyHost, bodyBox, bodyScrollBox, bodyScrollBar =
         MacroStudio.Helpers:CreateNativeScrollingEditBox(bodyBorder, 5)
@@ -227,6 +221,15 @@ function MacroDialog:Create()
     self.bodyBox = bodyBox
 
     bodyBox:SetFontObject(ChatFontNormal)
+    bodyBox:SetTextColor(unpack(NORMAL_COLOR))
+    local _, focusEdges = MacroStudio.Helpers:CreateOverlayBorder(bodyBorder, bodyScrollBar, 2)
+    MacroStudio.Helpers:SetOverlayBorderColor(focusEdges, unpack(MacroStudio.Theme.palette.border))
+    bodyBox:HookScript("OnEditFocusGained", function()
+        MacroStudio.Helpers:SetOverlayBorderColor(focusEdges, unpack(MacroStudio.Theme.palette.focus))
+    end)
+    bodyBox:HookScript("OnEditFocusLost", function()
+        MacroStudio.Helpers:SetOverlayBorderColor(focusEdges, unpack(MacroStudio.Theme.palette.border))
+    end)
     bodyBox:SetTextInsets(6, 6, 6, 6)
     bodyBox:SetJustifyH("LEFT")
     bodyBox:SetJustifyV("TOP")
@@ -235,17 +238,17 @@ function MacroDialog:Create()
     end)
 
     local countText = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "0 / 255")
-    countText:SetPoint("BOTTOMLEFT", 18, 63)
+    countText:SetPoint("BOTTOMLEFT", 14, 54)
     self.countText = countText
 
     local errorText = MacroStudio.Helpers:CreateLabel(frame, "GameFontHighlightSmall", "")
-    errorText:SetPoint("BOTTOMLEFT", 18, 39)
-    errorText:SetPoint("BOTTOMRIGHT", -18, 39)
+    errorText:SetPoint("BOTTOMLEFT", 14, 36)
+    errorText:SetPoint("BOTTOMRIGHT", -14, 36)
     errorText:SetJustifyH("LEFT")
     errorText:SetWordWrap(false)
     self.errorText = errorText
 
-    local createButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local createButton = MacroStudio.Helpers:CreateButton(frame)
     createButton:SetSize(104, 26)
     createButton:SetPoint("BOTTOMRIGHT", -18, 10)
     createButton:SetText("Create Macro")
@@ -254,7 +257,7 @@ function MacroDialog:Create()
     end)
     self.createButton = createButton
 
-    local cancelButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local cancelButton = MacroStudio.Helpers:CreateButton(frame)
     cancelButton:SetSize(86, 26)
     cancelButton:SetPoint("RIGHT", createButton, "LEFT", -8, 0)
     cancelButton:SetText("Cancel")
