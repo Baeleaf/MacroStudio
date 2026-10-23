@@ -21,6 +21,19 @@ The packaged-addon live smoke checklist and measured release results are in
 `RELEASE-1.3.0.md`. Historical milestone/version checks below remain records of
 their original scope; they are not the current release version.
 
+## Player-facing release notes
+
+Before tagging a release, update `RELEASE-NOTES.md` with that version's short
+player-facing notes. `.pkgmeta` selects it as a Markdown `manual-changelog`,
+replacing CurseForge's automatically generated Git history. Keep it focused on
+the current version; retain historical details in `CHANGELOG.md`. The notes file
+must be committed in the release tag, or the packager falls back to Git logs.
+
+This configuration does not rewrite notes on files already uploaded to
+CurseForge. Use Author Dashboard → project → Files → Edit file to replace an
+existing file's changelog. Match the notes to that file's version. Do not move
+an existing release tag just to update changelog text.
+
 ## Automated preflight
 
 With Python 3 and `lupa` installed, run from the addon root:

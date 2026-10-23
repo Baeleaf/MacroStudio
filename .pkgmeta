@@ -1,6 +1,10 @@
 package-as: MacroStudio
 license-output: LICENSE
 
+manual-changelog:
+  filename: RELEASE-NOTES.md
+  markup-type: markdown
+
 ignore:
   - .github
   - assets
