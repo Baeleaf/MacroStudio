@@ -62,7 +62,9 @@ The analyzer suite covers 47 fixtures plus isolation, repeated edits/fresh resul
 
 ### Retail in-game acceptance checklist (pending; not performed by Codex)
 
-Use a disposable macro. This feature branch keeps the release version at 1.3.0; identify the test build by its `feature/macro-linting` checkout and the new footer indicator. Do not test by executing Lua or malformed macros.
+Use a disposable macro. The current test build displays **v1.4.0-dev.ms10.1** in the title and declares the same development version in its addon manifest. After updating the checkout, finish any unsaved editing, run `/reload`, open `/ms`, and confirm that exact label before testing. Do not test by executing Lua or malformed macros.
+
+Owner screenshots on 2026-10-24 confirmed that the lint summary and Macro Diagnostics tooltip loaded in-game before the development label was added. Verification of the new version label and the remaining acceptance checks are pending; this is not full live-client sign-off.
 
 1. Open `/ms`, select a macro, and confirm **No issues detected** appears beside the character count. Resize to minimum and larger sizes; check that the count, summary, Save/Revert and complete editor remain readable.
 2. Type `/cast [harm Moonfire` without saving. Confirm **1 error**; hover for `UNCLOSED_CONDITIONAL`, line 1, column 7, and a repair explanation. Change it to `/cast [harm] Moonfire`; the error should disappear immediately without reload.

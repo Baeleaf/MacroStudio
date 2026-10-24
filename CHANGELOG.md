@@ -12,6 +12,10 @@ Notable user-facing changes to MacroStudio are documented here.
 
 Static checks cannot guarantee gameplay or combat success. Lua syntax validation and broader command support remain follow-up work.
 
+### Changed
+
+- Identify the Milestone 10 test build as `1.4.0-dev.ms10.1` in the title and addon manifest, distinguishing it from the live 1.3.0 release.
+
 ## 1.3.0
 
 ### Added

@@ -5,6 +5,7 @@ then WoW API stubs exercise repository mutation, metadata, and section filters.
 """
 
 from pathlib import Path
+import re
 
 from lupa.lua51 import LuaRuntime
 
@@ -992,8 +993,10 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120105" in toc_source
-assert "## Version: 1.3.0" in toc_source
-assert 'MacroStudio.VERSION = "1.3.0"' in core_source
+toc_version = re.search(r"^## Version:\s*(\S+)", toc_source, re.MULTILINE).group(1)
+core_version = re.search(r'MacroStudio\.VERSION\s*=\s*"([^"]+)"', core_source).group(1)
+assert re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", toc_version)
+assert core_version == toc_version, "Displayed version must match the addon manifest, including development suffix"
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source
