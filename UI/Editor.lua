@@ -324,6 +324,35 @@ function Editor:Create(parent)
     countText:SetPoint("BOTTOMLEFT", 14, 43)
     self.countText = countText
 
+    local lintButton = CreateFrame("Button", nil, panel)
+    lintButton:SetPoint("BOTTOMLEFT", countText, "BOTTOMRIGHT", 12, -2)
+    lintButton:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, 41)
+    lintButton:SetHeight(20)
+    lintButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    lintButton:EnableMouseWheel(true)
+    local lintText = MacroStudio.Helpers:CreateLabel(lintButton, "GameFontNormalSmall", "")
+    lintText:SetAllPoints(lintButton)
+    lintText:SetJustifyH("RIGHT")
+    lintText:SetWordWrap(false)
+    lintButton.Text = lintText
+    lintButton:SetScript("OnEnter", function()
+        self.lintHovered = true
+        self:ShowLintTooltip()
+    end)
+    lintButton:SetScript("OnLeave", function()
+        self:HideLintTooltip()
+    end)
+    lintButton:SetScript("OnHide", function()
+        self:HideLintTooltip()
+    end)
+    lintButton:SetScript("OnClick", function(_, button)
+        self:StepLintFinding(button == "RightButton" and -1 or 1)
+    end)
+    lintButton:SetScript("OnMouseWheel", function(_, delta)
+        self:StepLintFinding(delta > 0 and -1 or 1)
+    end)
+    self.lintButton = lintButton
+
     local stateText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlight", "No macro selected.")
     stateText:SetPoint("BOTTOMLEFT", 14, 19)
     stateText:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -190, 19)
@@ -378,6 +407,59 @@ function Editor:Create(parent)
     self.externalConflict = false
     self:Clear()
     return panel
+end
+
+function Editor:HideLintTooltip()
+    if self.lintHovered then
+        MacroStudio.Helpers:HideTooltip()
+    end
+    self.lintHovered = false
+end
+
+function Editor:ShowLintTooltip()
+    if not self.macro then return end
+    local diagnostics = self.diagnostics or {}
+    local finding = diagnostics[self.lintFinding or 1]
+    local text = "Advisory static checks only. No issues detected does not guarantee gameplay or combat success."
+    if finding then
+        text = string.format("%s - Line %d, column %d\n%s\n%s\n\nFinding %d of %d. Click/scroll for next; right-click/scroll up for previous.\n\n%s",
+            finding.severity, finding.line, finding.column, finding.code, finding.message,
+            self.lintFinding, #diagnostics, text)
+    end
+    MacroStudio.Helpers:ShowTooltip(self.lintButton, "Macro Diagnostics", text)
+end
+
+function Editor:StepLintFinding(step)
+    local count = #(self.diagnostics or {})
+    if count > 0 then
+        self.lintFinding = ((self.lintFinding or 1) - 1 + step) % count + 1
+    end
+    self:ShowLintTooltip()
+end
+
+function Editor:UpdateLint(body)
+    if self.lintBody ~= body or self.lintMacro ~= self.macro then
+        self.lintBody = body
+        self.lintMacro = self.macro
+        self.diagnostics = self.macro and MacroStudio.MacroLinter:Analyze(body) or {}
+        self.lintFinding = 1
+    end
+    local errors, warnings, suggestions = 0, 0, 0
+    for _, finding in ipairs(self.diagnostics or {}) do
+        if finding.severity == "Error" then errors = errors + 1
+        elseif finding.severity == "Warning" then warnings = warnings + 1
+        else suggestions = suggestions + 1 end
+    end
+    local parts = {}
+    for _, entry in ipairs({ { errors, "error" }, { warnings, "warning" }, { suggestions, "suggestion" } }) do
+        if entry[1] > 0 then
+            parts[#parts + 1] = entry[1] .. " " .. entry[2] .. (entry[1] == 1 and "" or "s")
+        end
+    end
+    self.lintButton.Text:SetText(#parts > 0 and table.concat(parts, " · ") or "No issues detected")
+    self.lintButton.Text:SetTextColor(unpack(errors > 0 and ERROR_COLOR or warnings > 0 and WARNING_COLOR or NORMAL_COLOR))
+    self.lintButton:SetShown(self.macro ~= nil)
+    if self.lintHovered then self:ShowLintTooltip() end
 end
 
 function Editor:SetEditorText(text)
@@ -569,6 +651,7 @@ function Editor:UpdateEditorState(reason)
     local name = self:GetName()
     local icon = self:GetIcon()
     local body = self:GetBody()
+    self:UpdateLint(body)
     local nameDirty = hasMacro and not offline and name ~= self.savedName or false
     local iconDirty = hasMacro
         and not offline

@@ -10,6 +10,7 @@ from lupa.lua51 import LuaRuntime
 
 
 from ui_smoke import run_ui_smoke
+from macro_linter import run_linter_tests
 
 ROOT = Path(__file__).resolve().parents[1]
 lua = LuaRuntime(unpack_returned_tuples=True)
@@ -1030,6 +1031,7 @@ assert 'scope = "CHARACTER"' in main_frame_source and "CopySelectedSnapshotToCur
 assert "Offline character snapshots cannot be placed on action bars." in main_frame_source
 assert "does not delete any WoW macros" in dialogs_source
 assert "ActionBarRepository:GetUsage" not in snapshot_copy_source
+run_linter_tests(ROOT)
 run_ui_smoke(ROOT, "warcraft")
 run_ui_smoke(ROOT, "legacy")
 print("PASS MacroStudio development preflight")

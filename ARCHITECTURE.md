@@ -61,6 +61,7 @@ Core.lua
 |-- MetadataRepository.lua
 |-- Utils/Helpers.lua
 |-- Search.lua
+|-- MacroLinter.lua
 `-- UI/MainFrame.lua
     |-- UI/Dialogs.lua
     |-- UI/IconPicker.lua
@@ -79,6 +80,7 @@ Core.lua
 - `MetadataRepository.lua` owns virtual organization records, preserves them through trusted native identity edits, and removes the trusted record for a MacroStudio-deleted macro before reconciliation.
 - `Utils/Helpers.lua` centralizes Blizzard scrolling EditBox construction, exact overlay borders, mouse/focus configuration, tooltips, and disabled styling.
 - `Search.lua` performs read-only matching against native macro fields and attached metadata.
+- `MacroLinter.lua` analyzes text only and returns deterministic advisory diagnostics; it has no WoW API, execution, compiler, repository, or SavedVariables dependency.
 - `UI/Editor.lua` owns the unified name/icon/body draft, derives Save/Delete state, reuses the icon picker, and owns the editor's complete four-edge focus treatment.
 - `UI/MacroDialog.lua` derives Create state and owns the movable dialog and modal lifecycle.
 - `UI/IconPicker.lua` uses Blizzard's icon provider when available and compatible API fallbacks otherwise.
@@ -87,6 +89,38 @@ Core.lua
 - `UI/MainFrame.lua` coordinates selection, native mutations and pickup notices, organization refresh, dialogs, and the interaction-blocking modal overlay.
 
 UI modules never call raw native macro mutation or pickup APIs.
+
+## Milestone 10: advisory macro linting (unreleased)
+
+`MacroLinter:Analyze(body)` returns a fresh array of `{ code, severity, line, column, message }` records, ordered by line and column. Locations are 1-based; columns count Lua string bytes, not rendered glyphs. CRLF and CR line endings normalize to LF for analysis only. The analyzer never rewrites the supplied text. Error, Warning and Suggestion are presentation severities; the MVP emits only Error and Warning.
+
+The command allowlist is `/cast`, `/use`, and `/castsequence` (English spellings, case-insensitive). Each semicolon alternative is scanned for leading conditional groups. Empty `[]`, adjacent groups, whitespace-separated groups, unknown conditional names/values, and deliberate empty alternatives are accepted. Once an action payload begins, its brackets are opaque. Hyperlink data and labels are skipped when finding semicolon boundaries. Other commands, Lua, chat, and comments are ignored. This deliberately avoids a universal bracket validator or an incomplete list of valid conditional keywords.
+
+| Code | Severity | Trigger |
+| --- | --- | --- |
+| `UNCLOSED_CONDITIONAL` | Error | A leading conditional `[` is not closed before the alternative/line ends. |
+| `UNEXPECTED_CLOSE` | Error | A leading conditional prefix contains an unmatched `]`. |
+| `NESTED_CONDITIONAL` | Error | A conditional opens another `[` before its closing `]`. |
+| `MISSING_ARGUMENT` | Warning | No alternative has an action after its leading conditions; for `/castsequence`, a reset option alone also has no action. Suppressed on structurally malformed lines to avoid cascading noise. |
+| `DUPLICATE_SHOWTOOLTIP` | Warning | A second or subsequent standalone `#showtooltip` directive; each cites the first directive's line. |
+
+Missing arguments are warnings because a player may intentionally build a no-op. The analyzer does not flag individual empty alternatives, empty comma-separated sequence entries, unknown spells/items, reset values, aliases/localized command names, brackets inside action payloads, or runtime usability. A clean result means only that these supported checks found no issue. It does not establish that a macro works in gameplay or combat.
+
+### Editor integration and safety
+
+`UI/Editor.lua:UpdateEditorState` calls `UpdateLint` on the current EditBox body. The analysis cache is limited to the current body and selected record, so typing, unsuppressed text changes, Save/Revert, selection changes, clean external reloads and read-only snapshot restoration use the same path. Oversized drafts are analyzed too; no diagnostics are truncated. Work scales with text size (plus diagnostic sorting), and native macros remain limited to 255 characters by the existing validation. No timers, per-frame polling, persistence, or additional schema are introduced.
+
+The footer summary shares the character-count row without moving the editor inset. Hover shows one wrapped finding with severity, line, byte column, rule and an explanation. Click/scroll advances, right-click/scroll up goes back, and navigation wraps so every finding is reachable even for oversized pasted drafts. Editing resets the finding page and refreshes an open tooltip. Selection clearing hides the indicator. Both appearances use this shared controller and their existing palette/fonts.
+
+Lint does not set editor text, caret, selection, focus, native macros or saved data. Its diagnostics never enter the `canSave` expression, content validation, or repository mutations. Existing combat, length, exact-target, offline and conflict restrictions remain authoritative. Tooltip navigation does not navigate the caret or invoke a protected action.
+
+### Retail source research and Lua feasibility (2026-10-24)
+
+Reviewed the current extracted Blizzard UI `live` sources. [SlashCommands.lua](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_ChatFrameBase/Shared/SlashCommands.lua) sends cast/use options through `SecureCmdOptionParse`; the two handlers can resolve spells or items. It separately routes `/script` through policy checks and `RunScript`. MacroStudio calls none of those functions during analysis. [CastSequenceManager.lua](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_ChatFrameBase/Shared/CastSequenceManager.lua) parses secure options first, then a leading `reset=...` token and comma-separated actions. Neither source justifies treating every slash command as conditional syntax. These are source-level observations, not live-client validation or a guarantee for every Retail build.
+
+The [Lua 5.1 manual](https://www.lua.org/manual/5.1/manual.html#pdf-loadstring) defines `loadstring` as returning a compiled function or a syntax error. Compilation alone does not invoke that function. A future validator could compile only the text after `/run` or `/script` and discard the function, never calling it. It could report grammar errors only, not API availability, protected operations, combat restrictions, or runtime behavior. It must also reject binary chunks and handle source locations and client policy differences.
+
+Blizzard's [RestrictedExecution.lua](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_RestrictedAddOnEnvironment/RestrictedExecution.lua) uses internal `loadstring_untainted` with environment control to build restricted closures; that is not evidence of a supported addon validation API. We have not demonstrated normal-addon compiler availability/security behavior in the target client. Consequently Lua syntax checking is deferred, consistent with issue #1. The shipped linter never compiles or executes user input, and it never treats an entire macro as Lua. Follow-up work requires target-client compile-only verification, policy review and non-execution regression coverage before inclusion.
 
 ## Blizzard-owned and MacroStudio-owned data
 

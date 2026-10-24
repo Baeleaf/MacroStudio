@@ -50,6 +50,40 @@ The Milestone 7 harness additionally covers unified name/icon/body drafts, one-c
 
 The Milestone 8 harness additionally covers default slash takeover, exact native-handler restoration, native fallback, preserved refresh/debug commands, settings migration, minimap visibility and radial persistence, launcher clicks, AddOn Compartment metadata, combat-safe opening, and conservative collision failure. Headless checks cannot prove real client slash load order, native frame visibility, minimap interaction, taint, or third-party ownership; test those phases live.
 
+## Milestone 10: advisory linting (unreleased)
+
+Run `tests/preflight.py` for the full existing repository and UI suites plus the new lint checks. To run only the pure analyzer fixtures:
+
+```powershell
+py .\tests\macro_linter.py
+```
+
+The analyzer suite covers 47 fixtures plus isolation, repeated edits/fresh results, and a 1,000-line oversized draft. It loads the module in an environment that exposes only the required standard Lua libraries; any access to WoW APIs, execution/compilation functions or SavedVariables fails. The UI harness adds 45 lint checks per appearance, including real draft Save through stubbed native APIs, selection changes, Revert, tooltip paging/wraparound, focus/caret/selection, read-only restoration, unchanged saved/native data during linting, search refresh, combat, conflicts and length blockers. Existing UI suites still run in full. These counts describe headless checks, not live game tests.
+
+### Retail in-game acceptance checklist (pending; not performed by Codex)
+
+Use a disposable macro. This feature branch keeps the release version at 1.3.0; identify the test build by its `feature/macro-linting` checkout and the new footer indicator. Do not test by executing Lua or malformed macros.
+
+1. Open `/ms`, select a macro, and confirm **No issues detected** appears beside the character count. Resize to minimum and larger sizes; check that the count, summary, Save/Revert and complete editor remain readable.
+2. Type `/cast [harm Moonfire` without saving. Confirm **1 error**; hover for `UNCLOSED_CONDITIONAL`, line 1, column 7, and a repair explanation. Change it to `/cast [harm] Moonfire`; the error should disappear immediately without reload.
+3. Try `/use ] 13` and `/cast [[help] Regrowth` and inspect the bracket errors. Try `/cast`, `/use []`, and `/castsequence reset=target/5`; these should warn about missing actions. Bare `#showtooltip` alone is valid.
+4. Paste the following draft, then click/scroll the indicator forward and backward. Inspect all three findings and check wraparound, line/column accuracy, tooltip wrapping, and live refresh while the tooltip is open. Move away or close the window and confirm it disappears.
+
+   ```text
+   #showtooltip
+   #showtooltip
+   /cast [
+   /use
+   ```
+
+5. Confirm both valid examples remain clear: `/cast [@focus,harm,nodead] [] Skull Bash` and `/cast [@mouseover,help,nodead] Regrowth; [@target,harm] Moonfire`. Try a reset castsequence, an item link, an unknown addon slash command, `/say [hello`, and `/run print("[")` as text only; Lua/chat/addon brackets must not be reported as conditional errors.
+6. While editing, select text, move the caret, type repeatedly, and inspect/page findings. Confirm selection, focus, scrolling, copy/paste and the draft remain intact. Save a disposable erroneous draft intentionally: lint must allow Save, save exact text and continue showing the finding. Correct it, then Save or Revert and switch macros; findings must follow the displayed body.
+7. Repeat with a saved macro containing a supported error, a blank body, no selection, and an offline snapshot containing a supported error. Offline text must remain selectable/copyable and read-only; rejected edits must restore the snapshot and its diagnostics. No native macro may change just from selection or lint inspection.
+8. Verify a draft over 255 characters still shows findings but cannot Save. Verify combat and external-change conflicts still block native writes and preserve the draft. After an external clean reload or Revert, diagnostics must reflect the displayed version. Confirm no automatic Save occurs after combat.
+9. Repeat the checklist in **Legacy** (Settings → appearance → explicit Reload UI after resolving drafts), then Warcraft. Check tooltip/page usability, minimum-size layout and no Lua/taint errors. Confirm categories, tags, Favorites, action-bar indicators and snapshots still work.
+
+Passing static linting is not a promise of spell availability, valid targets, cooldown/range, conditional truth, or successful combat execution. Lua validation and localization/aliases are not included. Record client build, appearance, results and any false positives before promoting the draft PR.
+
 ## MS8 Settings Fix - 1.2.0-r3
 
 The headless harness verifies the installed title mouse-down hook, deferred shared-controller call, actual frame state, singleton reuse, overlay level, and minimap toggle transitions. It cannot prove how the live WoW client routes mouse-up through the draggable title-bar region, so complete these focused live checks.

@@ -21,6 +21,7 @@ CharacterMacroLibrary.lua
 ActionBarRepository.lua
 MetadataRepository.lua
 Search.lua
+MacroLinter.lua
 UI\Dialogs.lua
 UI\IconPicker.lua
 UI\MacroDialog.lua

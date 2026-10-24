@@ -125,6 +125,8 @@ def run_ui_smoke(root, appearance="warcraft"):
         function Frame:SetWordWrap(enabled) self.wordWrap = enabled and true or false end
         function Frame:GetText() return rawget(self, "text") or "" end
         function Frame:GetNumLetters() return #(rawget(self, "text") or "") end
+        function Frame:SetCursorPosition(position) self.cursorPosition = position end
+        function Frame:HighlightText(first, last) self.selectionStart, self.selectionEnd = first, last end
         function Frame:SetScript(event, handler) self.scripts[event] = handler end
         function Frame:HookScript(event, handler)
             self.hooks[event] = self.hooks[event] or {}
@@ -486,6 +488,7 @@ def run_ui_smoke(root, appearance="warcraft"):
         assert chunk is not None, error
         chunk("MacroStudio", namespace)
 
+    lua.globals().RunLintUIRegression = load((root / "tests/editor_lint.lua").read_text(encoding="utf-8"))()
     smoke = load(
         r"""
         local _, ms = ...
@@ -513,6 +516,7 @@ def run_ui_smoke(root, appearance="warcraft"):
         assert(ms.initialized, "full UI should initialize")
         assert(ms.frame and not ms.frame:IsShown(), "main window should remain hidden on login")
         assert(ms.selectedMacro and ms.selectedMacro.name == "Account", "initial refresh should select a macro")
+        lintUICheckCount = RunLintUIRegression(ms)
         assert(ms.Theme.activeAppearance == requestedAppearance,
             "startup should apply the saved appearance after database initialization")
         if requestedAppearance == "legacy" then
@@ -1568,4 +1572,4 @@ def run_ui_smoke(root, appearance="warcraft"):
         "@ui-smoke",
     )
     smoke("MacroStudio", namespace)
-    print(f"PASS full UI behavior suite ({appearance} appearance)")
+    print(f"PASS full UI behavior suite ({appearance} appearance; {lua.globals().lintUICheckCount} lint regression checks)")

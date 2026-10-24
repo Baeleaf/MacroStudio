@@ -2,6 +2,16 @@
 
 Notable user-facing changes to MacroStudio are documented here.
 
+## Unreleased
+
+### Added
+
+- Advisory macro linting while editing saved macros, unsaved drafts, and read-only offline snapshots, in both Warcraft and Legacy appearances.
+- Line-specific explanations for malformed leading cast/use/castsequence brackets, commands without action arguments, and repeated `#showtooltip` directives.
+- A compact diagnostics summary beside the character count; hover to inspect and click/scroll to browse every finding. Findings never block Save or correct text automatically.
+
+Static checks cannot guarantee gameplay or combat success. Lua syntax validation and broader command support remain follow-up work.
+
 ## 1.3.0
 
 ### Added
