@@ -56,7 +56,22 @@ The roadmap records shipped capabilities and likely future directions; unchecked
 - [x] Search offline macro names, complete bodies, character names, and realms without native rescans.
 - [x] Forget one offline snapshot with confirmation while preserving Blizzard macros and unrelated MacroStudio data.
 
-## Portability, backups, and history
+## Next active milestone: macro linting and diagnostics (Milestone 10)
+
+MacroStudio's next active feature after 1.3.0 is an **advisory, read-only linter** for native WoW macro text. The implementation checklist and test cases are tracked in [issue #1](https://github.com/Baeleaf/MacroStudio/issues/1). This work is independent of the unmerged Milestone 9 import/export branch.
+
+- [ ] Introduce a deterministic macro-aware analyzer for the current saved/draft body; return severity, line, column, and explanatory message without running or rewriting macro text.
+- [ ] Start with high-confidence conditional-bracket structural errors on documented commands and a small set of safe warnings (e.g., missing cast/use argument, duplicate `#showtooltip`). Preserve valid `[]` fallbacks, advanced conditionals, custom addon commands, and literal Lua strings.
+- [ ] Show an accessible diagnostics summary and individual findings directly in the editor, including before Save. Support both Warcraft and Legacy appearances.
+- [ ] Keep diagnostics advisory; the existing native length, combat, exact-target, and dirty-draft validations remain the sole Save blockers.
+- [ ] Cover the linter and UI integration in headless tests; then complete Retail in-game smoke tests before release.
+- [ ] State limitations honestly: static linting cannot prove a spell is usable or that a macro will function in live combat.
+
+Follow-on editing assistance can add compile-only Lua syntax checks (never execute imported or typed Lua), token coloring, snippets, and opt-in optimization after feasibility and safety are established.
+
+## Portability, backups, and history (Milestone 9 workstream)
+
+The existing `feature/import-export` branch contains substantial implementation and tests for import/export, previews, conflict choices, and untrusted-data validation. It has **not** been merged into `main` or released; review and rebase/test it independently before marking its work complete on the release roadmap.
 
 - [ ] Full-profile import/export.
 - [ ] Selective macro and metadata import/export.
@@ -68,7 +83,7 @@ The roadmap records shipped capabilities and likely future directions; unchecked
 ## Editing assistance
 
 - [ ] Previewable templates and cursor-position snippets.
-- [ ] Advisory tokenizer, linter, and maintainable syntax highlighting.
+- [ ] Maintainable syntax highlighting and richer editor navigation (after the linting MVP).
 - [ ] Explained, opt-in character-count reduction suggestions.
 - [ ] Advanced search fields such as scope, tag, category, Favorite, body, and name.
 
