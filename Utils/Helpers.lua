@@ -29,22 +29,39 @@ function Helpers:TextLength(value)
     return #text
 end
 
-function Helpers:GetIconIdentity(icon)
-    if type(icon) == "number" then
-        return "file:" .. tostring(icon)
-    end
+function Helpers:NormalizeIcon(icon)
+    if type(icon) == "number" then return icon end
     if type(icon) ~= "string" or icon == "" then
         return nil
     end
 
+    -- The legacy macro lists include numeric strings and bare icon names.
+    -- WoW reads saved selections back as file IDs, so normalize before writing
+    -- and comparing rather than treating those representations as new icons.
+    local fileId = tonumber(icon)
+    if fileId then return fileId end
+    local normalized = icon:lower():gsub("/", "\\"):gsub("%.blp$", ""):gsub("%.tga$", "")
+    if not normalized:find("\\", 1, true) then
+        normalized = "interface\\icons\\" .. normalized
+    end
+    if normalized == "interface\\icons\\inv_misc_questionmark" then
+        return MacroStudio.DEFAULT_ICON
+    end
     if type(GetFileIDFromPath) == "function" then
-        local ok, fileId = pcall(GetFileIDFromPath, icon)
+        local ok, fileId = pcall(GetFileIDFromPath, normalized)
         if ok and type(fileId) == "number" and fileId > 0 then
-            return "file:" .. tostring(fileId)
+            return fileId
         end
     end
+    return normalized
+end
 
-    local normalized = icon:lower():gsub("/", "\\"):gsub("%.blp$", ""):gsub("%.tga$", "")
+function Helpers:GetIconIdentity(icon)
+    local normalized = self:NormalizeIcon(icon)
+    if type(normalized) == "number" then
+        return "file:" .. tostring(normalized)
+    end
+    if not normalized then return nil end
     local basename = normalized:match("([^\\]+)$") or normalized
     if basename == "inv_misc_questionmark" then
         return "file:" .. tostring(MacroStudio.DEFAULT_ICON)

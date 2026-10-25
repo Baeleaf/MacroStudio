@@ -2,6 +2,16 @@
 
 Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 
+## Icon save and search patch - 1.3.1
+
+Headless coverage checks native icon string/path-to-file-ID readback, creation and editing, genuine icon-write rejection, search results, deduplication, numeric IDs outside the catalog, empty results, clearing, selection callbacks, and scrolling in both appearances. Live verification is still required for the reported friend's client.
+
+1. Confirm the displayed build is `1.3.1`. Open a disposable macro, pick several icons, Save, and reopen it. Repeat with a `#showtooltip` macro and the question-mark icon. Confirm the icon and body persist with no false save error.
+2. Open the icon picker from both the editor and New Macro dialog. Search `raid` for all eight markers; search `skull` for its marker. Choose one, save/create, reopen, and compare with Blizzard's macro window.
+3. Search an icon file ID (for example `135846`), an exact ability name in the client's language, and part of an ability in the current spellbook. Confirm the expected textures appear and can be saved. Numbers are icon file IDs, not spell IDs; arbitrary nonexistent file IDs may display a missing texture.
+4. Search nonsense, clear with the X or Escape, scroll the full list, filter again, and reopen. Confirm no stale icons, lost editor text, stuck focus, or stuck modal overlay. Repeat in Warcraft and Legacy appearances.
+5. Confirm combat blocks saving and external macro changes preserve the draft as before. Record client version and any remaining save failures.
+
 ## v1.3.0 release validation
 
 **Live smoke status: PASS, owner sign-off on 2026-10-23.** The exact packaged

@@ -410,14 +410,35 @@ def run_ui_smoke(root, appearance="warcraft"):
             list[#list + 1] = "Interface\\Icons\\INV_Misc_QuestionMark"
             list[#list + 1] = "INV_Misc_QuestionMark"
             list[#list + 1] = 135000
+            list[#list + 1] = "135000"
+            list[#list + 1] = "Spell_Nature_Test"
         end
         function GetMacroItemIcons() end
         function GetFileIDFromPath(path)
             if type(path) == "string" and path:lower():find("inv_misc_questionmark", 1, true) then
                 return 134400
             end
+            if path == "interface\\icons\\spell_nature_test" then return 135000 end
+            local marker = path:match("ui%-raidtargetingicon_(%d+)$")
+            if marker then return 137000 + tonumber(marker) end
             return nil
         end
+        Enum = { SpellBookSpellBank = { Player = 0 } }
+        C_SpellBook = {
+            GetNumSpellBookSkillLines = function() return 1 end,
+            GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 2, numSpellBookItems = 3 } end,
+            GetSpellBookItemInfo = function(index, bank)
+                assert(bank == 0 and index >= 3 and index <= 5)
+                return index <= 4 and { name = "Healing Touch", iconID = 135915 }
+                    or { name = "Moonfire", iconID = 136096 }
+            end,
+        }
+        spellLookupCalls = 0
+        C_Spell = { GetSpellInfo = function(name)
+            spellLookupCalls = spellLookupCalls + 1
+            if name == "frostbolt" then return { name = "Frostbolt", iconID = 135846 } end
+            if name == "healing touch" then return { name = "Healing Touch", iconID = 135915 } end
+        end }
         function EditMacro(index, name, icon, body)
             editCalls = editCalls + 1
             lastEditCall = { index = index, name = name, icon = icon, body = body }
@@ -1449,11 +1470,54 @@ def run_ui_smoke(root, appearance="warcraft"):
         ms.Editor:SetEditorText(ms.Editor.savedBody)
         assert(ms.MacroDialog.createButton:IsEnabled(), "clean editor should restore valid dialog Create")
         local pickerIcons = ms.IconPicker:BuildIconList()
-        assert(#pickerIcons == 3 and pickerIcons[1] == ms.DEFAULT_ICON
+        assert(#pickerIcons == 11 and pickerIcons[1] == ms.DEFAULT_ICON
                 and pickerIcons[2] == 101 and pickerIcons[3] == 135000,
             "icon picker should retain native icons while canonicalizing question-mark aliases")
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
         assert(ms.IconPicker.frame:IsShown(), "icon picker should construct and open")
+        local picker = ms.IconPicker
+        local writesBeforeSearch = editCalls
+        picker.searchBox:SetText("  RaId  ")
+        assert(#picker.filteredIcons == 8 and picker.buttons[1].iconValue == 137001
+                and picker.buttons[8].iconValue == 137008 and not picker.buttons[9]:IsShown(),
+            "raid search must show all eight usable markers and hide stale buttons")
+        picker.searchBox:SetText("skull")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 137008,
+            "marker names should be searchable")
+        picker.searchBox:SetText("heal")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 135915,
+            "partial spellbook names should resolve and deduplicate icons")
+        picker.searchBox:SetText("Frostbolt")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 135846,
+            "exact ability lookup should work outside the current spellbook")
+        local lookupsBeforeID = spellLookupCalls
+        picker.searchBox:SetText("987654")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 987654
+                and spellLookupCalls == lookupsBeforeID,
+            "direct icon IDs outside the catalog must stay numeric and never be interpreted as spell IDs")
+        picker.searchBox:SetText("no such ability")
+        assert(#picker.filteredIcons == 0 and not picker.buttons[1]:IsShown()
+                and picker.countText:GetText() == "No matching icons"
+                and picker.topRow == 0 and picker.scrollBar.scrollPercentage == 0,
+            "empty results should clear the grid and safely reset scrolling")
+        picker.searchBox:SetText("[")
+        assert(#picker.filteredIcons == 0, "search text must not be interpreted as a Lua pattern")
+        picker.searchBox:SetText("0")
+        assert(#picker.filteredIcons == 0, "zero is not a usable icon ID")
+        picker.clearSearchButton:TriggerScript("OnClick")
+        assert(picker.filteredIcons == nil and #picker:GetVisibleIcons() == 11
+                and picker.searchBox:HasFocus(), "clear should restore all icons and focus")
+        picker.searchBox:SetText("raid")
+        picker.searchBox:TriggerScript("OnEscapePressed")
+        assert(picker.frame:IsShown() and picker.searchBox:GetText() == "",
+            "Escape should clear search before dismissing the picker")
+        assert(editCalls == writesBeforeSearch, "searching must never write native macros")
+        local chosenIcon
+        picker:Open(ms.DEFAULT_ICON, function(icon) chosenIcon = icon end)
+        picker.searchBox:SetText("135846")
+        picker.buttons[1]:TriggerScript("OnClick")
+        assert(chosenIcon == 135846 and not picker.frame:IsShown()
+                and not picker.searchBox:HasFocus(), "search results should use the usual selection callback")
         local savedPickerIcons = ms.IconPicker.icons
         local manyIcons = {}
         for index = 1, 160 do manyIcons[index] = 200000 + index end
@@ -1475,7 +1539,8 @@ def run_ui_smoke(root, appearance="warcraft"):
             "wheel scrolling should stop at the final page")
         ms.IconPicker.icons = savedPickerIcons
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
-        assert(ms.IconPicker.topRow == 0 and ms.IconPicker.scrollBar.scrollPercentage == 0,
+        assert(ms.IconPicker.topRow == 0 and ms.IconPicker.scrollBar.scrollPercentage == 0
+                and ms.IconPicker.searchBox:GetText() == "" and ms.IconPicker.filteredIcons == nil,
             "reopening a short icon list should reset a previously scrolled thumb")
         ms.MacroDialog:Close()
         assert(ms:GetSearchQuery() == "account" and searchBox:GetText() == "account",

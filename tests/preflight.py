@@ -849,6 +849,48 @@ sidebar_source = (ROOT / "UI" / "Sidebar.lua").read_text(encoding="utf-8")
 editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
 macro_dialog_source = (ROOT / "UI" / "MacroDialog.lua").read_text(encoding="utf-8")
 main_frame_source = (ROOT / "UI" / "MainFrame.lua").read_text(encoding="utf-8")
+# Reproduce the client converting picker strings/paths to file IDs on readback.
+lua.execute(r'''
+    local ms = ...
+    local repo = ms.MacroRepository
+    local nativeEdit, nativeCreate = EditMacro, CreateMacro
+    local originalFileLookup = GetFileIDFromPath
+    function GetFileIDFromPath(path)
+        if path == "interface\\icons\\spell_nature_test" then return 135000 end
+        return nil
+    end
+    local function nativeIcon(icon)
+        return tonumber(icon) or (type(icon) == "string" and icon:lower():find("spell_nature_test", 1, true) and 135000) or icon
+    end
+    function EditMacro(index, name, icon, body)
+        return nativeEdit(index, name, nativeIcon(icon), body)
+    end
+    function CreateMacro(name, icon, body, perCharacter)
+        return nativeCreate(name, nativeIcon(icon), body, perCharacter)
+    end
+    accountMacros = { { name = "Icon Test", icon = 101, selectedIcon = 101, body = "/say before" } }
+    combat = false
+    editMoveToEnd = false
+    for _, icon in ipairs({ "135000", "Spell_Nature_Test", "Interface/Icons/Spell_Nature_Test.blp", 135000 }) do
+        repo:Refresh()
+        local snapshot = ms.Helpers:CopyMacro(repo:FindByIndex(1))
+        local ok, saved, reason = repo:Update(snapshot, { name = snapshot.name, icon = icon, body = "/say saved" })
+        assert(ok and saved.selectedIcon == 135000, reason or "icon normalization save regression")
+        assert(lastEditCall.icon == 135000, "writes should use a canonical numeric icon ID")
+        assert(ms.Helpers:IconsEqual(icon, saved.selectedIcon), "draft and native readback must share an identity")
+    end
+    local ok, created, reason = repo:Create({ name = "New Icon", icon = "Spell_Nature_Test", body = "/say created", scope = "ACCOUNT" })
+    assert(ok and created.selectedIcon == 135000, reason or "creation must normalize icon paths too")
+    -- A genuine icon-write failure must still be rejected, even if text saves.
+    function EditMacro(index, name, icon, body) return nativeEdit(index, name, 101, body) end
+    repo:Refresh()
+    local snapshot = ms.Helpers:CopyMacro(repo:FindByIndex(1))
+    local ok, saved, reason = repo:Update(snapshot, { name = snapshot.name, icon = 135000, body = "/say failed icon" })
+    assert(not ok and not saved and reason:find("buffer was preserved", 1, true),
+        "normalization must not hide a genuinely rejected icon change")
+    EditMacro, CreateMacro, GetFileIDFromPath = nativeEdit, nativeCreate, originalFileLookup
+''', namespace)
+
 icon_picker_source = (ROOT / "UI" / "IconPicker.lua").read_text(encoding="utf-8")
 search_source = (ROOT / "Search.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
@@ -991,8 +1033,8 @@ assert 'self.Access:ToggleSettings("title", false)' in main_frame_source
 assert "settingsButton:SetFrameLevel(modalOverlay:GetFrameLevel() + 1)" in main_frame_source
 assert "C_Timer.After(0, toggleSettings)" in main_frame_source
 assert "## Interface: 120105" in toc_source
-assert "## Version: 1.3.0" in toc_source
-assert 'MacroStudio.VERSION = "1.3.0"' in core_source
+assert "## Version: 1.3.1" in toc_source
+assert 'MacroStudio.VERSION = "1.3.1"' in core_source
 assert "## AddonCompartmentFunc: MacroStudio_AddonCompartmentOnClick" in toc_source
 assert "## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter" in toc_source
 assert "## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave" in toc_source

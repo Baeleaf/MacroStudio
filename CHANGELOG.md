@@ -2,6 +2,17 @@
 
 Notable user-facing changes to MacroStudio are documented here.
 
+## 1.3.1
+
+### Added
+
+- Search the icon picker by raid marker names, icon file ID, full ability name, or partial spellbook ability name in both the editor and New Macro dialog.
+- All eight raid target markers are available in the icon picker.
+
+### Fixed
+
+- Normalize numeric icon strings, bare icon names, and texture paths before native writes and save verification, preventing false save failures when WoW returns the chosen icon as a file ID.
+
 ## 1.3.0
 
 ### Added

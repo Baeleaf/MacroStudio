@@ -1,7 +1,7 @@
-## MacroStudio v1.3.0
+## MacroStudio v1.3.1
 
-- New Warcraft-style default interface with textured panels, a recessed editor, and clearer text.
-- Prefer the original blue/gray look? Choose Settings → Appearance → Legacy, then Reload UI.
-- Updated for World of Warcraft Retail 12.1.5.
+- Fixed an icon-format mismatch that could show a save error after choosing a macro icon.
+- Added icon search in the editor and New Macro dialog. Search for raid markers, an icon file ID, a full ability name, or part of an ability name from your spellbook.
+- Added all eight raid target markers to the icon picker.
 
 Your existing macros, Favorites, categories, tags, and settings are preserved.
