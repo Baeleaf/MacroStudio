@@ -2,6 +2,52 @@
 
 Enable Lua errors (`/console scriptErrors 1`, then `/reload`) and keep Blizzard's Macro UI available for comparison.
 
+## MacroStudio macros and named styles - 1.4.0
+
+Automated preflight covers a shared library beyond native storage limits, migration of existing Account/Character definitions with IDs and bindings retained, a single library section, native mutation isolation, stable metadata, search, CRUD/stale targets, character/key isolation, duplicate key rejection, inline keyboard/mouse/wheel capture, capture cancellation and lifecycle guards, secure binding snippets, vehicle/pet-battle/override state transitions, combat guards, the five unified styles, and saved-choice upgrade cases. Editor text contrast is checked for each preset. This is headless coverage; live key routing, protected-frame behavior, taint, and rendering still need the following in-game checks.
+
+1. Reload UI and confirm `1.4.0`. Choose Library → MacroStudio Macros → New Macro. Under Macro Type, verify Account, Character, and MacroStudio (shared) are all visible. Select MacroStudio (shared) and confirm the submit button reads Create MacroStudio Macro. Switch types and confirm the name/body/icon draft is retained. Save a disposable macro of at most 255 characters. Confirm Blizzard's native macro counts do not increase, including when native slots are full.
+2. Select the saved MacroStudio macro. Under Category and Tags, verify a themed Keybind button says Not Bound. Hover for left-click/right-click instructions. Left-click: the label must change to Press a key, click, or scroll...; press Alt+1 and confirm it immediately displays Alt + 1 with no dialog. Esc while listening must retain the old assignment and keep the main window open. Right-click while idle must clear and restore the underlying game binding. Check modifiers, punctuation, middle/extra mouse buttons, both wheel directions, key down/up, and repeat behavior. Primary left/right mouse clicks while listening must not become bindings or click through. The captured input must not also activate its previous game action. Inspect the tooltip's existing-binding disclosure. Verify one subsequent hardware input performs the macro without a native slot.
+3. Give two managed macros the same key and confirm the second is refused. Edit/revert/save a body, name, and icon; confirm the bound action uses only the saved body. Favorites, categories, tags and search must remain attached after edits. Deleting a macro must clear its key and action text.
+4. Enter combat: saved definitions and keys must not change. Drafting remains allowed. Return to normal context without automatically saving a draft. Check startup during combat. Test entering/exiting vehicles, pet battles, possession, and override bars; native context keys must work while our assignments are suspended.
+5. Reload and relog. All MacroStudio definitions must appear on every character, including entries created with Character scope in the previous development build. Key assignments must be independent per character. Return to the original character and confirm its definitions and assignments persist.
+6. In Settings, verify there is no Appearance section. Under Color Style, verify Warcraft (default), Legacy, Emerald, Violet, and Ember are all visible and exactly one is selected. Legacy must select the original blue/gray layout; all other styles use the Warcraft layout. Confirm the selected style persists after reopening Settings and reload. Reload UI to apply and inspect the main frame, editor, dialogs, rows, focus, disabled buttons, and readability at minimum size. Defaults must retain the original designs; error/warning colors must retain their meaning.
+7. Leave a draft or creation form open and confirm Reload UI is disabled. Return to the active style to cancel its pending reload. Verify no macros, organization data or window geometry are reset.
+8. Begin key capture, then press Esc, close the main window, switch selection, open another dialog, or enter combat. Each must stop listening without changing the saved assignment; leaving combat must not restart capture. Verify editing disables the button while preserving the draft. A duplicate MacroStudio key must show the conflict and permit another input. Check the row, long key labels and hover/capture text in Legacy, Warcraft and named styles at minimum window size. Account, Character and offline views must retain their previous layout, with no managed Keybind row. On Bar usage must remain independent in the top-right corner.
+
+### Dragging shared macros to action bars
+
+Automated coverage exercises the real list/editor drag handlers, linked-copy reuse and synchronization, shifted native indices, draft preservation, combat/cursor guards, external edits and ambiguous duplicates, capacity fallback, direct-key availability when full, and login reconciliation in both designs. Native cursor drops, execution, taint and third-party bar behavior require live verification.
+
+1. Drag disposable Account, Character and MacroStudio macros from both their list rows and editor icons onto empty bar slots. Use a harmless `/say` body and confirm clicking each action executes the saved body. Clicking the editor icon without dragging must still open the icon picker.
+2. A MacroStudio macro's first drag should add one Character copy, or one Account copy if Character slots are full. Repeated drags and multiple placements must reuse it. Cancel a drag, then drag again: the same copy should be reused. Confirm On Bar tracks placements.
+3. Drag with unsaved name, icon and body edits. Confirm the saved version is placed, the draft is preserved, and Save later updates all placements using that linked copy. Rename/delete an unrelated native macro to shift indices and repeat.
+4. Fill both native scopes. A new shared macro must remain creatable and directly bindable, but dragging it must explain that action-bar placement needs a free slot. Existing linked copies must remain draggable without another slot.
+5. Edit a linked copy externally or create an identical duplicate. Save must preserve the shared definition and draft and refuse to overwrite an uncertain target. Drag again with capacity available to create a fresh copy; the old externally edited copy must remain untouched. Replace the old bar placement, then save again.
+6. Delete a shared macro and confirm its verified linked copy and keybinding are removed. Other characters reconcile their linked copies when loaded: edits synchronize and deleted definitions remove only verified copies. Check reload and character switching.
+7. Attempt list and editor drags during combat and with a busy cursor. Neither may create a copy or replace the cursor. Repeat basic placement in Legacy and, if available, a third-party action bar. Confirm no Lua or taint errors.
+
+Version 1.4.0 is the release build. Automated checks pass; the remaining live-client checks above are not recorded as completed. The historical 1.3.1 tag and package are unchanged.
+
+### Snapshot copy destinations
+
+Automated tests exercise all three dropdown destinations in both designs, exact copied content, unchanged source data, individual capacity checks, copying to shared storage with full native scopes, outside-click dismissal, stale menu sources, deleted snapshots, invalid content, and combat/modal guards.
+
+1. Open an offline snapshot and verify Copy to... replaces Copy to Current Character. Open it and verify Current Character, Account Macros and MacroStudio Macros, matching the active style and fitting at minimum window size. Clicking outside must dismiss it.
+2. Copy a disposable snapshot to each destination. Each choice must create a fresh macro immediately, select it and switch to the matching library filter. Verify the same name, body and icon; the offline snapshot must remain unchanged. Include a question-mark icon and duplicate names.
+3. Fill Character slots, then Account slots. Each full native destination must be disabled with a hover explanation. MacroStudio Macros must remain enabled, create a shared entry and use no native slot or automatic keybinding. Native copies must use only the chosen scope.
+4. Open the dropdown, then enter combat, change selection, open a dialog or close the window. It must dismiss safely. Combat must block every destination and leaving combat must not retry copying. If a source snapshot is forgotten or updated while selected, stale copy requests must refuse to create anything.
+
+## Icon save and search patch - 1.4.0-dev.ms10.2
+
+Headless coverage checks native icon string/path-to-file-ID readback, creation and editing, genuine icon-write rejection, search results, deduplication, numeric IDs outside the catalog, empty results, clearing, selection callbacks, and scrolling in both appearances. Live verification is still required for the reported friend's client.
+
+1. Confirm the displayed build is `1.4.0-dev.ms10.2`. Open a disposable macro, pick several icons, Save, and reopen it. Repeat with a `#showtooltip` macro and the question-mark icon. Confirm the icon and body persist with no false save error.
+2. Open the icon picker from both the editor and New Macro dialog. Search `raid` for all eight markers; search `skull` for its marker. Choose one, save/create, reopen, and compare with Blizzard's macro window.
+3. Search an icon file ID (for example `135846`), an exact ability name in the client's language, and part of an ability in the current spellbook. Confirm the expected textures appear and can be saved. Numbers are icon file IDs, not spell IDs; arbitrary nonexistent file IDs may display a missing texture.
+4. Search nonsense, clear with the X or Escape, scroll the full list, filter again, and reopen. Confirm no stale icons, lost editor text, stuck focus, or stuck modal overlay. Repeat in Warcraft and Legacy appearances.
+5. Confirm combat blocks saving and external macro changes preserve the draft as before. Record client version and any remaining save failures.
+
 ## v1.3.0 release validation
 
 **Live smoke status: PASS, owner sign-off on 2026-10-23.** The exact packaged
@@ -148,7 +194,7 @@ This intentionally short checklist is used after WoW patches or hotfixes to deci
 
 ### Phase 4 - Cross-Character
 
-- [ ] Browse and search an offline snapshot; confirm its read-only presentation and **Copy to Current Character**.
+- [ ] Browse and search an offline snapshot; confirm its read-only presentation and **Copy to...** destination dropdown.
 
 ### Phase 5 - Combat
 

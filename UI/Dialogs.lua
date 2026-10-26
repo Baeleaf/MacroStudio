@@ -7,6 +7,7 @@ local KEYS = {
     DISCARD = "MACROSTUDIO_DISCARD_EDITOR_CHANGES",
     DELETE_CATEGORY = "MACROSTUDIO_DELETE_CATEGORY",
     DELETE_MACRO = "MACROSTUDIO_DELETE_NATIVE_MACRO",
+    DELETE_STUDIO = "MACROSTUDIO_DELETE_STUDIO_MACRO",
     FORGET_CHARACTER = "MACROSTUDIO_FORGET_CHARACTER",
 }
 
@@ -63,6 +64,16 @@ if StaticPopupDialogs then
         hideOnEscape = true,
         showAlert = true,
         preferredIndex = 3,
+    }
+
+    StaticPopupDialogs[KEYS.DELETE_STUDIO] = {
+        text = "Delete the %s MacroStudio macro \"%s\", its keybindings, and its linked action-bar copy on this character?",
+        button1 = "Delete Macro", button2 = CANCEL, timeout = 0,
+        whileDead = true, hideOnEscape = true, showAlert = true, preferredIndex = 3,
+        OnAccept = function(dialog, data)
+            data = getData(dialog, data)
+            if data and data.callback then data.callback() end
+        end,
     }
 
     StaticPopupDialogs[KEYS.FORGET_CHARACTER] = {
@@ -235,8 +246,9 @@ function Dialogs:ShowAddTag(macro, callback)
 end
 
 function Dialogs:ShowDeleteMacro(macro, callback)
-    local scope = macro.scope == "CHARACTER" and "Character" or "Account"
-    StaticPopup_Show(KEYS.DELETE_MACRO, scope, macro.name or "Unnamed Macro", { callback = callback })
+    local scope = macro.source == "STUDIO" and "shared" or (macro.scope == "CHARACTER" and "Character" or "Account")
+    StaticPopup_Show(macro.source == "STUDIO" and KEYS.DELETE_STUDIO or KEYS.DELETE_MACRO,
+        scope, macro.name or "Unnamed Macro", { callback = callback })
 end
 
 function Dialogs:ShowForgetCharacter(character, callback)

@@ -47,6 +47,7 @@ end
 
 function MacroStudio:SetMainWindowModalBlocked(blocked)
     self.mainWindowModalBlocked = blocked and true or false
+    if blocked and self.KeybindButton then self.KeybindButton:CancelCapture() end
     if not self.modalOverlay then
         return
     end
@@ -63,6 +64,7 @@ function MacroStudio:SetMainWindowModalBlocked(blocked)
     else
         self.modalOverlay:Hide()
     end
+    if self.KeybindButton then self.KeybindButton:Refresh() end
 end
 
 function MacroStudio:IsMainWindowModalBlocked()
@@ -232,6 +234,7 @@ function MacroStudio:CreateMainFrame()
         if self.Settings and self.Settings.frame then
             self.Settings.frame:Hide()
         end
+        self.KeybindButton:CancelCapture()
     end)
 
     frame:Hide()
@@ -253,12 +256,14 @@ function MacroStudio:Initialize()
     if self.CharacterMacroLibrary then
         self.CharacterMacroLibrary:Initialize()
     end
+    self.StudioMacroRepository:RebuildBindings()
 
     self.activeFilter = { kind = "all" }
     self.searchQuery = ""
     self:CreateMainFrame()
     self.initialized = true
     self:RefreshMacros("initial")
+    self.StudioActionBarRepository:ReconcileCurrentCopies()
     self:UpdateCombatState()
 end
 
@@ -287,8 +292,12 @@ function MacroStudio:GetFilteredMacros()
         return filtered
     end
 
-    for _, macro in ipairs(self.MacroRepository:GetAll()) do
+    local catalog = {}
+    for _, macro in ipairs(self.MacroRepository:GetAll()) do catalog[#catalog + 1] = macro end
+    for _, macro in ipairs(self.StudioMacroRepository:GetAll()) do catalog[#catalog + 1] = macro end
+    for _, macro in ipairs(catalog) do
         local include = filter.kind == "all"
+            or (filter.kind == "studio" and macro.source == "STUDIO")
             or (filter.kind == "account" and macro.scope == "ACCOUNT")
             or (filter.kind == "character" and macro.scope == "CHARACTER")
             or (filter.kind == "favorites" and self.MetadataRepository:IsFavorite(macro))
@@ -308,10 +317,10 @@ function MacroStudio:UpdateActionControls()
     local accountCount, accountLimit = self.MacroRepository:GetCapacity("ACCOUNT")
     local characterCount, characterLimit = self.MacroRepository:GetCapacity("CHARACTER")
     if self.capacityText then
-        self.capacityText:SetText(string.format("Account: %d / %d     Character: %d / %d",
-            accountCount, accountLimit, characterCount, characterLimit))
+        self.capacityText:SetText(string.format("Blizzard: %d/%d Account · %d/%d Character     MacroStudio: %d",
+            accountCount, accountLimit, characterCount, characterLimit, #self.StudioMacroRepository:GetAll()))
     end
-    local hasCapacity = accountCount < accountLimit or characterCount < characterLimit
+    local hasCapacity = self.StudioMacroRepository ~= nil or accountCount < accountLimit or characterCount < characterLimit
     local dirty = self.Editor and self.Editor:IsDirty()
     local enabled = not self.inCombat and hasCapacity and not dirty
     local reason
@@ -423,7 +432,8 @@ function MacroStudio:RequestPickupMacro(macro)
         and self:MacroRecordsEqual(self.selectedMacro, macro)
         and self.Editor
         and self.Editor:IsDirty()
-    local pickedUp, current, message = self.MacroRepository:Pickup(macro)
+    local repository = macro.source == "STUDIO" and self.StudioActionBarRepository or self.MacroRepository
+    local pickedUp, current, message = repository:Pickup(macro)
     if not pickedUp then
         message = message or "This macro could not be placed on the cursor."
         if self.Editor then
@@ -435,9 +445,11 @@ function MacroStudio:RequestPickupMacro(macro)
 
     if draggingDirtySelection then
         self.Editor:SetNotice(
-            "You have unsaved changes. The saved version was placed on the cursor.",
+            "You have unsaved changes. The saved version was placed on the cursor." .. (message and (" " .. message) or ""),
             false
         )
+    elseif message then
+        self.Editor:SetNotice(message, false)
     end
     self:Debug("native macro picked up", current.index)
     return true, current
@@ -553,7 +565,21 @@ function MacroStudio:RefreshMacros(reason)
         end
     end
 
-    if offlineSelection then
+    if self.StudioMacroRepository:IsStudio(self.selectedMacro) then
+        local latest = self.StudioMacroRepository:GetById(self.selectedMacro.studioId)
+        if self.StudioMacroRepository:SnapshotsEqual(latest, self.selectedMacro) then
+            self.Editor:SetExternalConflict(false)
+        elseif editorWasDirty then
+            self.Editor:SetExternalConflict(true)
+        elseif latest then
+            self:SelectMacro(latest)
+        else
+            self.selectedMacro = nil
+            self.Editor:Clear()
+        end
+        self:RefreshOrganizationUI()
+        return
+    elseif offlineSelection then
         -- Offline selection is preserved without consulting native indices.
         self.externalConflictResolution = nil
     elseif exactSelection then
@@ -625,6 +651,14 @@ function MacroStudio:SaveSelectedMacro()
     local previousMacro = self.Helpers:CopyMacro(self.selectedMacro)
     local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(previousMacro)
     local draft = self.Editor:GetDraft()
+    if self.StudioMacroRepository:IsStudio(previousMacro) then
+        local saved, updated, message = self.StudioMacroRepository:Update(previousMacro, draft)
+        if not saved then self.Editor:SetNotice(message, true); return end
+        self.MetadataRepository:OnMacroSaved(previousMacro, updated, trustedMetadataId)
+        self:SelectMacro(updated)
+        self.Editor:SetNotice("MacroStudio macro saved.", false)
+        return
+    end
     self.nativeMutationInProgress = true
     local saved, updatedMacro, message = self.MacroRepository:Update(previousMacro, draft)
     self:FinishNativeMacroMutation("save")
@@ -658,6 +692,12 @@ function MacroStudio:RevertSelectedMacro()
     end
     if self:IsOfflineMacro(self.selectedMacro) then
         self.Editor:SetNotice("Offline snapshots already show their saved read-only name, icon, and body.", true)
+        return
+    end
+    if self.StudioMacroRepository:IsStudio(self.selectedMacro) then
+        local latest = self.StudioMacroRepository:GetById(self.selectedMacro.studioId)
+        if latest then self:SelectMacro(latest)
+        else self.selectedMacro = nil; self.Editor:Clear(); self:RefreshOrganizationUI() end
         return
     end
 
@@ -849,12 +889,20 @@ function MacroStudio:ShowNewMacroDialog()
         self.Editor:SetNotice("Creating macros is unavailable during Combat Lockdown.", true)
         return
     end
-    self.MacroDialog:Open({ scope = "ACCOUNT", icon = self.DEFAULT_ICON })
+    self.MacroDialog:Open({ scope = "ACCOUNT", icon = self.DEFAULT_ICON,
+        source = self.activeFilter and self.activeFilter.kind == "studio" and "STUDIO" or nil })
 end
 
 function MacroStudio:CreateNativeMacro(request)
     if self.Editor:IsDirty() then
         return false, "Save or Revert editor changes before creating a macro."
+    end
+    if request.source == "STUDIO" then
+        local created, macro, message = self.StudioMacroRepository:Create(request)
+        if not created then return false, message end
+        self:SelectMacro(macro)
+        self.Editor:SetNotice("MacroStudio macro created. Use Keybind to bind it on this character.", false)
+        return true, macro
     end
 
     self.nativeMutationInProgress = true
@@ -878,32 +926,45 @@ function MacroStudio:CreateNativeMacro(request)
     end
     return true, macro
 end
-function MacroStudio:CopySelectedSnapshotToCurrentCharacter()
-    local snapshot = self.selectedMacro
+function MacroStudio:ValidateSnapshotCopy(snapshot, destination)
+    if destination ~= "CHARACTER" and destination ~= "ACCOUNT" and destination ~= "STUDIO" then
+        return false, "Choose Current Character, Account Macros, or MacroStudio Macros."
+    end
+    if InCombatLockdown() then return false, "Copying snapshots is unavailable during Combat Lockdown." end
+    if self:IsMainWindowModalBlocked() then return false, "Close the open dialog before copying a snapshot." end
+    if self.Editor:IsDirty() then return false, "Save or Revert editor changes before copying a snapshot." end
     if not self:IsOfflineMacro(snapshot) then
-        self.Editor:SetNotice("Select an offline character macro to copy it.", true)
-        return false
+        return false, "Select an offline character macro to copy it."
     end
-
     local source = self.CharacterMacroLibrary:FindSnapshot(snapshot)
-    if not source then
-        self.Editor:SetNotice("This stored macro snapshot is no longer available.", true)
+    if not source then return false, "This stored macro snapshot is no longer available." end
+    local request = {
+        name = source.name, body = source.body, icon = source.icon, scope = destination,
+        source = destination == "STUDIO" and "STUDIO" or nil,
+    }
+    local repository = destination == "STUDIO" and self.StudioMacroRepository or self.MacroRepository
+    local valid, reason = repository:ValidateCreateRequest(request)
+    return valid, reason, request
+end
+
+function MacroStudio:CopySelectedSnapshot(destination, expectedSnapshot)
+    if expectedSnapshot and not self:MacroRecordsEqual(self.selectedMacro, expectedSnapshot) then
+        self.Editor:SetNotice("The selected snapshot changed. Open Copy to again.", true)
         return false
     end
-
-    local created, macroOrMessage = self:CreateNativeMacro({
-        name = source.name,
-        body = source.body,
-        icon = source.icon,
-        scope = "CHARACTER",
-    })
+    local valid, reason, request = self:ValidateSnapshotCopy(self.selectedMacro, destination)
+    if not valid then self.Editor:SetNotice(reason, true); return false end
+    local created, macroOrMessage = self:CreateNativeMacro(request)
     if not created then
         self.Editor:SetNotice(macroOrMessage or "The snapshot could not be copied.", true)
         return false
     end
 
-    self:SetFilter("character")
-    self.Editor:SetNotice("Copied to the current character. The offline snapshot was not changed.", false)
+    local filter = destination == "STUDIO" and "studio" or destination == "ACCOUNT" and "account" or "character"
+    local label = destination == "STUDIO" and "MacroStudio Macros" or destination == "ACCOUNT" and "Account Macros" or "the current character"
+    self:SetFilter(filter)
+    self.Editor:SetNotice("Copied to " .. label .. ". The offline snapshot was not changed."
+        .. (not macroOrMessage and " Select the new macro from the list." or ""), false)
     return true, macroOrMessage
 end
 
@@ -932,6 +993,16 @@ function MacroStudio:DeleteSelectedMacro(snapshot)
     end
 
     local _, trustedMetadataId = self.MetadataRepository:GetRecordForMacro(snapshot)
+    if self.StudioMacroRepository:IsStudio(snapshot) then
+        local deleted, message = self.StudioMacroRepository:Delete(snapshot)
+        if not deleted then self.Editor:SetNotice(message, true); return false end
+        self.MetadataRepository:OnMacroDeleted(snapshot, trustedMetadataId)
+        self.selectedMacro = nil
+        self.Editor:Clear()
+        self:RefreshOrganizationUI()
+        self.Editor:SetNotice("MacroStudio macro and its keybindings deleted.", false)
+        return true
+    end
     self.nativeMutationInProgress = true
     local deleted, message = self.MacroRepository:Delete(snapshot)
     self:FinishNativeMacroMutation("delete")
@@ -952,6 +1023,13 @@ end
 
 function MacroStudio:UpdateCombatState()
     self.inCombat = type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
+    if not self.inCombat and self.StudioMacroRepository.pendingRebuild then
+        self.StudioMacroRepository:RebuildBindings()
+    end
+    if not self.inCombat and self.StudioActionBarRepository.pendingSync then
+        self.StudioActionBarRepository:ReconcileCurrentCopies()
+    end
+    self.KeybindButton:Refresh()
     if self.Editor then
         self.Editor:UpdateEditorState("combat")
     end

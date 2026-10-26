@@ -41,8 +41,8 @@ local function getSelectedIcon(index, fallback)
     local provider = C_Macro and C_Macro.GetSelectedMacroIcon
     if type(provider) == "function" then
         local ok, icon = pcall(provider, index)
-        if ok and (type(icon) == "number" or (type(icon) == "string" and icon ~= "")) then
-            return icon
+        if ok and ((type(icon) == "number" and icon > 0) or (type(icon) == "string" and icon ~= "")) then
+            return MacroStudio.Helpers:NormalizeIcon(icon)
         end
     end
     return fallback or MacroStudio.DEFAULT_ICON
@@ -167,6 +167,10 @@ function MacroRepository:FindByIndex(index)
 end
 
 function MacroRepository:SnapshotsEqual(first, second)
+    local studio = MacroStudio.StudioMacroRepository
+    if studio and (studio:IsStudio(first) or studio:IsStudio(second)) then
+        return studio:SnapshotsEqual(first, second)
+    end
     return type(first) == "table"
         and type(second) == "table"
         and first.index == second.index
@@ -177,6 +181,9 @@ function MacroRepository:SnapshotsEqual(first, second)
 end
 
 function MacroRepository:IsSnapshotCurrent(snapshot)
+    if MacroStudio.StudioMacroRepository and MacroStudio.StudioMacroRepository:IsStudio(snapshot) then
+        return MacroStudio.StudioMacroRepository:IsSnapshotCurrent(snapshot)
+    end
     if type(snapshot) ~= "table" or type(snapshot.index) ~= "number" then
         return false
     end
@@ -410,7 +417,7 @@ function MacroRepository:ValidateMacroContent(request)
         return false, string.format("Macro bodies are limited to %d characters.", MacroStudio.MAX_BODY_LENGTH)
     end
 
-    local icon = request.icon
+    local icon = MacroStudio.Helpers:NormalizeIcon(request.icon)
     if type(icon) ~= "number" and (type(icon) ~= "string" or icon == "") then
         return false, "Choose a valid macro icon."
     end
@@ -461,7 +468,7 @@ function MacroRepository:Create(request)
         name = MacroStudio.Helpers:Trim(self:NormalizeMacroName(request.name)),
         body = type(request.body) == "string" and request.body or "",
         scope = request.scope,
-        icon = request.icon or MacroStudio.DEFAULT_ICON,
+        icon = MacroStudio.Helpers:NormalizeIcon(request.icon) or MacroStudio.DEFAULT_ICON,
     }
 
     self:Refresh()

@@ -29,7 +29,7 @@ function Theme:CreateWindow(name, parent, portrait)
     frame.NineSlice:SetBorderColor(unpack(self.palette.metal))
     frame.NineSlice:SetFrameLevel(frame:GetFrameLevel() + 5)
     frame.NineSlice:EnableMouse(false)
-    frame.Bg:SetVertexColor(0.78, 0.68, 0.53, 1)
+    frame.Bg:SetVertexColor(unpack(self.palette.windowTint))
     if frame.TopTileStreaks then frame.TopTileStreaks:SetAlpha(0.6) end
     frame.TitleContainer:SetFrameLevel(frame:GetFrameLevel() + 8)
     local band = frame:CreateTexture(nil, "BACKGROUND", nil, -4)
@@ -69,14 +69,14 @@ end
 
 function Theme:WorkbenchSurface(frame)
     -- A restrained material wash under all three regions, never under code.
-    frame.Bg:SetColorTexture(0.072, 0.064, 0.055, 1)
+    frame.Bg:SetColorTexture(unpack(self.palette.workbench))
     frame.Bg:SetVertexColor(1, 1, 1, 1)
     local material = frame:CreateTexture(nil, "BACKGROUND", nil, -4)
     material:SetAllPoints(frame.Bg)
     material:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock")
     material:SetHorizTile(true)
     material:SetVertTile(true)
-    material:SetVertexColor(0.9, 0.82, 0.71, 0.24)
+    material:SetVertexColor(unpack(self.palette.materialTint))
 end
 
 function Theme:SecondaryText(label)
@@ -88,10 +88,10 @@ end
 function Theme:CreateInset(parent, editor)
     local frame = CreateFrame("Frame", nil, parent, editor and self.resources.editor or self.resources.inset)
     if editor then
-        frame.Bg:SetColorTexture(0.025, 0.023, 0.02, 1)
+        frame.Bg:SetColorTexture(unpack(self.palette.editorBackground))
         for _, key in ipairs({ "BorderTopRight", "BorderBottomRight", "BorderRightMiddle", "BorderTopLeft",
             "BorderBottomLeft", "BorderLeftMiddle", "BorderTopMiddle", "BorderBottomMiddle" }) do
-            tint(frame[key], { 0.9, 0.81, 0.65, 1 })
+            tint(frame[key], self.palette.editorRim)
         end
         -- The native eight-piece rim stays intact. Inside it, directional
         -- shadows make the unchanged near-black editing surface sit deeper.
@@ -111,8 +111,8 @@ function Theme:CreateInset(parent, editor)
         bottom:SetHeight(1)
         bottom:SetColorTexture(0.16, 0.14, 0.11, 0.6)
     else
-        frame.Bg:SetVertexColor(0.7, 0.61, 0.48, 1)
-        frame.NineSlice:SetBorderColor(0.6, 0.52, 0.4, 1)
+        frame.Bg:SetVertexColor(unpack(self.palette.insetTint))
+        frame.NineSlice:SetBorderColor(unpack(self.palette.insetBorder))
     end
     return frame
 end
@@ -145,7 +145,7 @@ function Theme:Section(parent, title)
     rule:SetHeight(3)
     rule:SetAtlas("_UI-Frame-InnerTopTile")
     rule:SetHorizTile(true)
-    rule:SetVertexColor(0.36, 0.3, 0.22, 1)
+    rule:SetVertexColor(unpack(self.palette.sectionRule))
 end
 
 function Theme:Label(label, font)
@@ -157,10 +157,10 @@ function Theme:Button(button, role)
     button.macroStudioRole = role or "button"
     -- Keep separate Blizzard up/down/disabled artwork and its texcoords.
     tint(button:GetNormalTexture(), self.palette.metal)
-    tint(button:GetPushedTexture(), { 0.72, 0.58, 0.36, 1 })
+    tint(button:GetPushedTexture(), self.palette.buttonPushed)
     local disabled = button:GetDisabledTexture()
     if disabled then disabled:SetDesaturated(true) end
-    tint(button:GetHighlightTexture(), { 1, 0.8, 0.4, 0.45 })
+    tint(button:GetHighlightTexture(), self.palette.buttonHighlight)
     button:SetNormalFontObject(GameFontNormalSmall)
     button:SetHighlightFontObject(GameFontHighlightSmall)
     button:SetDisabledFontObject(GameFontDisableSmall)
@@ -195,7 +195,7 @@ function Theme:Input(box)
     box:SetTextColor(unpack(self.palette.text))
     local function focus(focused)
         for _, key in ipairs({ "Left", "Middle", "Right" }) do
-            tint(box[key], focused and { 1, 0.88, 0.6, 1 } or { 0.82, 0.76, 0.63, 1 })
+            tint(box[key], focused and self.palette.inputFocus or self.palette.inputIdle)
         end
     end
     focus(false)
@@ -207,18 +207,18 @@ function Theme:Row(row)
     local selection = row:CreateTexture(nil, "BACKGROUND")
     selection:SetAllPoints(row)
     selection:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-    selection:SetVertexColor(0.65, 0.47, 0.2, 0.8)
+    selection:SetVertexColor(unpack(self.palette.selection))
     selection:Hide()
     row.macroStudioSelection = selection
     local hover = row:CreateTexture(nil, "HIGHLIGHT")
     hover:SetAllPoints(row)
     hover:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-    hover:SetVertexColor(0.55, 0.43, 0.24, 0.25)
+    hover:SetVertexColor(unpack(self.palette.hover))
     local shadow = row:CreateTexture(nil, "BORDER")
     shadow:SetPoint("BOTTOMLEFT")
     shadow:SetPoint("BOTTOMRIGHT")
     shadow:SetHeight(1)
-    shadow:SetColorTexture(0.025, 0.022, 0.018, 0.6)
+    shadow:SetColorTexture(unpack(self.palette.rowRule))
 end
 
 function Theme:RowState(row)

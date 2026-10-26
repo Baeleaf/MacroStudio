@@ -116,3 +116,17 @@ Editing assistance must never silently rewrite a working macro or claim semantic
 - [x] Add an optional draggable minimap launcher with remembered radial position.
 - [x] Register through the supported AddOn Compartment TOC metadata without manipulating Blizzard frames.
 - [x] Detect pre-existing slash ownership conservatively and retain `/ms` instead of entering a command conflict.
+
+## MacroStudio macros and named styles (1.4.0)
+
+- [x] Store shared MacroStudio definitions independently of Blizzard slots, with stable IDs, revision-checked edits, and a migration from the original split library.
+- [x] Share editor, icon search, Favorites, categories, tags and search with native macro workflows.
+- [x] Bind saved macros directly to per-character keyboard assignments through secure buttons; protect combat and override contexts.
+- [x] Offer Warcraft (default), Legacy, Emerald, Violet and Ember through one mutually exclusive radio selector, with no separate Appearance section.
+- [x] Cover native-slot isolation, both native count limits, key isolation/cleanup and named styles in headless checks.
+- [x] Drag saved macros from list rows and editor icons; bridge shared macros to reusable native action-bar copies with guarded synchronization.
+- [x] Move keybinding to an inline themed button below Tags, with readable key labels, immediate keyboard/mouse/wheel capture, right-click clearing and Esc cancellation.
+- [x] Copy offline snapshots into Current Character, Account Macros or MacroStudio Macros using one themed dropdown, with independent capacity and stale-source guards.
+- [x] Promote the completed feature build to the 1.4.0 release and prepare readable GitHub/CurseForge release notes.
+- [ ] Finish the recorded live-client checklist; automated checks do not verify actual key routing, native drops, or taint.
+- [ ] Evaluate mouse/hovercast separately after keyboard execution is accepted.

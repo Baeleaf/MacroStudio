@@ -124,7 +124,7 @@ Blizzard's [RestrictedExecution.lua](https://github.com/Gethe/wow-ui-source/blob
 
 ## Blizzard-owned and MacroStudio-owned data
 
-Blizzard owns every native macro's name, body, icon, scope, and current enumeration index. MacroStudio writes through the native macro APIs and never creates a parallel execution mechanism.
+Blizzard owns every native macro's name, body, icon, scope, and current enumeration index. Native macros continue to use the native macro APIs. The unreleased MacroStudio macro library described below owns a separate storage and execution path.
 
 `MacroStudioDB` schema 4 stores settings, virtual metadata, and the account-wide character snapshot library. Organization records use opaque IDs and carry a reconciliation snapshot:
 
@@ -183,7 +183,9 @@ Cross-character records carry an explicit `source`: `LIVE` for the current chara
 
 Offline editor text remains enabled for native selection, scrolling, and copy shortcuts, but any mutation is immediately restored from the snapshot. Save, Revert, Delete, drag, action-bar usage, Favorite, category, and tag controls are unavailable. Organization metadata is intentionally not associated with offline snapshots because the existing metadata identity is scoped to loaded native macros.
 
-Copy to Current Character re-resolves the exact offline record, then calls the existing `CreateNativeMacro` path with only name, body, icon, and Character scope. Native name/body/icon validation, capacity, combat lockdown, question-mark icon behavior, duplicate names, repository refresh, and current snapshot refresh remain owned by the existing creation path. Copy never transfers organization metadata or modifies the source snapshot.
+The themed Copy to dropdown offers Current Character, Account Macros, and MacroStudio Macros. `ValidateSnapshotCopy` re-resolves the exact offline record and validates each destination separately; full native scopes disable only their own rows, leaving shared storage available. `CopySelectedSnapshot` verifies the selected snapshot still matches the menu's captured source before creating a fresh macro through the existing creation path. Native destinations use Character or Account scope; shared copies use `source = "STUDIO"` and never allocate native slots or assign keys. Success selects the new macro and switches to its destination filter. Copy never transfers organization metadata or modifies the source snapshot.
+
+Copy retains the existing name/body/icon validation, question-mark icon behavior, duplicate-name safety, combat lockdown and repository refresh. The menu closes after selection, outside clicks, selection changes, modal dialogs, window closure or combat. Stale menu targets, removed snapshots, invalid content, blocked destinations and modal/dirty state are rechecked before creation; blocked copies are never retried automatically.
 
 Forget Character is limited to offline records, requires confirmation, and deletes only that character key from `characterLibrary`. It cannot forget the current character or touch Blizzard macros, Account macros, or unrelated MacroStudio data.
 
@@ -209,11 +211,11 @@ Name validation follows Retail's 16-letter limit, removes unsupported quotation 
 
 ## Native action-bar drag handoff
 
-Macro-list rows register for Blizzard's native left-button drag gesture. `OnDragStart` passes the row's saved snapshot to `MacroRepository:Pickup`, which re-reads the same native index and requires index, scope, name, icon, and body to match before calling `PickupMacro(index)`. It never looks up a macro by name, so duplicate names remain safe. A stale row is refused rather than redirected to a shifted neighbor.
+Macro-list rows and the editor icon register for Blizzard's native left-button drag gesture. `OnDragStart` routes the saved snapshot through `RequestPickupMacro`. Native macros use `MacroRepository:Pickup`, which re-reads the same native index and requires index, scope, name, icon, and body to match before calling `PickupMacro(index)`. It never looks up a macro by name, so duplicate names remain safe. A stale row is refused rather than redirected to a shifted neighbor.
 
 `PickupMacro` is unavailable during combat lockdown. MacroStudio checks `InCombatLockdown()` first, leaves the cursor unchanged, and shows a concise message instead of attempting a secure workaround. It also does not call `ClearCursor`, matching Blizzard's own Macro UI handoff behavior when the cursor already holds something.
 
-Pickup uses the saved native macro. It never saves an editor draft, creates a temporary macro, or changes category, tag, Favorite, body, name, icon, or scope metadata. When the dragged row is the dirty editor selection, MacroStudio explains that the saved version was placed on the cursor.
+Pickup uses the saved macro and never saves an editor draft. When dragging the dirty editor selection, MacroStudio explains that the saved version was placed on the cursor. Shared macros use the persistent linked native copy described below.
 
 MacroStudio stops after `PickupMacro(index)`. Blizzard's standard action buttons receive the normal cursor payload and perform their own drop, swap, and cancel behavior. MacroStudio does not call `PlaceAction`, emulate action buttons, or hardcode action-bar frame names. Compatible third-party bars can consume the same native payload, but real-client testing is still required.
 
@@ -340,3 +342,29 @@ The dialog's `OnHide` path is the single cleanup point for Cancel, Escape, the c
 - Ambiguous native targets and metadata are never guessed.
 - Category/tag/Favorite actions never mutate a native macro.
 - Imported text, when implemented, must never be executed as Lua.
+
+## MacroStudio macros and named color styles (unreleased)
+
+`StudioMacroRepository.lua` owns additive schema 4 `studioMacros = {nextId, records}` and `studioBindings[characterId][studioId] = key`. Definitions carry stable opaque numeric-string IDs, a single internal STUDIO scope, and a revision. The library version 2 migration promotes prior Account and Character definitions into this shared collection, clears obsolete owners, and preserves IDs, names, bodies, revisions, metadata and per-character key assignments. Runtime records use `source = "STUDIO"` and a string index `studio:<id>`; they never impersonate a native macro index. All managed definitions enter the shared live catalog. Account/Character filters remain specific to Blizzard macros, while All Macros, Favorites and category views can include the shared collection. Native snapshots and action-bar lookup remain native-only.
+
+Managed CRUD validates the current saved snapshot and the same 255-character executable-body limit. It never calls CreateMacro, EditMacro, DeleteMacro or PickupMacro. The normal editor, filters, category/tag/Favorite metadata and search are shared. Metadata reconciliation follows the stable Studio ID and excludes managed records from native identity matching. Native refresh events preserve managed drafts without manufacturing a native external conflict. MacroStudio creation remains available when both native scopes are full.
+
+Keys are saved per character for the shared definitions. `UI/KeybindButton.lua` provides one themed button below Category and Tags, visible only for shared macros. It displays Not Bound or a readable assigned key, with hover instructions and game-binding disclosure. Left-click starts capture; the first supported keyboard key, middle/extra mouse button or wheel direction (with modifiers) commits immediately. Right-click while idle clears; Esc cancels without changing the assignment. Primary mouse buttons remain reserved for normal UI interaction. Duplicate managed keys are rejected while listening remains active for a retry.
+
+A temporary transparent input frame consumes keyboard, mouse and wheel input while listening; it is hidden after success, Esc, selection or draft changes, window closure, another modal, stale targets, or combat. No delayed binding is applied when combat ends. The editor reserves one additional row only for shared macros; the top-right indicator reports action-bar usage independently. Definitions, deletion, and binding writes are blocked in combat. No code compiles or runs user macro text from insecure addon code.
+
+One secure action button per bound definition holds its saved macrotext. A secure state-handler owner binds real hardware key presses directly to these buttons. Its state driver clears its own bindings during pet battles, vehicles, possession and override bars, restoring them when normal context returns. The protected snippets read attribute values rather than interpolating user input into code. Rebuild clears old action text, releases previous keys, and rebuilds only validated current-character bindings. Reload reconstructs actions from saved definitions and assignments. Offline native snapshots remain read-only.
+
+### Shared macro action-bar copies
+
+`StudioActionBarRepository.lua` bridges a shared macro to the native macro cursor. Stock bars accept a native macro index, so the first drag creates a persistent exact name/icon/body copy in a free Character slot, falling back to Account. This consumes one native slot per linked macro; direct keybindings and shared library storage remain independent of those limits. No `/click` helper chaining or action-button modification is used. Repeated drags reuse the copy, including after a canceled drop.
+
+Additive `studioActionBarCopies[characterId][studioId]` stores complete native copy snapshots. Reuse, updates and deletion require exactly one same-scope native macro matching all saved content, allowing native index shifts without overwriting an uncertain neighbor. External changes or identical duplicates block synchronization and preserve the draft. A fresh drag can create and link a new copy while leaving the old uncertain copy untouched. Native rows for copies remain visible as ordinary native macros.
+
+Saving a shared definition first synchronizes its verified current-character copy; failure prevents committing the shared edit. Deletion removes a verified current-character copy and unlinks an externally changed one without deleting it. Login reconciles other characters' existing copies with the shared definition or removes verified copies for deleted definitions. Combat delays login reconciliation, while explicit drag/save/delete operations are refused. A busy cursor is checked before any copy creation. Native writes use the existing mutation gate and reconciliation, and action-bar usage resolves through the verified native copy.
+
+`UI/ColorStyles.lua` defines a unified style list: Warcraft (default), Legacy, Emerald, Violet and Ember. Each choice determines its base presentation and colors. Legacy uses the original blue/gray layout; the colored presets use Warcraft geometry. Initialization applies the selected presentation and then its palette, mutating arrays in place to preserve editor references. Warning/error colors remain semantic.
+
+`settings.style` is the canonical saved choice; `settings.appearance` is derived for existing frame construction. Saved legacy appearance maps to Legacy, the former Warcraft Frost preset maps to Legacy, and other Warcraft colors retain their named style. Older `settings.colorStyles` data is preserved for rollback. Settings exposes only the unified radio list. Selection stages the complete choice, never partially recolors live frames, and uses the existing draft/form-protected Reload UI action.
+
+Tests exercise managed definitions beyond both native count limits, key scope/cleanup, the exact secure snippets against a modeled frame API, CRUD/search/metadata integration, five fresh unified style starts including contrast, and eight saved-choice upgrade cases. Native secure input routing and visual/taint acceptance still require the live checklist in TESTING.md.

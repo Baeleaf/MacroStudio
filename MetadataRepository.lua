@@ -37,6 +37,8 @@ end
 local function copySnapshot(macro)
     return {
         scope = macro.scope,
+        source = macro.source == "STUDIO" and "STUDIO" or nil,
+        studioId = macro.studioId,
         lastKnownIndex = macro.index,
         name = macro.name,
         icon = identityIcon(macro),
@@ -248,6 +250,16 @@ function MetadataRepository:FindReconciliationCandidate(record, macros, availabl
         return nil, "missing snapshot"
     end
 
+    if snapshot.source == "STUDIO" then
+        local macro = MacroStudio.StudioMacroRepository:GetById(snapshot.studioId)
+        return macro, macro and "stable MacroStudio ID" or "MacroStudio macro unavailable on this character"
+    end
+    local native = {}
+    for _, macro in ipairs(macros) do
+        if macro.source ~= "STUDIO" then native[#native + 1] = macro end
+    end
+    macros = native
+
     local exact = getCandidates(macros, available, function(macro)
         return macro.scope == snapshot.scope
             and macro.name == snapshot.name
@@ -286,6 +298,12 @@ function MetadataRepository:FindReconciliationCandidate(record, macros, availabl
 end
 
 function MetadataRepository:Reconcile(macros)
+    if MacroStudio.StudioMacroRepository then
+        local combined = {}
+        for _, macro in ipairs(macros or {}) do combined[#combined + 1] = macro end
+        for _, macro in ipairs(MacroStudio.StudioMacroRepository:Refresh()) do combined[#combined + 1] = macro end
+        macros = combined
+    end
     self.attachedByIndex = {}
     self.attachedByRecord = {}
     self.reconciliation = {}

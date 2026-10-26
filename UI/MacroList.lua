@@ -142,8 +142,8 @@ function MacroList:SetNewMacroState(enabled, reason)
     MacroStudio.Helpers:SetButtonEnabled(self.newMacroButton, enabled)
     MacroStudio.Helpers:SetButtonTooltip(
         self.newMacroButton,
-        "Create Native Macro",
-        enabled and "Create an Account or Character macro." or reason
+        "Create Macro",
+        enabled and "Choose a shared MacroStudio macro or a Blizzard Account/Character macro." or reason
     )
 end
 
@@ -276,6 +276,13 @@ function MacroList:AddEmptyMessage(message, yOffset)
 end
 
 function MacroList:UpdateRowUsageTooltip(row)
+    if row.macro and row.macro.source == "STUDIO" then
+        local key = MacroStudio.StudioMacroRepository:GetBinding(row.macro)
+        MacroStudio.Helpers:SetButtonTooltip(row, row.displayName,
+            "MacroStudio macro · " .. (key or "No key assigned")
+                .. "\nDrag to place on an action bar. A linked copy uses one native macro slot.")
+        return
+    end
     if MacroStudio:IsOfflineMacro(row.macro) then
         local tooltip = "Click to view this read-only snapshot."
             .. "\nViewing " .. (row.macro.characterDisplayName or "offline character")
@@ -309,7 +316,9 @@ function MacroList:UpdateRowUsage(row)
         return
     end
 
-    local count, slots = MacroStudio.ActionBarRepository:GetUsage(row.macro)
+    local repository = row.macro and row.macro.source == "STUDIO"
+        and MacroStudio.StudioActionBarRepository or MacroStudio.ActionBarRepository
+    local count, slots = repository:GetUsage(row.macro)
     row.actionBarUsageCount = count
     row.actionBarUsageSlots = slots
     row.usageText:SetShown(count > 0)
@@ -367,6 +376,8 @@ function MacroList:AddSection(title, macros, yOffset, showEmpty, emptyMessage)
         end
         if offline then
             preview = "Read-only - " .. preview
+        elseif macro.source == "STUDIO" then
+            preview = "MacroStudio - " .. preview
         end
         row.detailText:SetText(string.format("%d / %d  |  %s", length, MacroStudio.MAX_BODY_LENGTH, preview))
         self.visibleRows[#self.visibleRows + 1] = row
@@ -421,18 +432,21 @@ function MacroList:Rebuild(macros, selectedMacro, activeFilter, searchQuery, cha
 
     local accountMacros = {}
     local characterMacros = {}
+    local studioMacros = {}
     for _, macro in ipairs(macros or {}) do
-        if macro.scope == "ACCOUNT" then
+        if macro.source == "STUDIO" then
+            studioMacros[#studioMacros + 1] = macro
+        elseif macro.scope == "ACCOUNT" then
             accountMacros[#accountMacros + 1] = macro
         else
             characterMacros[#characterMacros + 1] = macro
         end
     end
 
-    local showAccount = filterKind ~= "character"
-    local showCharacter = filterKind ~= "account"
+    local showAccount = filterKind ~= "character" and filterKind ~= "studio"
+    local showCharacter = filterKind ~= "account" and filterKind ~= "studio"
     local showEmptySections = visibleQuery == ""
-        and (filterKind == "all" or filterKind == "account" or filterKind == "character")
+        and (filterKind == "all" or filterKind == "account" or filterKind == "character" or filterKind == "studio")
 
     if showAccount then
         local added
@@ -445,6 +459,13 @@ function MacroList:Rebuild(macros, selectedMacro, activeFilter, searchQuery, cha
         end
         local added
         yOffset, added = self:AddSection("CHARACTER MACROS", characterMacros, yOffset, showEmptySections)
+        addedSection = addedSection or added
+    end
+    if filterKind ~= "account" and filterKind ~= "character" then
+        if addedSection and #studioMacros > 0 then yOffset = yOffset + 8 end
+        local added
+        yOffset, added = self:AddSection("MACROSTUDIO MACROS", studioMacros, yOffset,
+            filterKind == "studio" and visibleQuery == "", "No MacroStudio macros yet. Choose + New Macro to add one.")
         addedSection = addedSection or added
     end
     if not addedSection then

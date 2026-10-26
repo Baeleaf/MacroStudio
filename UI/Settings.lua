@@ -19,7 +19,7 @@ function Settings:Create()
     end
 
     local frame = MacroStudio.Helpers:CreateWindow(UIParent)
-    frame:SetSize(470, 350)
+    frame:SetSize(470, 390)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetToplevel(true)
@@ -59,31 +59,34 @@ function Settings:Create()
     status:SetWordWrap(true)
     self.statusText = status
 
-    local appearanceHeading = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "APPEARANCE")
-    appearanceHeading:SetPoint("TOPLEFT", 20, -196)
+    local styleHeading = MacroStudio.Helpers:CreateLabel(frame, "GameFontNormal", "COLOR STYLE")
+    styleHeading:SetPoint("TOPLEFT", 20, -196)
+    self.styleButtons = {}
+    for index, style in ipairs(MacroStudio.Theme.colorStyles) do
+        local id = style.id
+        local radio = CreateFrame("CheckButton", nil, frame, "UIRadioButtonTemplate")
+        radio:SetSize(18, 18)
+        radio:SetPoint("TOPLEFT", 20 + ((index - 1) % 2) * 215, -222 - math.floor((index - 1) / 2) * 26)
+        radio:SetHitRectInsets(0, -180, 0, 0)
+        local label = MacroStudio.Helpers:CreateLabel(radio, "GameFontHighlight", style.name)
+        label:SetPoint("LEFT", radio, "RIGHT", 4, 0)
+        label:SetTextColor(unpack(style.color or style.swatch or MacroStudio.Theme.palette.text))
+        radio.label = label
+        radio:SetScript("OnClick", function()
+            MacroStudio.Theme:SetColorStyle(id)
+            self:Refresh()
+        end)
+        self.styleButtons[id] = radio
+    end
 
-    local warcraft = MacroStudio.Helpers:CreateButton(frame)
-    warcraft:SetSize(164, 24)
-    warcraft:SetPoint("TOPLEFT", 20, -220)
-    warcraft:SetText("Warcraft (default)")
-    warcraft:SetScript("OnClick", function() self:SetAppearance("warcraft") end)
-    self.warcraftButton = warcraft
-
-    local legacy = MacroStudio.Helpers:CreateButton(frame)
-    legacy:SetSize(110, 24)
-    legacy:SetPoint("LEFT", warcraft, "RIGHT", 8, 0)
-    legacy:SetText("Legacy")
-    legacy:SetScript("OnClick", function() self:SetAppearance("legacy") end)
-    self.legacyButton = legacy
-
-    local appearanceHelp = MacroStudio.Helpers:CreateLabel(frame, "GameFontHighlightSmall", "")
-    appearanceHelp:SetPoint("TOPLEFT", 24, -254)
-    appearanceHelp:SetSize(420, 34)
-    appearanceHelp:SetJustifyH("LEFT")
-    appearanceHelp:SetJustifyV("TOP")
-    appearanceHelp:SetWordWrap(true)
-    MacroStudio.Theme:SecondaryText(appearanceHelp)
-    self.appearanceHelp = appearanceHelp
+    local styleHelp = MacroStudio.Helpers:CreateLabel(frame, "GameFontHighlightSmall", "")
+    styleHelp:SetPoint("TOPLEFT", 24, -306)
+    styleHelp:SetSize(420, 34)
+    styleHelp:SetJustifyH("LEFT")
+    styleHelp:SetJustifyV("TOP")
+    styleHelp:SetWordWrap(true)
+    MacroStudio.Theme:SecondaryText(styleHelp)
+    self.styleHelp = styleHelp
 
     local reload = MacroStudio.Helpers:CreateButton(frame)
     reload:SetSize(110, 26)
@@ -119,27 +122,23 @@ function Settings:Refresh()
     local settings = MacroStudio.db and MacroStudio.db.settings or {}
     self.takeoverCheckbox:SetChecked(settings.useMacroStudioSlashCommands == true)
     self.minimapCheckbox:SetChecked(settings.showMinimapButton == true)
-    MacroStudio.Theme:ToggleButton(self.warcraftButton, settings.appearance == "warcraft")
-    MacroStudio.Theme:ToggleButton(self.legacyButton, settings.appearance == "legacy")
+    local style = MacroStudio.Theme:GetColorStyle()
+    for id, radio in pairs(self.styleButtons) do
+        radio:SetChecked(id == style.id)
+    end
     local pending = MacroStudio.Theme:HasPendingAppearance()
     local canReload = pending and self:CanReloadAppearance()
     self.reloadButton:SetShown(pending)
     MacroStudio.Helpers:SetButtonEnabled(self.reloadButton, canReload)
-    self.appearanceHelp:SetText(pending and (canReload and "Reload UI to apply your appearance. Your macros and settings are kept."
+    self.styleHelp:SetText(pending and (canReload and "Reload UI to apply your style. Your macros and settings are kept."
         or "Save or Revert your macro changes and close any macro dialog before reloading.")
-        or "Warcraft uses the new design. Legacy restores the original blue and gray panels.")
+        or "Choose a style above. Reload UI applies your selection.")
     self.statusText:SetText(MacroStudio.Access:GetStatusText())
     if MacroStudio.Access:IsTakeoverRequested() and not MacroStudio.Access:IsTakeoverActive() then
         self.statusText:SetTextColor(unpack(MacroStudio.Theme.palette.error))
     else
         self.statusText:SetTextColor(unpack(MacroStudio.Theme.palette.muted))
     end
-end
-
-function Settings:SetAppearance(appearance)
-    if not MacroStudio.Theme:SetAppearance(appearance) then return false end
-    self:Refresh()
-    return true
 end
 
 function Settings:CanReloadAppearance()

@@ -63,6 +63,7 @@ function Sidebar:Create(parent)
         { kind = "all", text = "All Macros" },
         { kind = "account", text = "Account Macros" },
         { kind = "character", text = "Current Character" },
+        { kind = "studio", text = "MacroStudio Macros" },
     }
     self.navigationButtons = {}
     local previous
@@ -84,7 +85,7 @@ function Sidebar:Create(parent)
     end
 
     local scrollFrame = MacroStudio.Helpers:CreateScrollFrame(panel)
-    scrollFrame:SetPoint("TOPLEFT", 10, -143)
+    scrollFrame:SetPoint("TOPLEFT", 10, -(39 + #navigation * (BUTTON_HEIGHT + 1)))
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 76)
     self.scrollFrame = scrollFrame
 

@@ -12,6 +12,7 @@ from lupa.lua51 import LuaRuntime
 
 from ui_smoke import run_ui_smoke
 from macro_linter import run_linter_tests
+from color_styles import run_color_style_tests
 
 ROOT = Path(__file__).resolve().parents[1]
 lua = LuaRuntime(unpack_returned_tuples=True)
@@ -207,10 +208,13 @@ globals_.MacroStudioDB = None
 load_addon_file("Utils/Helpers.lua", namespace)
 load_addon_file("UI/WarcraftTheme.lua", namespace)
 load_addon_file("UI/LegacyTheme.lua", namespace)
+load_addon_file("UI/ColorStyles.lua", namespace)
 load_addon_file("Database.lua", namespace)
 load_addon_file("MacroRepository.lua", namespace)
 load_addon_file("CharacterMacroLibrary.lua", namespace)
+load_addon_file("StudioMacroRepository.lua", namespace)
 load_addon_file("ActionBarRepository.lua", namespace)
+load_addon_file("StudioActionBarRepository.lua", namespace)
 load_addon_file("MetadataRepository.lua", namespace)
 load_addon_file("Search.lua", namespace)
 load_addon_file("UI/MacroList.lua", namespace)
@@ -851,6 +855,48 @@ sidebar_source = (ROOT / "UI" / "Sidebar.lua").read_text(encoding="utf-8")
 editor_source = (ROOT / "UI" / "Editor.lua").read_text(encoding="utf-8")
 macro_dialog_source = (ROOT / "UI" / "MacroDialog.lua").read_text(encoding="utf-8")
 main_frame_source = (ROOT / "UI" / "MainFrame.lua").read_text(encoding="utf-8")
+# Reproduce the client converting picker strings/paths to file IDs on readback.
+lua.execute(r'''
+    local ms = ...
+    local repo = ms.MacroRepository
+    local nativeEdit, nativeCreate = EditMacro, CreateMacro
+    local originalFileLookup = GetFileIDFromPath
+    function GetFileIDFromPath(path)
+        if path == "interface\\icons\\spell_nature_test" then return 135000 end
+        return nil
+    end
+    local function nativeIcon(icon)
+        return tonumber(icon) or (type(icon) == "string" and icon:lower():find("spell_nature_test", 1, true) and 135000) or icon
+    end
+    function EditMacro(index, name, icon, body)
+        return nativeEdit(index, name, nativeIcon(icon), body)
+    end
+    function CreateMacro(name, icon, body, perCharacter)
+        return nativeCreate(name, nativeIcon(icon), body, perCharacter)
+    end
+    accountMacros = { { name = "Icon Test", icon = 101, selectedIcon = 101, body = "/say before" } }
+    combat = false
+    editMoveToEnd = false
+    for _, icon in ipairs({ "135000", "Spell_Nature_Test", "Interface/Icons/Spell_Nature_Test.blp", 135000 }) do
+        repo:Refresh()
+        local snapshot = ms.Helpers:CopyMacro(repo:FindByIndex(1))
+        local ok, saved, reason = repo:Update(snapshot, { name = snapshot.name, icon = icon, body = "/say saved" })
+        assert(ok and saved.selectedIcon == 135000, reason or "icon normalization save regression")
+        assert(lastEditCall.icon == 135000, "writes should use a canonical numeric icon ID")
+        assert(ms.Helpers:IconsEqual(icon, saved.selectedIcon), "draft and native readback must share an identity")
+    end
+    local ok, created, reason = repo:Create({ name = "New Icon", icon = "Spell_Nature_Test", body = "/say created", scope = "ACCOUNT" })
+    assert(ok and created.selectedIcon == 135000, reason or "creation must normalize icon paths too")
+    -- A genuine icon-write failure must still be rejected, even if text saves.
+    function EditMacro(index, name, icon, body) return nativeEdit(index, name, 101, body) end
+    repo:Refresh()
+    local snapshot = ms.Helpers:CopyMacro(repo:FindByIndex(1))
+    local ok, saved, reason = repo:Update(snapshot, { name = snapshot.name, icon = 135000, body = "/say failed icon" })
+    assert(not ok and not saved and reason:find("buffer was preserved", 1, true),
+        "normalization must not hide a genuinely rejected icon change")
+    EditMacro, CreateMacro, GetFileIDFromPath = nativeEdit, nativeCreate, originalFileLookup
+''', namespace)
+
 icon_picker_source = (ROOT / "UI" / "IconPicker.lua").read_text(encoding="utf-8")
 search_source = (ROOT / "Search.lua").read_text(encoding="utf-8")
 helpers_source = (ROOT / "Utils" / "Helpers.lua").read_text(encoding="utf-8")
@@ -922,7 +968,6 @@ assert 'self.emptyText:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT", -5, -y
 category_section_index = sidebar_source.index("self.categoriesHeading:ClearAllPoints()")
 library_section_index = sidebar_source.index("self.libraryHeading:ClearAllPoints()")
 assert '"ORGANIZATION"' not in sidebar_source
-assert 'scrollFrame:SetPoint("TOPLEFT", 10, -143)' in sidebar_source
 assert category_section_index < library_section_index
 assert "characterLibraryExpanded" in sidebar_source
 assert "characterLibraryExpanded" not in library_source
@@ -1030,11 +1075,12 @@ assert "GetActionInfo" not in library_source and "GetMacroSpell" not in library_
 assert "GetMacroItem" not in library_source and "MetadataRepository" not in library_source
 assert 'SetScript("OnUpdate"' not in library_source
 assert "RefreshCurrentSnapshot" not in search_update_source
-assert 'scope = "CHARACTER"' in main_frame_source and "CopySelectedSnapshotToCurrentCharacter" in main_frame_source
+assert "ValidateSnapshotCopy" in main_frame_source and "CopySelectedSnapshot" in main_frame_source
 assert "Offline character snapshots cannot be placed on action bars." in main_frame_source
 assert "does not delete any WoW macros" in dialogs_source
 assert "ActionBarRepository:GetUsage" not in snapshot_copy_source
 run_linter_tests(ROOT)
+run_color_style_tests(ROOT)
 run_ui_smoke(ROOT, "warcraft")
 run_ui_smoke(ROOT, "legacy")
 print("PASS MacroStudio development preflight")

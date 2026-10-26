@@ -6,24 +6,28 @@
 ## AddonCompartmentFuncOnEnter: MacroStudio_AddonCompartmentOnEnter
 ## AddonCompartmentFuncOnLeave: MacroStudio_AddonCompartmentOnLeave
 ## Author: Baeleaf
-## Version: 1.4.0-dev.ms10.1
+## Version: 1.4.0
 ## SavedVariables: MacroStudioDB
 
 Core.lua
 UI\WarcraftTheme.lua
 UI\LegacyTheme.lua
+UI\ColorStyles.lua
 Utils\Helpers.lua
 Database.lua
 Access.lua
 MinimapButton.lua
 MacroRepository.lua
 CharacterMacroLibrary.lua
+StudioMacroRepository.lua
 ActionBarRepository.lua
+StudioActionBarRepository.lua
 MetadataRepository.lua
 Search.lua
 MacroLinter.lua
 UI\Dialogs.lua
 UI\IconPicker.lua
+UI\KeybindButton.lua
 UI\MacroDialog.lua
 UI\Editor.lua
 UI\MacroList.lua

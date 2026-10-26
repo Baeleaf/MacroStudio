@@ -81,6 +81,8 @@ def run_ui_smoke(root, appearance="warcraft"):
         function Frame:SetClampedToScreen(clamped) self.clamped = clamped and true or false end
         function Frame:EnableMouse(enabled) self.mouseEnabled = enabled and true or false end
         function Frame:EnableMouseWheel(enabled) self.mouseWheelEnabled = enabled and true or false end
+        function Frame:EnableKeyboard(enabled) self.keyboardEnabled = enabled and true or false end
+        function Frame:SetPropagateKeyboardInput(enabled) self.propagatesKeyboard = enabled and true or false end
         function Frame:RegisterForDrag(button) self.dragButton = button end
         function Frame:RegisterForClicks(...) self.clickButtons = { ... } end
         function Frame:RegisterEvent(event)
@@ -133,6 +135,22 @@ def run_ui_smoke(root, appearance="warcraft"):
             table.insert(self.hooks[event], handler)
         end
         function Frame:GetScript(event) return self.scripts[event] end
+        function Frame:SetAttribute(key, value)
+            self.attributes = self.attributes or {}
+            self.attributes[key] = value
+        end
+        function Frame:GetAttribute(key) return self.attributes and self.attributes[key] end
+        function Frame:Execute(snippet)
+            local fn = assert(loadstring(snippet))
+            setfenv(fn, setmetatable({ self = self }, { __index = _G }))
+            return fn()
+        end
+        function Frame:RunAttribute(key) return self:Execute(self:GetAttribute(key)) end
+        function Frame:ClearBindings() self.secureBindings = {} end
+        function Frame:SetBindingClick(_, key, button, mouseButton)
+            self.secureBindings = self.secureBindings or {}
+            self.secureBindings[key] = { button = button, mouseButton = mouseButton }
+        end
         function Frame:Show()
             local wasShown = rawget(self, "shown") == true
             self.shown = true
@@ -361,6 +379,11 @@ def run_ui_smoke(root, appearance="warcraft"):
         end
 
         function InCombatLockdown() return combat end
+        function RegisterStateDriver(frame, state, conditions)
+            frame:SetAttribute("state-" .. state, "ready")
+        end
+        function IsControlKeyDown() return false end
+        function IsAltKeyDown() return false end
         function strlenutf8(value) return #value end
         playerGUID = "Player-1-CURRENT"
         playerName = "Current"
@@ -412,14 +435,35 @@ def run_ui_smoke(root, appearance="warcraft"):
             list[#list + 1] = "Interface\\Icons\\INV_Misc_QuestionMark"
             list[#list + 1] = "INV_Misc_QuestionMark"
             list[#list + 1] = 135000
+            list[#list + 1] = "135000"
+            list[#list + 1] = "Spell_Nature_Test"
         end
         function GetMacroItemIcons() end
         function GetFileIDFromPath(path)
             if type(path) == "string" and path:lower():find("inv_misc_questionmark", 1, true) then
                 return 134400
             end
+            if path == "interface\\icons\\spell_nature_test" then return 135000 end
+            local marker = path:match("ui%-raidtargetingicon_(%d+)$")
+            if marker then return 137000 + tonumber(marker) end
             return nil
         end
+        Enum = { SpellBookSpellBank = { Player = 0 } }
+        C_SpellBook = {
+            GetNumSpellBookSkillLines = function() return 1 end,
+            GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 2, numSpellBookItems = 3 } end,
+            GetSpellBookItemInfo = function(index, bank)
+                assert(bank == 0 and index >= 3 and index <= 5)
+                return index <= 4 and { name = "Healing Touch", iconID = 135915 }
+                    or { name = "Moonfire", iconID = 136096 }
+            end,
+        }
+        spellLookupCalls = 0
+        C_Spell = { GetSpellInfo = function(name)
+            spellLookupCalls = spellLookupCalls + 1
+            if name == "frostbolt" then return { name = "Frostbolt", iconID = 135846 } end
+            if name == "healing touch" then return { name = "Healing Touch", iconID = 135915 } end
+        end }
         function EditMacro(index, name, icon, body)
             editCalls = editCalls + 1
             lastEditCall = { index = index, name = name, icon = icon, body = body }
@@ -754,7 +798,7 @@ def run_ui_smoke(root, appearance="warcraft"):
         assert(ms.Editor.state.offline and ms.Editor.copyButton:IsShown()
                 and not ms.Editor.saveButton:IsShown() and not ms.Editor.deleteButton:IsShown(),
             "offline selection should replace native mutation actions with Copy")
-        assert(ms.Editor.copyButton:GetText() == "Copy to Current Character",
+        assert(ms.Editor.copyButton:GetText() == "Copy to...",
             "Copy action should remain complete at minimum window size")
         assert(ms.Editor.scopeText.wordWrap,
             "offline character identity and read-only state should use responsive wrapping")
@@ -807,13 +851,16 @@ def run_ui_smoke(root, appearance="warcraft"):
         ms:UpdateCombatState()
         assert(not ms.Editor.copyButton:IsEnabled() and ms.Editor.stateText:GetText():find("Read%-only"),
             "combat should disable Copy while preserving the read-only snapshot view")
-        assert(not ms:CopySelectedSnapshotToCurrentCharacter() and createdCharacterMacro == nil,
+        assert(not ms:CopySelectedSnapshot("CHARACTER") and createdCharacterMacro == nil,
             "combat must block snapshot copy before native creation")
         combat = false
         ms:UpdateCombatState()
         assert(createdCharacterMacro == nil,
             "leaving combat must never retry or automatically create the blocked copy")
-        assert(ms:CopySelectedSnapshotToCurrentCharacter(),
+        ms.Editor.copyButton:TriggerScript("OnClick")
+        assert(ms.Editor.copyMenu:IsShown() and #ms.Editor.copyMenuRows == 3)
+        ms.Editor.copyMenuRows[1]:TriggerScript("OnClick")
+        assert(not ms.Editor.copyMenu:IsShown() and createdCharacterMacro,
             "a valid offline snapshot should copy through the native Character macro path")
         assert(createdCharacterMacro
                 and createdCharacterMacro.name == offlineSnapshot.name
@@ -1453,11 +1500,54 @@ def run_ui_smoke(root, appearance="warcraft"):
         ms.Editor:SetEditorText(ms.Editor.savedBody)
         assert(ms.MacroDialog.createButton:IsEnabled(), "clean editor should restore valid dialog Create")
         local pickerIcons = ms.IconPicker:BuildIconList()
-        assert(#pickerIcons == 3 and pickerIcons[1] == ms.DEFAULT_ICON
+        assert(#pickerIcons == 11 and pickerIcons[1] == ms.DEFAULT_ICON
                 and pickerIcons[2] == 101 and pickerIcons[3] == 135000,
             "icon picker should retain native icons while canonicalizing question-mark aliases")
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
         assert(ms.IconPicker.frame:IsShown(), "icon picker should construct and open")
+        local picker = ms.IconPicker
+        local writesBeforeSearch = editCalls
+        picker.searchBox:SetText("  RaId  ")
+        assert(#picker.filteredIcons == 8 and picker.buttons[1].iconValue == 137001
+                and picker.buttons[8].iconValue == 137008 and not picker.buttons[9]:IsShown(),
+            "raid search must show all eight usable markers and hide stale buttons")
+        picker.searchBox:SetText("skull")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 137008,
+            "marker names should be searchable")
+        picker.searchBox:SetText("heal")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 135915,
+            "partial spellbook names should resolve and deduplicate icons")
+        picker.searchBox:SetText("Frostbolt")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 135846,
+            "exact ability lookup should work outside the current spellbook")
+        local lookupsBeforeID = spellLookupCalls
+        picker.searchBox:SetText("987654")
+        assert(#picker.filteredIcons == 1 and picker.buttons[1].iconValue == 987654
+                and spellLookupCalls == lookupsBeforeID,
+            "direct icon IDs outside the catalog must stay numeric and never be interpreted as spell IDs")
+        picker.searchBox:SetText("no such ability")
+        assert(#picker.filteredIcons == 0 and not picker.buttons[1]:IsShown()
+                and picker.countText:GetText() == "No matching icons"
+                and picker.topRow == 0 and picker.scrollBar.scrollPercentage == 0,
+            "empty results should clear the grid and safely reset scrolling")
+        picker.searchBox:SetText("[")
+        assert(#picker.filteredIcons == 0, "search text must not be interpreted as a Lua pattern")
+        picker.searchBox:SetText("0")
+        assert(#picker.filteredIcons == 0, "zero is not a usable icon ID")
+        picker.clearSearchButton:TriggerScript("OnClick")
+        assert(picker.filteredIcons == nil and #picker:GetVisibleIcons() == 11
+                and picker.searchBox:HasFocus(), "clear should restore all icons and focus")
+        picker.searchBox:SetText("raid")
+        picker.searchBox:TriggerScript("OnEscapePressed")
+        assert(picker.frame:IsShown() and picker.searchBox:GetText() == "",
+            "Escape should clear search before dismissing the picker")
+        assert(editCalls == writesBeforeSearch, "searching must never write native macros")
+        local chosenIcon
+        picker:Open(ms.DEFAULT_ICON, function(icon) chosenIcon = icon end)
+        picker.searchBox:SetText("135846")
+        picker.buttons[1]:TriggerScript("OnClick")
+        assert(chosenIcon == 135846 and not picker.frame:IsShown()
+                and not picker.searchBox:HasFocus(), "search results should use the usual selection callback")
         local savedPickerIcons = ms.IconPicker.icons
         local manyIcons = {}
         for index = 1, 160 do manyIcons[index] = 200000 + index end
@@ -1479,7 +1569,8 @@ def run_ui_smoke(root, appearance="warcraft"):
             "wheel scrolling should stop at the final page")
         ms.IconPicker.icons = savedPickerIcons
         ms.IconPicker:Open(ms.DEFAULT_ICON, function() end)
-        assert(ms.IconPicker.topRow == 0 and ms.IconPicker.scrollBar.scrollPercentage == 0,
+        assert(ms.IconPicker.topRow == 0 and ms.IconPicker.scrollBar.scrollPercentage == 0
+                and ms.IconPicker.searchBox:GetText() == "" and ms.IconPicker.filteredIcons == nil,
             "reopening a short icon list should reset a previously scrolled thumb")
         ms.MacroDialog:Close()
         assert(ms:GetSearchQuery() == "account" and searchBox:GetText() == "account",
@@ -1534,13 +1625,14 @@ def run_ui_smoke(root, appearance="warcraft"):
         -- Appearance changes are pending until reload and must not discard data.
         ms.Editor:SetEditorText(ms.Editor.savedBody)
         local originalAppearance = ms.Theme.activeAppearance
+        local originalStyle = ms.Theme.activeColorStyle
         local otherAppearance = originalAppearance == "legacy" and "warcraft" or "legacy"
         local dataBeforeAppearance = { ms.db.metadata, ms.db.categories, ms.db.characterLibrary, ms.db.settings.window }
         assert(not ms.Theme:HasPendingAppearance() and not ms.Settings.reloadButton:IsShown(),
             "the saved startup appearance should not require a reload")
-        assert(not ms.Settings:SetAppearance("unknown") and ms.db.settings.appearance == originalAppearance,
+        assert(not ms.Theme:SetColorStyle("unknown") and ms.db.settings.appearance == originalAppearance,
             "unsupported appearance values should not overwrite preferences")
-        ms.Settings[otherAppearance .. "Button"]:TriggerScript("OnClick")
+        ms.Settings.styleButtons[otherAppearance]:TriggerScript("OnClick")
         assert(ms.db.settings.appearance == otherAppearance and ms.Theme.activeAppearance == originalAppearance
                 and ms.Theme:HasPendingAppearance() and ms.Settings.reloadButton:IsShown()
                 and reloadCalls == 0,
@@ -1565,11 +1657,19 @@ def run_ui_smoke(root, appearance="warcraft"):
                 and ms.db.categories == dataBeforeAppearance[2] and ms.db.characterLibrary == dataBeforeAppearance[3]
                 and ms.db.settings.window == dataBeforeAppearance[4],
             "appearance selection must preserve macro metadata, categories, snapshots and window settings")
-        ms.Settings[originalAppearance .. "Button"]:TriggerScript("OnClick")
+        ms.Settings.styleButtons[originalStyle]:TriggerScript("OnClick")
         assert(not ms.Theme:HasPendingAppearance() and not ms.Settings.reloadButton:IsShown(),
             "selecting the active appearance again should cancel the pending change")
         """,
         "@ui-smoke",
     )
     smoke("MacroStudio", namespace)
+    feature_chunk = load((root / "tests" / "studio_macros.lua").read_text(encoding="utf-8"), "@studio-macros-tests")
+    feature_chunk("MacroStudio", namespace)
+    keybind_chunk = load((root / "tests" / "keybind_button.lua").read_text(encoding="utf-8"), "@keybind-button-tests")
+    keybind_chunk("MacroStudio", namespace)
+    action_bar_chunk = load((root / "tests" / "studio_action_bars.lua").read_text(encoding="utf-8"), "@studio-action-bar-tests")
+    action_bar_chunk("MacroStudio", namespace)
+    snapshot_chunk = load((root / "tests" / "snapshot_copy.lua").read_text(encoding="utf-8"), "@snapshot-copy-tests")
+    snapshot_chunk("MacroStudio", namespace)
     print(f"PASS full UI behavior suite ({appearance} appearance; {lua.globals().lintUICheckCount} lint regression checks)")

@@ -13,6 +13,11 @@ local ERROR_COLOR = MacroStudio.Theme.palette.error
 local SUCCESS_COLOR = MacroStudio.Theme.palette.success
 local EDITOR_BORDER_NORMAL = MacroStudio.Theme.palette.border
 local EDITOR_BORDER_FOCUSED = MacroStudio.Theme.palette.focus
+local COPY_DESTINATIONS = {
+    { id = "CHARACTER", label = "Current Character" },
+    { id = "ACCOUNT", label = "Account Macros" },
+    { id = "STUDIO", label = "MacroStudio Macros" },
+}
 
 local function formatSlots(slots)
     local labels = {}
@@ -121,6 +126,10 @@ function Editor:Create(parent)
 
     local iconButton = CreateFrame("Button", nil, panel)
     iconButton:SetSize(38, 38)
+    iconButton:RegisterForDrag("LeftButton")
+    iconButton:SetScript("OnDragStart", function()
+        if self.macro then MacroStudio:RequestPickupMacro(self.macro) end
+    end)
     iconButton:SetPoint("TOPLEFT", 10, -38)
     local icon = iconButton:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints(iconButton)
@@ -232,6 +241,14 @@ function Editor:Create(parent)
     tagsText:SetWordWrap(false)
     tagsText:SetTextColor(unpack(MacroStudio.Theme.palette.text))
     self.tagsText = tagsText
+
+    local keybindLabel = MacroStudio.Helpers:CreateLabel(panel, "GameFontNormalSmall", "Keybind:")
+    keybindLabel:SetPoint("TOPLEFT", 10, -148)
+    keybindLabel:Hide()
+    self.keybindLabel = keybindLabel
+    local keybindButton = MacroStudio.KeybindButton:Create(panel)
+    keybindButton:SetPoint("LEFT", keybindLabel, "RIGHT", 8, 0)
+    self.keybindButton = keybindButton
 
     local duplicateText = MacroStudio.Helpers:CreateLabel(panel, "GameFontHighlightSmall", "")
     duplicateText:SetPoint("TOPLEFT", 10, -143)
@@ -382,12 +399,44 @@ function Editor:Create(parent)
     local copyButton = MacroStudio.Helpers:CreateButton(panel)
     copyButton:SetSize(190, 24)
     copyButton:SetPoint("TOPRIGHT", -14, -9)
-    copyButton:SetText("Copy to Current Character")
+    copyButton:SetText("Copy to...")
+    local copyArrow = copyButton:CreateTexture(nil, "ARTWORK")
+    copyArrow:SetSize(18, 18)
+    copyArrow:SetPoint("RIGHT", -6, 0)
+    copyArrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
     copyButton:SetScript("OnClick", function()
-        MacroStudio:CopySelectedSnapshotToCurrentCharacter()
+        self:ToggleCopyMenu()
     end)
     copyButton:Hide()
     self.copyButton = copyButton
+
+    local copyMenu = createPopupMenu(panel, 208)
+    copyMenu:SetPoint("TOPRIGHT", copyButton, "BOTTOMRIGHT", 0, -2)
+    copyMenu:SetHeight(86)
+    self.copyMenu, self.copyMenuRows = copyMenu, {}
+    copyMenu:RegisterEvent("GLOBAL_MOUSE_DOWN")
+    copyMenu:SetScript("OnEvent", function()
+        if copyMenu:IsShown() and not MouseIsOver(copyMenu) and not MouseIsOver(copyButton) then copyMenu:Hide() end
+    end)
+    copyMenu:SetScript("OnHide", function()
+        self.copyMenuSnapshot = nil
+        MacroStudio.Helpers:HideTooltip()
+    end)
+    for index, destination in ipairs(COPY_DESTINATIONS) do
+        local row = createMenuRow(copyMenu)
+        row:SetHeight(26)
+        row:SetPoint("TOPLEFT", 4, -4 - ((index - 1) * 26))
+        row:SetPoint("TOPRIGHT", -4, -4 - ((index - 1) * 26))
+        row.Text:SetText(destination.label)
+        row.destination = destination.id
+        row:SetScript("OnClick", function(button)
+            local snapshot = button.snapshot
+            self:HideMetadataMenus()
+            MacroStudio:CopySelectedSnapshot(button.destination, snapshot)
+        end)
+        row:Show()
+        self.copyMenuRows[index] = row
+    end
 
     local categoryMenu = createPopupMenu(panel, 184)
     categoryMenu:SetPoint("TOPLEFT", categoryButton, "BOTTOMLEFT", 0, -2)
@@ -495,6 +544,7 @@ function Editor:SetDraftIcon(icon)
 end
 
 function Editor:SetMacro(macro)
+    MacroStudio.KeybindButton:SetMacro(macro)
     self.macro = macro
     self.savedName = macro and macro.name or ""
     self.savedIcon = macro and (macro.selectedIcon or macro.icon) or MacroStudio.DEFAULT_ICON
@@ -530,7 +580,8 @@ function Editor:SetMacro(macro)
         )
     else
         self.scopeText:SetText(
-            macro and (macro.scope == "ACCOUNT" and "Account Macro" or "Character Macro")
+            macro and (macro.source == "STUDIO" and "MacroStudio Macro · Shared across characters"
+                or (macro.scope == "ACCOUNT" and "Account Macro" or "Character Macro"))
                 or "Select a macro from the list."
         )
     end
@@ -538,6 +589,14 @@ function Editor:SetMacro(macro)
     self:HideMetadataMenus()
     self:SetEditorText(self.savedBody)
     self.suppressDraftChanged = false
+    local studio = macro and macro.source == "STUDIO"
+    self.keybindLabel:SetShown(studio and true or false)
+    self.duplicateText:ClearAllPoints()
+    self.duplicateText:SetPoint("TOPLEFT", 10, studio and -171 or -143)
+    self.duplicateText:SetPoint("TOPRIGHT", -10, studio and -171 or -143)
+    self.editBorder:ClearAllPoints()
+    self.editBorder:SetPoint("TOPLEFT", 10, studio and -192 or -164)
+    self.editBorder:SetPoint("BOTTOMRIGHT", -10, 65)
     self:RefreshMetadata()
     self:UpdateEditorState("selection")
 end
@@ -578,7 +637,7 @@ function Editor:ChooseIcon()
             self:SetDraftIcon(icon)
         end
     end, {
-        selectionHelp = "Use this icon when the native macro is saved.",
+        selectionHelp = "Use this icon when the macro is saved.",
         onClose = function()
             MacroStudio:SetMainWindowModalBlocked(false)
         end,
@@ -622,7 +681,8 @@ function Editor:RefreshDuplicateNotice(name, offline)
 
     local normalized = MacroStudio.MacroRepository:NormalizeMacroName(name)
     local matches = 1
-    for _, macro in ipairs(MacroStudio.MacroRepository:GetAll()) do
+    local repository = self.macro.source == "STUDIO" and MacroStudio.StudioMacroRepository or MacroStudio.MacroRepository
+    for _, macro in ipairs(repository:GetAll()) do
         if macro.scope == self.macro.scope
             and macro.index ~= self.macro.index
             and macro.name:lower() == normalized:lower() then
@@ -633,7 +693,7 @@ function Editor:RefreshDuplicateNotice(name, offline)
         self.duplicateText:SetText(string.format(
             "Duplicate name allowed - %d %s macros will share %q.",
             matches,
-            self.macro.scope == "ACCOUNT" and "account" or "character",
+            self.macro.source == "STUDIO" and "MacroStudio" or (self.macro.scope == "ACCOUNT" and "account" or "character"),
             normalized
         ))
     else
@@ -686,12 +746,11 @@ function Editor:UpdateEditorState(reason)
 
     local canCopy, copyReason = false, nil
     if offline then
-        canCopy, copyReason = MacroStudio.MacroRepository:ValidateCreateRequest({
-            name = self.macro.name,
-            body = self.macro.body,
-            icon = self.macro.selectedIcon or self.macro.icon,
-            scope = "CHARACTER",
-        })
+        for _, destination in ipairs(COPY_DESTINATIONS) do
+            local valid, failure = MacroStudio:ValidateSnapshotCopy(self.macro, destination.id)
+            canCopy = canCopy or valid
+            copyReason = copyReason or failure
+        end
     end
 
     local saveReason
@@ -760,7 +819,8 @@ function Editor:UpdateEditorState(reason)
         MacroStudio.Helpers:SetButtonTooltip(
             self.iconButton,
             "Change Macro Icon",
-            "Choose a saved icon for this native macro."
+            "Click to change the icon. Drag to place the saved macro on an action bar."
+                .. (self.macro and self.macro.source == "STUDIO" and " A linked action-bar copy uses one native macro slot." or "")
         )
     end
     if offline then
@@ -803,7 +863,7 @@ function Editor:UpdateEditorState(reason)
         statusMessage = validationMessage
         statusColor = ERROR_COLOR
     elseif MacroStudio.inCombat then
-        statusMessage = "Combat Lockdown - native macros cannot be modified until combat ends."
+        statusMessage = "Combat Lockdown - macros cannot be modified until combat ends."
         statusColor = ERROR_COLOR
     elseif overBy > 0 then
         statusMessage = string.format("Too long by %d character%s - cannot save.", overBy, overBy == 1 and "" or "s")
@@ -812,7 +872,7 @@ function Editor:UpdateEditorState(reason)
         statusMessage = self.notice.message
         statusColor = self.notice.color
     elseif length >= MacroStudio.BODY_WARNING_LENGTH then
-        statusMessage = string.format("Approaching the native limit: %d characters remain.", MacroStudio.MAX_BODY_LENGTH - length)
+        statusMessage = string.format("Approaching the macro limit: %d characters remain.", MacroStudio.MAX_BODY_LENGTH - length)
         statusColor = WARNING_COLOR
     elseif dirty then
         statusMessage = "Unsaved macro changes."
@@ -838,7 +898,7 @@ function Editor:UpdateEditorState(reason)
     MacroStudio.Helpers:SetButtonTooltip(
         self.saveButton,
         "Save Macro",
-        canSave and "Save the drafted name, icon, and body to this native macro." or saveReason
+        canSave and "Save this macro's drafted name, icon, and body." or saveReason
     )
     MacroStudio.Helpers:SetButtonEnabled(self.revertButton, canRevert)
     MacroStudio.Helpers:SetButtonTooltip(
@@ -848,12 +908,20 @@ function Editor:UpdateEditorState(reason)
     )
     MacroStudio.Helpers:SetButtonEnabled(self.deleteButton, canDelete)
     MacroStudio.Helpers:SetButtonTooltip(self.deleteButton, "Delete Native Macro", canDelete and "Permanently delete this exact Blizzard-native macro." or deleteReason)
+    if self.macro and self.macro.source == "STUDIO" then
+        MacroStudio.Helpers:SetButtonTooltip(self.deleteButton, "Delete MacroStudio Macro",
+            canDelete and "Delete this MacroStudio macro, its bindings, and its linked action-bar copy on this character." or deleteReason)
+    end
     MacroStudio.Helpers:SetButtonEnabled(self.copyButton, canCopy)
     MacroStudio.Helpers:SetButtonTooltip(
         self.copyButton,
-        "Copy to Current Character",
-        canCopy and "Create a new native Character macro from this snapshot." or copyReason
+        "Copy Snapshot",
+        canCopy and "Choose Current Character, Account Macros, or MacroStudio Macros. The source snapshot stays unchanged." or copyReason
     )
+    if self.copyMenu:IsShown() then
+        if canCopy then self:RefreshCopyMenu() else self.copyMenu:Hide() end
+    end
+    MacroStudio.KeybindButton:Refresh()
     if MacroStudio.UpdateActionControls then
         MacroStudio:UpdateActionControls()
     end
@@ -871,11 +939,12 @@ function Editor:UpdateActionBarUsageTooltip()
     end
 
     local tooltip
+    local subject = self.macro and self.macro.source == "STUDIO" and "This macro's linked action-bar copy" or "This saved native macro"
     if count == 1 then
-        tooltip = "This saved native macro is on an action bar."
+        tooltip = subject .. " is on an action bar."
     else
         tooltip = string.format(
-            "This saved native macro is on an action bar in %d placements.",
+            subject .. " is on an action bar in %d placements.",
             count
         )
     end
@@ -887,6 +956,15 @@ end
 
 function Editor:RefreshActionBarUsage()
     if not self.usageButton then
+        return
+    end
+    if self.macro and self.macro.source == "STUDIO" then
+        local count, slots = MacroStudio.StudioActionBarRepository:GetUsage(self.macro)
+        self.actionBarUsageCount, self.actionBarUsageSlots = count, slots
+        self.usageButton.Text:SetText(count > 1 and string.format("On Bar ×%d", count) or "On Bar")
+        self.usageButton:SetShown(count > 0)
+        MacroStudio.KeybindButton:Refresh()
+        self:UpdateActionBarUsageTooltip()
         return
     end
     if MacroStudio:IsOfflineMacro(self.macro) then
@@ -945,6 +1023,7 @@ function Editor:RefreshMetadata()
 end
 
 function Editor:HideMetadataMenus()
+    if self.copyMenu then self.copyMenu:Hide() end
     if self.categoryMenu then
         self.categoryMenu:Hide()
     end
@@ -954,6 +1033,31 @@ function Editor:HideMetadataMenus()
     if self.tagMenu then
         self.tagMenu:Hide()
     end
+end
+
+function Editor:RefreshCopyMenu()
+    if not self.copyMenuSnapshot or not MacroStudio:MacroRecordsEqual(self.macro, self.copyMenuSnapshot) then
+        self.copyMenu:Hide()
+        return
+    end
+    for index, destination in ipairs(COPY_DESTINATIONS) do
+        local row = self.copyMenuRows[index]
+        local valid, reason = MacroStudio:ValidateSnapshotCopy(self.copyMenuSnapshot, destination.id)
+        row.snapshot = MacroStudio.Helpers:CopyMacro(self.copyMenuSnapshot)
+        MacroStudio.Helpers:SetButtonEnabled(row, valid)
+        MacroStudio.Helpers:SetButtonTooltip(row, "Copy to " .. destination.label,
+            valid and (destination.id == "STUDIO" and "Create a shared MacroStudio macro without using an Account or Character slot."
+                or "Create a new macro here with this snapshot's name, icon, and body.") or reason)
+    end
+end
+
+function Editor:ToggleCopyMenu()
+    if self.copyMenu:IsShown() then self.copyMenu:Hide(); return end
+    if MacroStudio:IsMainWindowModalBlocked() or not self.state or not self.state.canCopy then return end
+    self:HideMetadataMenus()
+    self.copyMenuSnapshot = MacroStudio.Helpers:CopyMacro(self.macro)
+    self:RefreshCopyMenu()
+    self.copyMenu:Show()
 end
 
 function Editor:ToggleCategoryMenu()

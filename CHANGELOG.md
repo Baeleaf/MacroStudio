@@ -2,10 +2,16 @@
 
 Notable user-facing changes to MacroStudio are documented here.
 
-## Unreleased
+## 1.4.0
 
 ### Added
 
+- One shared MacroStudio macro library available across all characters, independent of Blizzard's native macro slot limits. Existing development-build Account and Character entries are preserved and upgraded automatically.
+- Per-character keybindings for MacroStudio macros, with conflict checks and automatic key release in vehicles, pet battles, and override bars.
+- A themed Keybind button below Category and Tags shows Not Bound or the assigned key. Left-click to capture a keyboard key, middle/extra mouse button, or scroll direction; Esc cancels and right-click clears. Bindings apply immediately without a separate dialog.
+- A Copy to dropdown for read-only snapshots offers Current Character, Account Macros, or MacroStudio Macros. Copies preserve the name, icon and body without changing the source; full native destinations are disabled individually, while shared MacroStudio storage remains available.
+- Drag saved macros onto action bars from either a list row or the editor icon. Shared MacroStudio macros create a linked native copy, reuse it on later drags, and keep it updated when saved. Each linked copy needs one free Character or Account macro slot; shared storage and direct keybindings remain independent of those limits.
+- One Color Style selector with Warcraft (default), Legacy, Emerald, Violet, and Ember. Legacy includes its original blue/gray design; the separate Appearance section is removed.
 - Advisory macro linting while editing saved macros, unsaved drafts, and read-only offline snapshots, in both Warcraft and Legacy appearances.
 - Line-specific explanations for malformed leading cast/use/castsequence brackets, commands without action arguments, and repeated `#showtooltip` directives.
 - A compact diagnostics summary beside the character count; hover to inspect and click/scroll to browse every finding. Findings never block Save or correct text automatically.
@@ -14,7 +20,19 @@ Static checks cannot guarantee gameplay or combat success. Lua syntax validation
 
 ### Changed
 
-- Identify the Milestone 10 test build as `1.4.0-dev.ms10.1` in the title and addon manifest, distinguishing it from the live 1.3.0 release.
+- Make the Create Macro type explicit with Account, Character, and MacroStudio (shared) radio choices and a matching submit label.
+- Release the shared macro library, inline keybindings, snapshot copy destinations, named color styles and advisory macro checks as `1.4.0`. Style and design changes use the existing explicit Reload UI action and protect unsaved drafts.
+
+## 1.3.1
+
+### Added
+
+- Search the icon picker by raid marker names, icon file ID, full ability name, or partial spellbook ability name in both the editor and New Macro dialog.
+- All eight raid target markers are available in the icon picker.
+
+### Fixed
+
+- Normalize numeric icon strings, bare icon names, and texture paths before native writes and save verification, preventing false save failures when WoW returns the chosen icon as a file ID.
 
 ## 1.3.0
 
