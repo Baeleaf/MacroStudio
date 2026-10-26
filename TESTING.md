@@ -38,11 +38,11 @@ Automated tests exercise all three dropdown destinations in both designs, exact 
 3. Fill Character slots, then Account slots. Each full native destination must be disabled with a hover explanation. MacroStudio Macros must remain enabled, create a shared entry and use no native slot or automatic keybinding. Native copies must use only the chosen scope.
 4. Open the dropdown, then enter combat, change selection, open a dialog or close the window. It must dismiss safely. Combat must block every destination and leaving combat must not retry copying. If a source snapshot is forgotten or updated while selected, stale copy requests must refuse to create anything.
 
-## Icon save and search patch - 1.4.0-dev.ms10.2
+## Icon save and search patch - 1.3.1
 
 Headless coverage checks native icon string/path-to-file-ID readback, creation and editing, genuine icon-write rejection, search results, deduplication, numeric IDs outside the catalog, empty results, clearing, selection callbacks, and scrolling in both appearances. Live verification is still required for the reported friend's client.
 
-1. Confirm the displayed build is `1.4.0-dev.ms10.2`. Open a disposable macro, pick several icons, Save, and reopen it. Repeat with a `#showtooltip` macro and the question-mark icon. Confirm the icon and body persist with no false save error.
+1. Confirm the displayed build is `1.3.1`. Open a disposable macro, pick several icons, Save, and reopen it. Repeat with a `#showtooltip` macro and the question-mark icon. Confirm the icon and body persist with no false save error.
 2. Open the icon picker from both the editor and New Macro dialog. Search `raid` for all eight markers; search `skull` for its marker. Choose one, save/create, reopen, and compare with Blizzard's macro window.
 3. Search an icon file ID (for example `135846`), an exact ability name in the client's language, and part of an ability in the current spellbook. Confirm the expected textures appear and can be saved. Numbers are icon file IDs, not spell IDs; arbitrary nonexistent file IDs may display a missing texture.
 4. Search nonsense, clear with the X or Escape, scroll the full list, filter again, and reopen. Confirm no stale icons, lost editor text, stuck focus, or stuck modal overlay. Repeat in Warcraft and Legacy appearances.
